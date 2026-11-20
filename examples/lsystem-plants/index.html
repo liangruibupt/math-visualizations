@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>L-system 植物 · 用重写规则长出一棵树</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #10140f; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 300px; padding: 10px 14px; box-sizing: border-box;
+    background: rgba(28,34,30,.92); border: 1px solid #34413a; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a9c9a4; border-top: 1px solid #34413a; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8d988f; display: block; }
+  input[type=range] { width: 100%; }
+  input[type=text], textarea { width: 100%; box-sizing: border-box; background: #1b211d; color: #e6e6e6;
+    border: 1px solid #3d4a42; border-radius: 4px; padding: 4px 6px;
+    font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+  textarea { resize: vertical; min-height: 54px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2b3530; color: #e6e6e6; border: 1px solid #3d4a42;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #38453d; }
+  button.on { background: #4a6a3f; border-color: #6b8f5c; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #err { color: #ff8f8f; }
+  #view { position: absolute; left: 324px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #str { position: absolute; left: 10px; right: 10px; bottom: 8px; padding: 6px 8px; border-radius: 4px;
+    background: rgba(16,20,15,.82); color: #cfd8cf; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace;
+    word-break: break-all; pointer-events: none; max-height: 4.5em; overflow: hidden; }
+  #str b { color: #fff; font-family: -apple-system, "PingFang SC", sans-serif; }
+  #str .F { color: #e2b47a; } #str .X { color: #8fd17e; } #str .T { color: #8fb8ff; } #str .B { color: #ff9f9f; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1>L-system 植物</h1>
+  <small>从一个短字符串（公理）出发，每一代把每个字符按规则同时替换，再让“海龟”按字符画线。几条简单的规则，就能长出蕨叶、灌木和分形曲线。</small>
+
+  <h2>规则</h2>
+  <div class="row">
+    <label>公理（第 0 代）</label>
+    <input id="axiom" type="text" spellcheck="false">
+  </div>
+  <div class="row">
+    <label>产生式（每行一条：符号=替换串）</label>
+    <textarea id="rules" spellcheck="false" rows="3"></textarea>
+    <small>F/G 前进并画线 · f 前进不画线 · + 左转 · − 右转 · | 掉头 · [ 记住当前位置和方向 · ] 回到上次记住的位置 · 其他字母（如 X）只参与替换，不画</small>
+    <small id="err"></small>
+  </div>
+
+  <h2>参数</h2>
+  <div class="row">
+    <label>迭代代数 n <b id="vN"></b></label>
+    <input id="N" type="range" min="0" max="10" step="1">
+  </div>
+  <div class="row">
+    <label>转角 δ <b id="vA"></b></label>
+    <input id="A" type="range" min="1" max="180" step="0.5">
+  </div>
+  <div class="row">
+    <label>随机扰动 <b id="vJ"></b></label>
+    <input id="J" type="range" min="0" max="20" step="0.5">
+    <small>每次转向随机偏离 ±这么多度，让植物看起来更自然</small>
+  </div>
+  <div class="row">
+    <label>随机种子 <b id="vS"></b></label>
+    <input id="S" type="range" min="1" max="99" step="1">
+  </div>
+  <div class="row">
+    <label>枝干粗细 <b id="vW"></b></label>
+    <input id="W" type="range" min="0.5" max="12" step="0.5">
+    <small>按分枝深度逐级变细，颜色由棕到绿</small>
+  </div>
+  <div class="row">
+    <label>生长进度 <b id="vG"></b></label>
+    <input id="G" type="range" min="0" max="1" step="0.001">
+    <div class="presets"><button id="play">▶ 播放生长</button><button id="grow">▶ 逐代生长</button></div>
+    <small>“播放生长”按海龟画线的顺序展开；“逐代生长”从第 0 代起逐代播放</small>
+  </div>
+  <div class="checks">
+    <label><input id="leaf" type="checkbox" checked> 画叶子</label>
+    <label><input id="showStr" type="checkbox" checked> 显示字符串</label>
+  </div>
+
+  <h2>预设</h2>
+  <small>植物</small>
+  <div class="presets" id="pPlant"></div>
+  <small style="margin-top:6px">分形曲线</small>
+  <div class="presets" id="pCurve"></div>
+  <small style="margin-top:8px">拖动平移 · 滚轮缩放 · 双击重新居中</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="str"></div></div>
+
+<script>
+// ---------- presets ----------
+// heading: initial direction in degrees (90 = up). Classic systems from Prusinkiewicz & Lindenmayer,
+// "The Algorithmic Beauty of Plants" (1990).
+const PRESETS = {
+  plant:  { name: '分形植物', kind: 'plant', axiom: 'X', rules: 'X=F+[[X]-X]-F[-FX]+X\nF=FF', n: 6, a: 25, heading: 65, j: 4, w: 4 },
+  bush:   { name: '灌木', kind: 'plant', axiom: 'F', rules: 'F=FF+[+F-F-F]-[-F+F+F]', n: 4, a: 22.5, heading: 90, j: 3, w: 5 },
+  weed:   { name: '水草', kind: 'plant', axiom: 'F', rules: 'F=F[+F]F[-F][F]', n: 5, a: 20, heading: 90, j: 5, w: 3 },
+  tree:   { name: '对称树', kind: 'plant', axiom: 'X', rules: 'X=F[+X][-X]FX\nF=FF', n: 7, a: 25.7, heading: 90, j: 0, w: 5 },
+  stick:  { name: '枝条', kind: 'plant', axiom: 'X', rules: 'X=F[+X]F[-X]+X\nF=FF', n: 7, a: 20, heading: 90, j: 2, w: 4 },
+  koch:   { name: 'Koch 雪花', kind: 'curve', axiom: 'F--F--F', rules: 'F=F+F--F+F', n: 4, a: 60, heading: 0, j: 0, w: 1.5 },
+  sier:   { name: 'Sierpinski 三角', kind: 'curve', axiom: 'F-G-G', rules: 'F=F-G+F+G-F\nG=GG', n: 6, a: 120, heading: 180, j: 0, w: 1.2 },
+  arrow:  { name: 'Sierpinski 箭头', kind: 'curve', axiom: 'F', rules: 'F=G-F-G\nG=F+G+F', n: 7, a: 60, heading: 0, j: 0, w: 1.2 },
+  dragon: { name: '龙曲线', kind: 'curve', axiom: 'FX', rules: 'X=X+YF+\nY=-FX-Y', n: 12, a: 90, heading: 0, j: 0, w: 1.2 },
+  hilbert:{ name: 'Hilbert 曲线', kind: 'curve', axiom: 'X', rules: 'X=+YF-XFX-FY+\nY=-XF+YFY+FX-', n: 6, a: 90, heading: 0, j: 0, w: 1.5 },
+};
+
+const MAX_LEN = 3_000_000;   // safety cap on the expanded string
+
+const P = { preset: 'plant', axiom: '', rules: '', n: 6, a: 25, heading: 90, j: 4, s: 7, w: 4, g: 1,
+  leaf: true, showStr: true, kind: 'plant' };
+const view = { x: 0, y: 0, zoom: 1 };   // pan/zoom on top of auto-fit
+
+const $ = id => document.getElementById(id);
+
+// ---------- L-system ----------
+function parseRules(text) {
+  const rules = {};
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/→|->/g, '=');
+    if (!line) continue;
+    const k = line.indexOf('=');
+    if (k !== 1) throw new Error(`无法解析“${raw.trim()}”：左边应是单个符号，例如 F=FF`);
+    rules[line[0]] = line.slice(2);
+  }
+  return rules;
+}
+
+// parallel rewriting: every symbol is replaced at the same time in each generation
+function expand(axiom, rules, n) {
+  let s = axiom.replace(/[−–]/g, '-');
+  const lens = [s.length];
+  for (let i = 0; i < n; i++) {
+    let out = '', len = 0;
+    const parts = [];
+    for (const ch of s) {
+      const r = rules[ch] ?? ch;
+      len += r.length;
+      if (len > MAX_LEN) return { s, gen: i, lens, capped: true };
+      parts.push(r);
+    }
+    s = parts.join('');
+    lens.push(s.length);
+  }
+  return { s, gen: n, lens, capped: false };
+}
+
+function rng(seed) {   // mulberry32
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+
+// turtle interpretation -> segments [x1, y1, x2, y2, depth] and leaf points
+function interpret(s, angle, heading, jitter, seed) {
+  const rand = rng(seed), segs = [], leaves = [], stack = [];
+  let x = 0, y = 0, h = heading * Math.PI / 180, depth = 0, maxDepth = 0;
+  let grew = false;   // drew a segment since the last '[' or ']': only then is this a real twig tip
+  const d = angle * Math.PI / 180, jr = jitter * Math.PI / 180;
+  const turn = sgn => { h += sgn * d + (jr ? (rand() * 2 - 1) * jr : 0); };
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === 'F' || ch === 'G') {
+      const nx = x + Math.cos(h), ny = y + Math.sin(h);
+      segs.push([x, y, nx, ny, depth]); x = nx; y = ny; grew = true;
+    } else if (ch === 'f') { x += Math.cos(h); y += Math.sin(h); }
+    else if (ch === '+') turn(1);
+    else if (ch === '-') turn(-1);
+    else if (ch === '|') h += Math.PI;
+    else if (ch === '[') { stack.push([x, y, h, depth]); depth++; if (depth > maxDepth) maxDepth = depth; grew = false; }
+    else if (ch === ']') {
+      if (stack.length) {
+        // the turtle is about to jump back; if this branch drew something, its end is a twig tip
+        if (grew) leaves.push([x, y, h, segs.length]);
+        [x, y, h, depth] = stack.pop();
+        grew = false;
+      }
+    }
+  }
+  if (grew) leaves.push([x, y, h, segs.length]);
+  return { segs, leaves, maxDepth };
+}
+
+// ---------- state / cache ----------
+let model = null;   // { exp, segs, leaves, maxDepth, bbox }
+let dirty = true;
+
+function rebuild() {
+  $('err').textContent = '';
+  let rules;
+  try { rules = parseRules(P.rules); } catch (e) { $('err').textContent = e.message; return; }
+  const exp = expand(P.axiom, rules, P.n);
+  if (exp.capped) $('err').textContent = `第 ${exp.gen + 1} 代会超过 ${MAX_LEN.toLocaleString()} 个字符，已停在第 ${exp.gen} 代`;
+  const it = interpret(exp.s, P.a, P.heading, P.j, P.s);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [a, b, c, d] of it.segs) {
+    if (a < x0) x0 = a; if (c < x0) x0 = c; if (a > x1) x1 = a; if (c > x1) x1 = c;
+    if (b < y0) y0 = b; if (d < y0) y0 = d; if (b > y1) y1 = b; if (d > y1) y1 = d;
+  }
+  if (!it.segs.length) { x0 = y0 = -1; x1 = y1 = 1; }
+  model = { exp, ...it, bbox: [x0, y0, x1, y1] };
+  dirty = true;
+  showString();
+}
+
+function showString() {
+  const el = $('str');
+  el.style.display = P.showStr ? '' : 'none';
+  if (!model || !P.showStr) return;
+  const { exp, segs } = model;
+  // colour each symbol by role: draw (F G f), turn (+ - |), stack ([ ]), other (X Y ...)
+  const cls = ch => 'FGf'.includes(ch) ? 'F' : '+-|'.includes(ch) ? 'T' : '[]'.includes(ch) ? 'B' : 'X';
+  const esc = ch => ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch === '&' ? '&amp;' : ch;
+  let head = '', run = '', runCls = '';
+  for (const ch of exp.s.slice(0, 400)) {
+    const c = cls(ch);
+    if (c !== runCls && run) { head += `<span class="${runCls}">${run}</span>`; run = ''; }
+    runCls = c; run += esc(ch);
+  }
+  if (run) head += `<span class="${runCls}">${run}</span>`;
+  el.innerHTML = `<b>第 ${exp.gen} 代：${exp.s.length.toLocaleString()} 个字符，${segs.length.toLocaleString()} 段线 · 各代长度 ${exp.lens.join(' → ')}</b><br>` +
+    head + (exp.s.length > 400 ? ' …' : '');
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+const BARK = [107, 74, 46], TIP = [120, 190, 90], LINE = [230, 200, 140];
+const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+
+function draw() {
+  const dpr = devicePixelRatio, W = cv.width, H = cv.height;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#10140f'; ctx.fillRect(0, 0, W, H);
+  if (!model) return;
+  const [x0, y0, x1, y1] = model.bbox, pad = 30 * dpr;
+  const fit = Math.min((W - 2 * pad) / Math.max(1e-9, x1 - x0), (H - 2 * pad) / Math.max(1e-9, y1 - y0));
+  const sc = fit * view.zoom;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  // math y points up, canvas y points down
+  const tx = x => W / 2 + (x - cx) * sc + view.x * dpr, ty = y => H / 2 - (y - cy) * sc + view.y * dpr;
+
+  const { segs, leaves, maxDepth } = model;
+  const count = Math.round(segs.length * P.g);
+  const plant = P.kind === 'plant';
+  ctx.lineCap = 'round';
+  // batch segments by depth so each depth is one stroke with one width and colour
+  const levels = Math.max(1, maxDepth + 1);
+  const paths = Array.from({ length: levels }, () => new Path2D());
+  for (let i = 0; i < count; i++) {
+    const [a, b, c, d, dep] = segs[i];
+    const p = paths[dep]; p.moveTo(tx(a), ty(b)); p.lineTo(tx(c), ty(d));
+  }
+  for (let dep = 0; dep < levels; dep++) {
+    const t = levels > 1 ? dep / (levels - 1) : 0;
+    const col = plant ? mix(BARK, TIP, t) : mix(LINE, [140, 200, 255], t);
+    ctx.strokeStyle = `rgb(${col})`;
+    // width shrinks geometrically with branch depth, and with zoom so the tree keeps proportion
+    ctx.lineWidth = Math.max(0.6 * dpr, P.w * dpr * Math.pow(0.68, dep) * Math.min(2, Math.sqrt(view.zoom)));
+    ctx.stroke(paths[dep]);
+  }
+  if (plant && P.leaf) {
+    const r = Math.max(1.5 * dpr, Math.min(7 * dpr, sc * 0.9));
+    for (const [x, y, h, idx] of leaves) {
+      if (idx > count) continue;
+      const g = 150 + ((idx * 37) % 70);
+      ctx.fillStyle = `rgba(${90 + (idx % 40)}, ${g}, 70, 0.85)`;
+      ctx.beginPath();
+      ctx.ellipse(tx(x), ty(y), r * 1.6, r * 0.7, -h, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('axiom').value = P.axiom; $('rules').value = P.rules;
+  for (const [id, k] of [['N', 'n'], ['A', 'a'], ['J', 'j'], ['S', 's'], ['W', 'w'], ['G', 'g']]) $(id).value = P[k];
+  $('vN').textContent = P.n; $('vA').textContent = P.a + '°'; $('vJ').textContent = '±' + P.j + '°';
+  $('vS').textContent = P.s; $('vW').textContent = P.w; $('vG').textContent = Math.round(P.g * 100) + '%';
+  $('leaf').checked = P.leaf; $('showStr').checked = P.showStr;
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, axiom: p.axiom, rules: p.rules, n: p.n, a: p.a, heading: p.heading,
+    j: p.j, w: p.w, kind: p.kind, g: 1 });
+  Object.assign(view, { x: 0, y: 0, zoom: 1 });
+  stopAnim(); syncUI(); rebuild();
+}
+
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $(p.kind === 'plant' ? 'pPlant' : 'pCurve').appendChild(b);
+}
+
+const custom = () => { P.preset = ''; syncUI(); };
+$('axiom').oninput = e => { P.axiom = e.target.value; custom(); rebuild(); };
+$('rules').oninput = e => { P.rules = e.target.value; custom(); rebuild(); };
+$('N').oninput = e => { P.n = +e.target.value; syncUI(); rebuild(); };
+$('A').oninput = e => { P.a = +e.target.value; syncUI(); rebuild(); };
+$('J').oninput = e => { P.j = +e.target.value; syncUI(); rebuild(); };
+$('S').oninput = e => { P.s = +e.target.value; syncUI(); rebuild(); };
+$('W').oninput = e => { P.w = +e.target.value; syncUI(); dirty = true; };
+$('G').oninput = e => { P.g = +e.target.value; stopAnim(); syncUI(); dirty = true; };
+$('leaf').onchange = e => { P.leaf = e.target.checked; dirty = true; };
+$('showStr').onchange = e => { P.showStr = e.target.checked; showString(); };
+
+// growth animations
+let anim = null;
+function stopAnim() { anim = null; $('play').textContent = '▶ 播放生长'; $('grow').textContent = '▶ 逐代生长'; }
+$('play').onclick = () => {
+  if (anim) return stopAnim();
+  anim = { type: 'draw', t0: performance.now() }; $('play').textContent = '■ 停止';
+};
+$('grow').onclick = () => {
+  if (anim) return stopAnim();
+  anim = { type: 'gen', target: P.n, t0: performance.now() }; $('grow').textContent = '■ 停止';
+  P.n = 0; P.g = 1; syncUI(); rebuild();
+};
+function stepAnim(now) {
+  if (!anim) return;
+  if (anim.type === 'draw') {
+    P.g = Math.min(1, (now - anim.t0) / 5000); syncUI(); dirty = true;
+    if (P.g >= 1) stopAnim();
+  } else if (now - anim.t0 > 900) {
+    if (P.n >= anim.target) return stopAnim();
+    P.n++; anim.t0 = now; syncUI(); rebuild();
+  }
+}
+
+// pan / zoom
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  view.x += e.clientX - drag[0]; view.y += e.clientY - drag[1]; drag = [e.clientX, e.clientY]; dirty = true;
+});
+cv.addEventListener('pointerup', () => drag = null);
+cv.addEventListener('dblclick', () => { Object.assign(view, { x: 0, y: 0, zoom: 1 }); dirty = true; });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY * 0.0015), r = cv.getBoundingClientRect();
+  const mx = e.clientX - r.left - r.width / 2, my = e.clientY - r.top - r.height / 2;
+  view.x = mx - (mx - view.x) * f; view.y = my - (my - view.y) * f;   // zoom about the cursor
+  view.zoom *= f; dirty = true;
+}, { passive: false });
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  cv.width = Math.max(1, Math.round(r.width * devicePixelRatio));
+  cv.height = Math.max(1, Math.round(r.height * devicePixelRatio));
+  dirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=bush&n=5&a=20&j=6&s=3  or a custom system ?ax=F&r=F%3DF[+F]F[-F]F&a=25.7&n=5
+const q = new URLSearchParams(location.search);
+loadPreset(PRESETS[q.get('p')] ? q.get('p') : 'plant');
+if (q.has('ax') || q.has('r')) {
+  P.preset = ''; P.kind = q.get('k') === 'curve' ? 'curve' : 'plant';
+  // a query string decodes an unescaped '+' to a space; spaces mean nothing in a rule, so map them back
+  if (q.has('ax')) P.axiom = q.get('ax').replace(/ /g, '+');
+  if (q.has('r')) P.rules = q.get('r').replace(/ /g, '+').replace(/;/g, '\n');
+}
+const num = (k, f) => { if (q.has(k)) { const x = +q.get(k); if (Number.isFinite(x)) f(x); } };
+num('n', x => P.n = Math.max(0, Math.min(10, Math.round(x))));
+num('a', x => P.a = x); num('h', x => P.heading = x); num('j', x => P.j = x);
+num('s', x => P.s = Math.round(x)); num('w', x => P.w = x);
+num('g', x => P.g = Math.max(0, Math.min(1, x)));
+if (q.get('leaf') === '0') P.leaf = false;
+
+resize(); syncUI(); rebuild();
+(function loop(now) {
+  stepAnim(now);
+  if (dirty) { dirty = false; draw(); window.__ready = true; }
+  requestAnimationFrame(loop);
+})(performance.now());
+</script>
+</body>
+</html>
