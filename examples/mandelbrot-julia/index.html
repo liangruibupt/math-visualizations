@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Mandelbrot 集与 Julia 集 · 分形</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0e1014; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 280px; padding: 10px 14px; box-sizing: border-box;
+    background: rgba(30,33,40,.92); border: 1px solid #333a45; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #9fb4d0; border-top: 1px solid #333a45; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8c95a3; display: block; }
+  input[type=range], select { width: 100%; }
+  select { background: #2b313c; color: #e6e6e6; border: 1px solid #3d4552; border-radius: 4px; padding: 2px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .presets button { background: #2b313c; color: #e6e6e6; border: 1px solid #3d4552;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  .presets button:hover { background: #3a4250; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  #views { position: absolute; left: 304px; right: 0; top: 0; bottom: 0; display: flex; gap: 4px; }
+  .view { position: relative; flex: 1; min-width: 0; min-height: 0; }
+  .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .view canvas.gl { cursor: crosshair; }
+  .view canvas.ov { pointer-events: none; }
+  .tag { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(14,16,20,.75); color: #cfd6e0; font-size: 12px; }
+  .tag b { color: #fff; }
+  #info { position: absolute; right: 10px; top: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(14,16,20,.75); color: #cfd6e0; font-size: 12px; }
+  #info:empty { display: none; }
+  @media (max-width: 900px) { #views { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1>Mandelbrot 集与 Julia 集</h1>
+  <small>同一个迭代 <span class="mono">z → z<sup>d</sup> + c</span>，两种看法：左图固定 z₀ = 0、让 c 取遍平面；右图固定 c、让 z₀ 取遍平面。</small>
+
+  <h2>参数</h2>
+  <div class="row">
+    <label>当前 c <b id="vC"></b></label>
+    <small>在左图单击设定 c；勾选“跟随鼠标”后移动鼠标即可实时改变</small>
+  </div>
+  <div class="row">
+    <label>幂次 d <b id="vD"></b></label>
+    <input id="D" type="range" min="2" max="8" step="1">
+    <small>d = 2 是经典 Mandelbrot 集；d 越大，对称轴越多（d − 1 重旋转对称）</small>
+  </div>
+  <div class="row">
+    <label>最大迭代次数 <b id="vI"></b></label>
+    <input id="I" type="range" min="20" max="2000" step="10">
+    <small>放大越深需要越多次迭代才能分辨边界</small>
+  </div>
+
+  <h2>显示</h2>
+  <div class="row">
+    <label>配色</label>
+    <select id="P">
+      <option value="0">火焰</option>
+      <option value="1">海洋</option>
+      <option value="2">彩虹</option>
+      <option value="3">灰度</option>
+    </select>
+  </div>
+  <div class="row">
+    <label>色带周期 <b id="vY"></b></label>
+    <input id="Y" type="range" min="4" max="200" step="1">
+    <small>多少步逃逸时间对应一轮颜色循环</small>
+  </div>
+  <div class="checks">
+    <label><input id="orbit" type="checkbox" checked> 显示迭代轨道</label>
+    <label><input id="follow" type="checkbox"> 跟随鼠标</label>
+  </div>
+
+  <h2>预设</h2>
+  <small>Julia 集的 c</small>
+  <div class="presets">
+    <button data-c="-0.123,0.745">Douady 兔子</button>
+    <button data-c="0,1">树枝</button>
+    <button data-c="-0.75,0">圣马可</button>
+    <button data-c="-0.391,-0.587">Siegel 圆盘</button>
+    <button data-c="-0.8,0.156">龙</button>
+    <button data-c="0.285,0.01">星系</button>
+  </div>
+  <small style="margin-top:6px">Mandelbrot 集的局部</small>
+  <div class="presets">
+    <button data-m="-0.7453,0.1127,0.012">海马谷</button>
+    <button data-m="0.2845,0.0105,0.02">大象谷</button>
+    <button data-m="-1.7686,0.0018,0.06">迷你 Mandelbrot</button>
+    <button data-m="-0.5,0,3.2">重置视图</button>
+  </div>
+  <small style="margin-top:8px">拖动平移 · 滚轮缩放 · 单击左图设定 c。<br>使用单精度浮点，放大到约 10<sup>5</sup> 倍后画面会变成色块。</small>
+</div>
+
+<div id="views">
+  <div class="view" id="vm">
+    <canvas class="gl" id="m"></canvas><canvas class="ov" id="mo"></canvas>
+    <div class="tag"><b>Mandelbrot 集</b>：z₀ = 0，c 取遍平面 · <span id="zm"></span></div>
+    <div id="info"></div>
+  </div>
+  <div class="view" id="vj">
+    <canvas class="gl" id="j"></canvas><canvas class="ov" id="jo"></canvas>
+    <div class="tag"><b>Julia 集</b>：c 固定，z₀ 取遍平面 · <span id="zj"></span></div>
+  </div>
+</div>
+
+<script>
+// ---------- shader ----------
+const VS = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';
+const FS = `
+precision highp float;
+uniform vec2 uRes, uCenter, uC;
+uniform float uScale, uCycle;
+uniform int uIter, uPow;
+uniform bool uJulia;
+uniform vec3 uA, uB, uK, uPh;
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
+vec2 cpow(vec2 z) {
+  vec2 r = z;
+  for (int k = 1; k < 8; k++) { if (k >= uPow) break; r = cmul(r, z); }
+  return r;
+}
+void main() {
+  vec2 pt = uCenter + (gl_FragCoord.xy - 0.5 * uRes) * uScale;
+  vec2 z = uJulia ? pt : vec2(0.0);
+  vec2 c = uJulia ? uC : pt;
+  float n = -1.0;
+  for (int i = 0; i < 4000; i++) {
+    if (i >= uIter) break;
+    z = cpow(z) + c;
+    if (dot(z, z) > 256.0) { n = float(i); break; }   // escape radius 16
+  }
+  if (n < 0.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }   // bounded: inside the set
+  // smooth (continuous) escape time: removes the stair-step colour bands
+  float sm = n + 1.0 - log(log(length(z))) / log(float(uPow));
+  vec3 col = uA + uB * cos(6.28318 * (uK * (sm / uCycle) + uPh));
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+
+// cosine palettes: col = a + b·cos(2π(k·t + ph))
+const PALETTES = [
+  [[0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [1, 1, 1], [0.0, 0.10, 0.20]],      // 火焰
+  [[0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [1, 1, 1], [0.50, 0.60, 0.70]],     // 海洋
+  [[0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [1, 1, 1], [0.00, 0.33, 0.67]],     // 彩虹
+  [[0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [1, 1, 1], [0.0, 0.0, 0.0]],        // 灰度
+];
+
+function makeView(canvasId, overlayId, julia, state) {
+  const cv = document.getElementById(canvasId), ov = document.getElementById(overlayId);
+  const gl = cv.getContext('webgl', { preserveDrawingBuffer: true, antialias: false });
+  const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o);
+    if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+  const pr = gl.createProgram();
+  gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(pr); gl.useProgram(pr);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, 'p');
+  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = {};
+  for (const n of ['uRes', 'uCenter', 'uC', 'uScale', 'uCycle', 'uIter', 'uPow', 'uJulia', 'uA', 'uB', 'uK', 'uPh'])
+    U[n] = gl.getUniformLocation(pr, n);
+  const v = { cv, ov, gl, U, julia, s: state, ctx: ov.getContext('2d'), hover: null };
+  // scale = complex units per device pixel; span covers the shorter side
+  v.scale = () => v.s.span / Math.min(cv.width, cv.height);
+  v.toC = (ex, ey) => {   // CSS offset -> complex
+    const d = devicePixelRatio, sc = v.scale();
+    return [v.s.x + (ex * d - cv.width / 2) * sc, v.s.y + (cv.height / 2 - ey * d) * sc];
+  };
+  v.toScreen = (zr, zi) => {   // complex -> CSS px
+    const d = devicePixelRatio, sc = v.scale();
+    return [((zr - v.s.x) / sc + cv.width / 2) / d, (cv.height / 2 - (zi - v.s.y) / sc) / d];
+  };
+  return v;
+}
+
+const P = { cr: -0.123, ci: 0.745, d: 2, it: 300, pal: 0, cyc: 40, orbit: true, follow: false,
+  M: { x: -0.5, y: 0, span: 3.2 }, J: { x: 0, y: 0, span: 3.2 } };
+
+// URL params, e.g. ?cr=-0.8&ci=0.156&d=2&it=500&mx=-0.745&my=0.11&ms=0.01
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = +q.get(k); if (Number.isFinite(x)) f(x); } };
+num('cr', x => P.cr = x); num('ci', x => P.ci = x);
+num('d', x => P.d = Math.min(8, Math.max(2, Math.round(x))));
+num('it', x => P.it = Math.min(2000, Math.max(20, Math.round(x))));
+num('pal', x => P.pal = Math.min(3, Math.max(0, Math.round(x)))); num('cyc', x => P.cyc = x);
+num('mx', x => P.M.x = x); num('my', x => P.M.y = x); num('ms', x => P.M.span = x);
+num('jx', x => P.J.x = x); num('jy', x => P.J.y = x); num('js', x => P.J.span = x);
+if (q.has('follow')) P.follow = q.get('follow') === '1';
+
+const VM = makeView('m', 'mo', false, P.M), VJ = makeView('j', 'jo', true, P.J);
+const views = [VM, VJ];
+let dirty = true;
+
+function draw(v) {
+  const { gl, U, cv } = v, pal = PALETTES[P.pal];
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.uniform2f(U.uRes, cv.width, cv.height);
+  gl.uniform2f(U.uCenter, v.s.x, v.s.y);
+  gl.uniform2f(U.uC, P.cr, P.ci);
+  gl.uniform1f(U.uScale, v.scale());
+  gl.uniform1f(U.uCycle, P.cyc);
+  gl.uniform1i(U.uIter, P.it);
+  gl.uniform1i(U.uPow, P.d);
+  gl.uniform1i(U.uJulia, v.julia ? 1 : 0);
+  gl.uniform3fv(U.uA, pal[0]); gl.uniform3fv(U.uB, pal[1]); gl.uniform3fv(U.uK, pal[2]); gl.uniform3fv(U.uPh, pal[3]);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// iterate in JS to draw the orbit z0, z1, z2, ... of one point
+function orbitOf(z0r, z0i, cr, ci) {
+  const pts = [[z0r, z0i]];
+  let zr = z0r, zi = z0i, esc = -1;
+  const limit = Math.min(P.it, 500);
+  for (let i = 0; i < limit; i++) {
+    let rr = zr, ri = zi;
+    for (let k = 1; k < P.d; k++) { const t = rr * zr - ri * zi; ri = rr * zi + ri * zr; rr = t; }
+    zr = rr + cr; zi = ri + ci;
+    pts.push([zr, zi]);
+    if (zr * zr + zi * zi > 4) { esc = i + 1; break; }   // |z| > 2 guarantees escape
+  }
+  return { pts, esc, limit };
+}
+
+function drawOverlay(v) {
+  const { ov, ctx } = v, d = devicePixelRatio;
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, ov.width / d, ov.height / d);
+  if (!v.julia) {   // mark current c on the Mandelbrot view
+    const [x, y] = v.toScreen(P.cr, P.ci);
+    ctx.strokeStyle = '#7fffd4'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, 2 * Math.PI);
+    ctx.moveTo(x - 10, y); ctx.lineTo(x + 10, y); ctx.moveTo(x, y - 10); ctx.lineTo(x, y + 10); ctx.stroke();
+  }
+  if (!P.orbit || !v.hover) return;
+  const [hr, hi] = v.hover;
+  const o = v.julia ? orbitOf(hr, hi, P.cr, P.ci) : orbitOf(0, 0, hr, hi);
+  ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  o.pts.forEach(([a, b], i) => { const [x, y] = v.toScreen(a, b); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke();
+  o.pts.forEach(([a, b], i) => {
+    const [x, y] = v.toScreen(a, b);
+    ctx.fillStyle = i === 0 ? '#7fffd4' : 'rgba(255,211,138,.9)';
+    ctx.beginPath(); ctx.arc(x, y, i === 0 ? 3.5 : 2, 0, 2 * Math.PI); ctx.fill();
+  });
+  if (!v.julia) {
+    $('info').textContent = `c = ${fmtC(hr, hi)} · ` +
+      (o.esc > 0 ? `第 ${o.esc} 步 |z| > 2，逃逸 → c 不在集合内` : `${o.limit} 步内有界 → c 很可能在集合内`);
+  }
+}
+
+const $ = id => document.getElementById(id);
+const fmtC = (a, b) => `${a.toFixed(4)} ${b < 0 ? '−' : '+'} ${Math.abs(b).toFixed(4)}i`;
+
+function syncUI() {
+  $('vC').textContent = fmtC(P.cr, P.ci);
+  $('D').value = P.d; $('vD').textContent = P.d;
+  $('I').value = P.it; $('vI').textContent = P.it;
+  $('P').value = P.pal; $('Y').value = P.cyc; $('vY').textContent = P.cyc;
+  $('orbit').checked = P.orbit; $('follow').checked = P.follow;
+  $('zm').textContent = `放大 ${(3.2 / P.M.span).toPrecision(3)}×`;
+  $('zj').textContent = `放大 ${(3.2 / P.J.span).toPrecision(3)}×`;
+}
+
+function setC(r, i) { P.cr = r; P.ci = i; dirty = true; syncUI(); }
+
+for (const v of views) {
+  let drag = null;
+  v.cv.addEventListener('pointerdown', e => {
+    drag = { x: e.offsetX, y: e.offsetY, moved: false }; v.cv.setPointerCapture(e.pointerId);
+  });
+  v.cv.addEventListener('pointermove', e => {
+    v.hover = v.toC(e.offsetX, e.offsetY);
+    if (drag) {
+      const dx = e.offsetX - drag.x, dy = e.offsetY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+      if (drag.moved) {
+        const sc = v.scale() * devicePixelRatio;
+        v.s.x -= dx * sc; v.s.y += dy * sc; drag.x = e.offsetX; drag.y = e.offsetY;
+      }
+    } else if (!v.julia && P.follow) { setC(...v.hover); }
+    dirty = true;
+  });
+  v.cv.addEventListener('pointerup', e => {
+    if (drag && !drag.moved && !v.julia) setC(...v.toC(e.offsetX, e.offsetY));
+    drag = null; syncUI();
+  });
+  v.cv.addEventListener('pointerleave', () => { v.hover = null; if (!v.julia) $('info').textContent = ''; dirty = true; });
+  v.cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    const before = v.toC(e.offsetX, e.offsetY);
+    v.s.span = Math.min(8, Math.max(1e-6, v.s.span * Math.exp(e.deltaY * 0.0015)));
+    const after = v.toC(e.offsetX, e.offsetY);
+    v.s.x += before[0] - after[0]; v.s.y += before[1] - after[1];   // keep the point under the cursor fixed
+    dirty = true; syncUI();
+  }, { passive: false });
+}
+
+$('D').oninput = e => { P.d = +e.target.value; dirty = true; syncUI(); };
+$('I').oninput = e => { P.it = +e.target.value; dirty = true; syncUI(); };
+$('P').onchange = e => { P.pal = +e.target.value; dirty = true; };
+$('Y').oninput = e => { P.cyc = +e.target.value; dirty = true; syncUI(); };
+$('orbit').onchange = e => { P.orbit = e.target.checked; dirty = true; };
+$('follow').onchange = e => { P.follow = e.target.checked; };
+document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => {
+  const [r, i] = b.dataset.c.split(',').map(Number);
+  Object.assign(P.J, { x: 0, y: 0, span: 3.2 }); setC(r, i);
+});
+document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+  const [x, y, s] = b.dataset.m.split(',').map(Number);
+  Object.assign(P.M, { x, y, span: s }); dirty = true; syncUI();
+});
+
+function resize() {
+  for (const v of views) {
+    const r = v.cv.getBoundingClientRect(), d = devicePixelRatio;
+    for (const c of [v.cv, v.ov]) { c.width = Math.max(1, Math.round(r.width * d)); c.height = Math.max(1, Math.round(r.height * d)); }
+  }
+  dirty = true;
+}
+addEventListener('resize', resize);
+
+// test hook: simulate hovering a complex point on the Mandelbrot view
+window.__hoverC = (r, i) => { VM.hover = [r, i]; dirty = true; };
+
+resize(); syncUI();
+(function loop() {
+  if (dirty) { dirty = false; views.forEach(draw); views.forEach(drawOverlay); window.__ready = true; }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -7,6 +7,7 @@
 | 样例 | 数学主题 | 预览 |
 |------|----------|------|
 | [Raup 贝壳卷曲模型 · 3D](examples/raup-shell/README.md)（[打开页面](examples/raup-shell/index.html)） | 对数螺线、自相似、超椭圆；W/D/T 三个数字生成几乎所有螺旋贝壳，可调管口形状、壁厚、纹理、透明度并沿中轴剖切 | <img src="examples/raup-shell/images/cover.png" width="240"> |
+| [Mandelbrot 集与 Julia 集 · 分形](examples/mandelbrot-julia/README.md)（[打开页面](examples/mandelbrot-julia/index.html)） | 复数迭代 z → z^d + c、逃逸时间、连通性定理、自相似；左右联动，单击 Mandelbrot 集上任一点即得对应 Julia 集，可显示迭代轨道 | <img src="examples/mandelbrot-julia/images/rabbit-orbit.png" width="240"> |
 
 ## 目录约定
 
