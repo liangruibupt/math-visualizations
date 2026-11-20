@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Raup 贝壳卷曲模型 · 3D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #14161a; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 280px; padding: 10px 14px;
+    background: rgba(30,33,40,.88); border: 1px solid #333a45; border-radius: 8px;
+    max-height: calc(100% - 50px); overflow-y: auto; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #9fb4d0; border-top: 1px solid #333a45; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  .row small { color: #8c95a3; display: block; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .presets button { background: #2b313c; color: #e6e6e6; border: 1px solid #3d4552;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  .presets button:hover { background: #3a4250; }
+  .checks { display: flex; gap: 12px; margin-top: 4px; }
+  #hint { position: absolute; bottom: 10px; left: 12px; color: #7d8592; font-size: 12px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="panel">
+  <h1>Raup 贝壳卷曲模型</h1>
+
+  <div class="row">
+    <label>W 每圈扩张率 <b id="vW"></b></label>
+    <input id="W" type="range" min="0" max="1000" step="1">
+    <small>转一圈后生成管口放大的倍数</small>
+  </div>
+  <div class="row">
+    <label>D 距中心轴的距离 <b id="vD"></b></label>
+    <input id="D" type="range" min="0" max="0.95" step="0.01">
+    <small>管口内缘 / 外缘到中轴的距离比；0 = 贴着中轴</small>
+  </div>
+  <div class="row">
+    <label>T 每圈下降量 <b id="vT"></b></label>
+    <input id="T" type="range" min="0" max="8" step="0.05">
+    <small>沿中轴的下移量（相对管口中心半径）；0 = 平旋</small>
+  </div>
+  <div class="row">
+    <label>圈数 <b id="vN"></b></label>
+    <input id="N" type="range" min="1" max="12" step="0.25">
+  </div>
+
+  <h2>管口形状</h2>
+  <div class="row">
+    <label>高宽比 <b id="vE"></b></label>
+    <input id="E" type="range" min="0.3" max="3" step="0.01">
+    <small>沿中轴方向 / 径向的半轴之比；1 = 圆，&gt;1 竖长，&lt;1 扁</small>
+  </div>
+  <div class="row">
+    <label>倾斜角 <b id="vR"></b></label>
+    <input id="R" type="range" min="-60" max="60" step="1">
+    <small>管口在径向剖面内的旋转角度</small>
+  </div>
+  <div class="row">
+    <label>方圆度 <b id="vS"></b></label>
+    <input id="S" type="range" min="1" max="8" step="0.1">
+    <small>超椭圆指数：1 = 菱形，2 = 椭圆，越大越方</small>
+  </div>
+  <div class="row">
+    <label>管壁厚度 <b id="vH"></b></label>
+    <input id="H" type="range" min="0.02" max="0.8" step="0.01">
+    <small>占管口尺寸的比例，随生长等比变厚</small>
+  </div>
+  <div class="checks"><label><input id="G" type="checkbox"> 管口形状随生长渐变</label></div>
+  <div id="gStart" style="display:none">
+    <small>开启后，上面三项是壳口处的形状，下面三项是壳顶处的形状，中间的过渡快慢由下面的“过渡曲线 γ”控制</small>
+    <div class="row">
+      <label>壳顶高宽比 <b id="vE0"></b></label>
+      <input id="E0" type="range" min="0.3" max="3" step="0.01">
+    </div>
+    <div class="row">
+      <label>壳顶倾斜角 <b id="vR0"></b></label>
+      <input id="R0" type="range" min="-60" max="60" step="1">
+    </div>
+    <div class="row">
+      <label>壳顶方圆度 <b id="vS0"></b></label>
+      <input id="S0" type="range" min="1" max="8" step="0.1">
+    </div>
+    <div class="row">
+      <label>过渡曲线 γ <b id="vC"></b></label>
+      <input id="C" type="range" min="0" max="3" step="0.05">
+      <small>0 = 按圈数均匀过渡，1 = 按管口尺寸线性过渡，越大变化越集中在壳口</small>
+    </div>
+  </div>
+
+  <h2>壳表纹理</h2>
+  <div class="row">
+    <label>螺肋条数 <b id="vRN"></b></label>
+    <input id="RN" type="range" min="0" max="60" step="1">
+    <small>沿螺旋方向延伸的纵肋，绕管口一周的条数；0 = 无</small>
+  </div>
+  <div class="row">
+    <label>螺肋高度 <b id="vRA"></b></label>
+    <input id="RA" type="range" min="0" max="0.2" step="0.005">
+  </div>
+  <div class="row">
+    <label>生长线每圈条数 <b id="vGN"></b></label>
+    <input id="GN" type="range" min="0" max="120" step="1">
+    <small>平行于壳口的横纹，强弱略有起伏；0 = 无</small>
+  </div>
+  <div class="row">
+    <label>生长线高度 <b id="vGA"></b></label>
+    <input id="GA" type="range" min="0" max="0.12" step="0.005">
+  </div>
+
+  <h2>显示</h2>
+  <div class="row">
+    <label>透明度 <b id="vO"></b></label>
+    <input id="O" type="range" min="0.05" max="1" step="0.01">
+    <small>调低可看到内部的早期螺层</small>
+  </div>
+  <div class="checks">
+    <label><input id="wire" type="checkbox"> 网格线</label>
+    <label><input id="axis" type="checkbox" checked> 中轴</label>
+  </div>
+  <div class="row">
+    <div class="checks">
+      <label><input id="cut" type="checkbox"> 沿中轴剖切</label>
+      <label><input id="flip" type="checkbox"> 保留另一半</label>
+    </div>
+    <label>剖切面角度 <b id="vA"></b></label>
+    <input id="A" type="range" min="0" max="360" step="1">
+    <small>剖切面始终包含中轴，绕中轴旋转；截面按管壁实体填充</small>
+  </div>
+  <div class="presets">
+    <button data-p="1.9,0.35,0,6">菊石</button>
+    <button data-p="3.2,0,0,4">鹦鹉螺</button>
+    <button data-p="2.0,0.15,1.6,5">蜗牛</button>
+    <button data-p="1.25,0.15,4.5,10">锥螺</button>
+    <button data-p="2.8,0.4,0.4,3">盘螺</button>
+  </div>
+</div>
+<div id="hint">左键拖动旋转 · 滚轮缩放 · 右键平移</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---- scene ----
+const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.localClippingEnabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14161a);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 100);
+camera.position.set(2.6, 1.4, 2.6);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(3, 4, 2); scene.add(key);
+const fill = new THREE.DirectionalLight(0xffe8cc, 0.6); fill.position.set(-3, -1, -2); scene.add(fill);
+
+// Section plane through the coiling axis (world Y). The group sits on the axis, so constant = 0.
+const cutPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+
+// Back faces render first, then front faces, so overlapping whorls blend in a stable order.
+const matBack = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.BackSide,
+  roughness: 0.55, metalness: 0.05, transparent: true, color: 0xffc9b8 });
+const matFront = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.FrontSide,
+  roughness: 0.45, metalness: 0.05, transparent: true });
+const matWire = new THREE.MeshBasicMaterial({ color: 0x9fd0ff, wireframe: true, transparent: true, opacity: 0.25 });
+
+// Solid section caps (stencil technique): count clipped back/front faces per pixel;
+// where the count is non-zero the plane lies inside the wall, so draw the cap there.
+const stencilBase = { depthWrite: false, depthTest: false, colorWrite: false, stencilWrite: true,
+  stencilFunc: THREE.AlwaysStencilFunc, clippingPlanes: [cutPlane] };
+const matStBack = new THREE.MeshBasicMaterial({ ...stencilBase, side: THREE.BackSide,
+  stencilFail: THREE.IncrementWrapStencilOp, stencilZFail: THREE.IncrementWrapStencilOp,
+  stencilZPass: THREE.IncrementWrapStencilOp });
+const matStFront = new THREE.MeshBasicMaterial({ ...stencilBase, side: THREE.FrontSide,
+  stencilFail: THREE.DecrementWrapStencilOp, stencilZFail: THREE.DecrementWrapStencilOp,
+  stencilZPass: THREE.DecrementWrapStencilOp });
+const capMat = new THREE.MeshStandardMaterial({ color: 0xefe0c4, roughness: 0.75, metalness: 0,
+  side: THREE.DoubleSide, stencilWrite: true, stencilRef: 0, stencilFunc: THREE.NotEqualStencilFunc,
+  stencilFail: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp, stencilZPass: THREE.ReplaceStencilOp });
+const cap = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), capMat);
+cap.renderOrder = 1.1;
+cap.onAfterRender = r => r.clearStencil();
+scene.add(cap);
+
+const group = new THREE.Group(); scene.add(group);
+let meshes = [], axisLine;
+
+// ---- Raup model ----
+// Generating curve: a superellipse aperture whose radial extent runs from D*r_out to r_out.
+// After angle θ every length scales by W^(θ/2π); the curve centre drops by T * r_centre.
+// The wall is a closed solid: outer surface, inner surface (scaled by 1 - thickness),
+// plus an annulus at the aperture and one at the apex.
+function buildGeometry(p) {
+  // resolution follows the texture: ~5 samples per growth line, ~6 per rib, capped at ~800k samples per surface
+  const turns = p.N, segV = Math.min(240, Math.max(64, p.RN * 6));
+  const perTurn = Math.min(360, Math.max(120, p.GN * 5));
+  const segU = Math.max(64, Math.min(Math.ceil(turns * perTurn), Math.floor(800000 / segV)));
+  const thetaMax = turns * 2 * Math.PI;
+  const k = 1 - p.H;
+  const g0 = p.G ? { E: p.E0, R: p.R0, S: p.S0 } : p;   // aperture shape at the apex
+  // transition curve: t = (s^γ - s0^γ) / (1 - s0^γ), s = aperture size, s0 = apex size.
+  // γ → 0 reduces to log(size), i.e. uniform per turn; γ = 1 is linear in size.
+  const sMin = Math.pow(p.W, -turns), gam = p.C;
+  const sMinG = Math.pow(sMin, gam);
+  const tAt = (i, s) => gam < 1e-3 ? i / segU : (Math.pow(s, gam) - sMinG) / (1 - sMinG);
+
+  // unit aperture profile (radial u, axial v) at growth fraction t (0 = apex, 1 = aperture):
+  // superellipse with radial semi-axis 1 and axial semi-axis E, then tilted by R
+  const profile = t => {
+    const E = g0.E + (p.E - g0.E) * t, ex = 2 / (g0.S + (p.S - g0.S) * t);
+    const tau = THREE.MathUtils.degToRad(g0.R + (p.R - g0.R) * t), cT = Math.cos(tau), sT = Math.sin(tau);
+    const out = [];
+    for (let j = 0; j <= segV; j++) {
+      const ph = 2 * Math.PI * j / segV, c = Math.cos(ph), s = Math.sin(ph);
+      const u = Math.sign(c) * Math.pow(Math.abs(c), ex), v = E * Math.sign(s) * Math.pow(Math.abs(s), ex);
+      out.push([u * cT - v * sT, u * sT + v * cT, ph]);
+    }
+    return out;
+  };
+
+  const pos = [], col = [], idx = [];
+  const cShellA = new THREE.Color(0xf3e3c3), cShellB = new THREE.Color(0x8a4b25);
+  const cNacre = new THREE.Color(0xf4c6b6), cRim = new THREE.Color(0xf6ead2), c = new THREE.Color();
+  const V = (x, y, z, cc) => { pos.push(x, y, z); col.push(cc.r, cc.g, cc.b); return pos.length / 3 - 1; };
+  // push a triangle, flipping it if its normal disagrees with the wanted direction (dx,dy,dz)
+  const tri = (a, b, d, dx, dy, dz) => {
+    const ax = pos[3*a], ay = pos[3*a+1], az = pos[3*a+2];
+    const ux = pos[3*b] - ax, uy = pos[3*b+1] - ay, uz = pos[3*b+2] - az;
+    const vx = pos[3*d] - ax, vy = pos[3*d+1] - ay, vz = pos[3*d+2] - az;
+    const nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
+    if (nx*dx + ny*dy + nz*dz < 0) idx.push(a, d, b); else idx.push(a, b, d);
+  };
+
+  const centers = [], outer = [], inner = [], rings = [];
+  for (let i = 0; i <= segU; i++) {
+    const th = thetaMax * i / segU;
+    const s = Math.pow(p.W, th / (2 * Math.PI) - turns);   // final aperture: r_out = 1
+    const prof = profile(tAt(i, s));
+    const rc = (1 + p.D) / 2 * s, a = (1 - p.D) / 2 * s, zc = -p.T * rc;
+    const ct = Math.cos(th), st = Math.sin(th);
+    centers.push([rc * ct, zc, rc * st]);
+    const band = 0.5 + 0.5 * Math.sin(th * 6);
+    // growth lines: sharp ridges parallel to the aperture, strength drifts irregularly
+    const gl = p.GN > 0 ? p.GA * Math.pow(0.5 + 0.5 * Math.cos(th * p.GN), 8)
+      * (0.6 + 0.4 * Math.sin(th * 1.7 + 3 * Math.sin(th * 0.37))) : 0;
+    const ro = [], ri = [], rg = [];
+    for (let j = 0; j <= segV; j++) {
+      const [u, v, ph] = prof[j];
+      // spiral ribs: ridges around the aperture that run along the coil; outer wall only
+      const rib = p.RN > 0 ? p.RA * Math.pow(0.5 + 0.5 * Math.cos(ph * p.RN), 3) : 0;
+      const bump = 1 + rib + gl;
+      const stripe = 0.5 + 0.5 * Math.cos(ph * 3);
+      c.copy(cShellA).lerp(cShellB, Math.min(1, 0.15 + 0.55 * band * stripe + 4 * gl));
+      const radO = rc + a * bump * u, yO = zc + a * bump * v;
+      const radI = rc + k * a * u, yI = zc + k * a * v;
+      ro.push(V(radO * ct, yO, radO * st, c));
+      ri.push(V(radI * ct, yI, radI * st, cNacre));
+      rg.push([radO * ct, yO, radO * st, radI * ct, yI, radI * st]);
+    }
+    outer.push(ro); inner.push(ri); rings.push(rg);
+  }
+
+  for (let i = 0; i < segU; i++) {
+    const [cx, cy, cz] = centers[i];
+    for (let j = 0; j < segV; j++) {
+      let a = outer[i][j], b = outer[i+1][j], d = outer[i][j+1], e = outer[i+1][j+1];
+      let dx = pos[3*a] - cx, dy = pos[3*a+1] - cy, dz = pos[3*a+2] - cz;
+      tri(a, b, d, dx, dy, dz); tri(b, e, d, dx, dy, dz);
+      a = inner[i][j]; b = inner[i+1][j]; d = inner[i][j+1]; e = inner[i+1][j+1];
+      tri(a, b, d, -dx, -dy, -dz); tri(b, e, d, -dx, -dy, -dz);   // inner wall faces the lumen
+    }
+  }
+
+  // annular caps: aperture (growth direction) and apex (opposite)
+  const ring = (i, sgn) => {
+    const i2 = i === 0 ? 1 : i - 1;
+    const dx = sgn * (centers[i][0] - centers[i2][0]), dy = sgn * (centers[i][1] - centers[i2][1]),
+          dz = sgn * (centers[i][2] - centers[i2][2]);
+    const o = [], n = [];
+    for (let j = 0; j <= segV; j++) {
+      const r = rings[i][j];
+      o.push(V(r[0], r[1], r[2], cRim)); n.push(V(r[3], r[4], r[5], cRim));
+    }
+    for (let j = 0; j < segV; j++) { tri(o[j], n[j], o[j+1], dx, dy, dz); tri(n[j], n[j+1], o[j+1], dx, dy, dz); }
+  };
+  ring(segU, 1);
+  ring(0, -1);   // centres[0]-centres[1] already points backwards
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+function rebuild() {
+  meshes.forEach(m => group.remove(m));
+  if (meshes[0]) meshes[0].geometry.dispose();
+  if (axisLine) { group.remove(axisLine); axisLine.geometry.dispose(); }
+  const g = buildGeometry(P);
+  g.computeBoundingBox();
+  const bb = g.boundingBox;
+  g.translate(0, -(bb.min.y + bb.max.y) / 2, 0);   // keep the shell vertically centred on screen
+  const mk = (mat, order) => { const m = new THREE.Mesh(g, mat); m.renderOrder = order; return m; };
+  const stB = mk(matStBack, 1), stF = mk(matStFront, 1);
+  const back = mk(matBack, 2), front = mk(matFront, 3), wire = mk(matWire, 4);
+  stB.visible = stF.visible = P.cut; wire.visible = P.wire;
+  meshes = [stB, stF, back, front, wire];
+  group.add(...meshes);
+  const h = (bb.max.y - bb.min.y) / 2 + 0.3;
+  axisLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -h, 0), new THREE.Vector3(0, h, 0)]),
+    new THREE.LineBasicMaterial({ color: 0xff6b6b }));
+  axisLine.visible = P.axis; axisLine.renderOrder = 5;
+  group.add(axisLine);
+  const span = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z);
+  group.scale.setScalar(2 / span);   // shell always fits roughly the same screen size
+}
+
+function applyOpacity() {
+  const o = P.O, opaque = o >= 0.995;
+  for (const m of [matBack, matFront]) {
+    m.opacity = o; m.transparent = !opaque; m.depthWrite = opaque; m.needsUpdate = true;
+  }
+  matBack.opacity = opaque ? 1 : o * 0.8;   // inner walls a bit fainter
+}
+
+function applyCut() {
+  const a = THREE.MathUtils.degToRad(P.A), sgn = P.flip ? -1 : 1;
+  cutPlane.normal.set(sgn * Math.cos(a), 0, sgn * Math.sin(a));
+  const planes = P.cut ? [cutPlane] : [];
+  for (const m of [matBack, matFront, matWire]) { m.clippingPlanes = planes; m.needsUpdate = true; }
+  cap.visible = P.cut;
+  cap.position.set(0, 0, 0);
+  cap.lookAt(cutPlane.normal);
+  if (meshes[0]) meshes[0].visible = meshes[1].visible = P.cut;
+}
+
+// ---- UI ----
+const Wmin = 1.05, Wmax = 12;
+const w2s = w => 1000 * Math.log(w / Wmin) / Math.log(Wmax / Wmin);
+const s2w = s => Wmin * Math.pow(Wmax / Wmin, s / 1000);
+// A=225 keeps the far half, so the cut faces the default camera
+const P = { W: 2.0, D: 0.15, T: 1.6, N: 5, E: 1, R: 0, S: 2, H: 0.12, O: 0.45,
+  G: false, E0: 0.6, R0: 0, S0: 2, C: 1,
+  RN: 24, RA: 0.04, GN: 48, GA: 0.02,
+  wire: false, axis: true, cut: false, flip: false, A: 225 };
+const $ = id => document.getElementById(id);
+const fmt = { W: 2, D: 2, T: 2, E: 2, S: 1, H: 2, O: 2, E0: 2, S0: 1, C: 2, RA: 3, GA: 3 };
+
+function syncUI() {
+  $('W').value = w2s(P.W);
+  for (const k of ['D', 'T', 'N', 'E', 'R', 'S', 'H', 'O', 'A', 'E0', 'R0', 'S0', 'C', 'RN', 'RA', 'GN', 'GA']) $(k).value = P[k];
+  for (const k in fmt) $('v' + k).textContent = P[k].toFixed(fmt[k]);
+  $('vN').textContent = P.N; $('vR').textContent = P.R + '°'; $('vA').textContent = P.A + '°';
+  $('vRN').textContent = P.RN; $('vGN').textContent = P.GN;
+  $('vR0').textContent = P.R0 + '°';
+  $('cut').checked = P.cut; $('flip').checked = P.flip;
+  $('G').checked = P.G; $('gStart').style.display = P.G ? '' : 'none';
+}
+$('W').oninput = e => { P.W = s2w(+e.target.value); syncUI(); rebuild(); };
+$('G').onchange = e => { P.G = e.target.checked; syncUI(); rebuild(); };
+for (const k of ['D', 'T', 'N', 'E', 'R', 'S', 'H', 'E0', 'R0', 'S0', 'C', 'RN', 'RA', 'GN', 'GA'])
+  $(k).oninput = e => { P[k] = +e.target.value; syncUI(); rebuild(); };
+$('O').oninput = e => { P.O = +e.target.value; syncUI(); applyOpacity(); };
+$('A').oninput = e => { P.A = +e.target.value; syncUI(); applyCut(); };
+$('wire').onchange = e => { P.wire = e.target.checked; meshes[4].visible = P.wire; };
+$('axis').onchange = e => { P.axis = e.target.checked; axisLine.visible = P.axis; };
+$('cut').onchange = e => { P.cut = e.target.checked; applyCut(); };
+$('flip').onchange = e => { P.flip = e.target.checked; applyCut(); };
+document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
+  const [w, d, t, n] = b.dataset.p.split(',').map(Number);
+  Object.assign(P, { W: w, D: d, T: t, N: n }); syncUI(); rebuild();
+});
+
+// URL params let you share a shape, e.g. shell.html?W=2&D=0.15&T=1.6&E=1.4&R=20&S=3&H=0.2&cut=1
+const q = new URLSearchParams(location.search);
+for (const k of ['W', 'D', 'T', 'N', 'E', 'R', 'S', 'H', 'O', 'A', 'E0', 'R0', 'S0', 'C', 'RN', 'RA', 'GN', 'GA']) if (q.has(k)) P[k] = +q.get(k);
+if (q.has('G')) P.G = q.get('G') === '1';
+if (q.has('cut')) P.cut = q.get('cut') === '1';
+if (q.has('flip')) P.flip = q.get('flip') === '1';
+
+syncUI(); rebuild(); applyOpacity(); applyCut();
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script>
+</body>
+</html>
