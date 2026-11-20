@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>IFS 蕨叶 · 迭代函数系统与混沌游戏</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0d120e; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(26,33,28,.93); border: 1px solid #34413a; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a9c9a4; border-top: 1px solid #34413a; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8d988f; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2b3530; color: #e6e6e6; border: 1px solid #3d4a42;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #38453d; }
+  button.on { background: #4a6a3f; border-color: #6b8f5c; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #err { color: #ff8f8f; }
+  /* affine map table: one row per map, columns # a b c d e f p × */
+  #maps { display: grid; grid-template-columns: 20px repeat(7, 1fr) 18px; gap: 2px 1px; margin-top: 4px; align-items: center; }
+  #maps .hd { color: #8d988f; text-align: center; font: 11px ui-monospace, Menlo, Consolas, monospace; }
+  #maps input { width: 100%; min-width: 0; box-sizing: border-box; background: #1b211d; color: #e6e6e6;
+    border: 1px solid #3d4a42; border-radius: 3px; padding: 2px 1px; text-align: right;
+    font: 10.5px/1.3 ui-monospace, Menlo, Consolas, monospace; }
+  #maps .sw { width: 20px; height: 18px; border-radius: 3px; border: 2px solid transparent; cursor: pointer;
+    font: bold 11px/14px ui-monospace, Menlo, monospace; color: #0d120e; text-align: center; box-sizing: border-box; }
+  #maps .sw.hl { border-color: #fff; }
+  #maps .del { padding: 0; width: 18px; height: 18px; line-height: 14px; font-size: 13px; }
+  #mapInfo { font: 11px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #a9b4ab; margin-top: 4px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #ov { pointer-events: none; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(13,18,14,.8); color: #cfd8cf; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #stat b { color: #fff; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>IFS 蕨叶 · 混沌游戏</h1>
+  <small>从任意一点出发，每一步按概率 p<sub>i</sub> 随机挑一个仿射变换 <span class="mono">x′ = A<sub>i</sub>x + t<sub>i</sub></span> 作用上去，再把这个点画出来。几百万步之后，点落在的地方就是这组变换的吸引子：一片蕨叶。</small>
+
+  <h2>点数</h2>
+  <div class="row">
+    <label>目标点数 <b id="vN"></b></label>
+    <input id="N" type="range" min="3" max="7" step="0.01">
+  </div>
+  <div class="row">
+    <label>每帧点数 <b id="vB"></b></label>
+    <input id="B" type="range" min="2" max="6" step="0.01">
+    <small>调小可以慢慢看画面被点填满</small>
+  </div>
+  <div class="row">
+    <label>亮度 <b id="vG"></b></label>
+    <input id="G" type="range" min="0.3" max="3" step="0.05">
+    <small>按每个像素被击中次数的对数着色：log(1 + 次数) / log(1 + 最大次数)</small>
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button></div>
+
+  <h2>仿射变换 <span class="mono">x′ = a·x + b·y + e，y′ = c·x + d·y + f</span></h2>
+  <div id="maps"></div>
+  <div class="presets"><button id="add">＋ 添加变换</button><button id="detP">按 |det A| 设概率</button><button id="eqP">等概率</button></div>
+  <div id="mapInfo"></div>
+  <small>单击左侧色块高亮这个变换：它产生的点着它的颜色，其余点变灰。概率 p 会自动归一化。</small>
+  <small id="err"></small>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="col" type="checkbox"> 按变换着色</label>
+    <label><input id="box" type="checkbox"> 显示包围盒的像</label>
+  </div>
+  <small>虚线框是吸引子的包围盒 R，彩色平行四边形是 f<sub>i</sub>(R)。整片叶子正好是它在各个变换下的像拼起来的（自相似）。</small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">拖动平移 · 滚轮缩放 · 双击复位</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><canvas id="ov"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- presets ----------
+// Each map is [a, b, c, d, e, f, p]:  x' = a x + b y + e,  y' = c x + d y + f,  chosen with probability p.
+// Coefficients: Barnsley, "Fractals Everywhere" (1988); Cyclosorus variant and the others are the
+// classic tables reproduced on Wikipedia and in Paul Bourke's IFS notes (Fractint .ifs format).
+const PRESETS = {
+  fern: { name: 'Barnsley 蕨叶', maps: [
+    [0, 0, 0, 0.16, 0, 0, 0.01],
+    [0.85, 0.04, -0.04, 0.85, 0, 1.6, 0.85],
+    [0.20, -0.26, 0.23, 0.22, 0, 1.6, 0.07],
+    [-0.15, 0.28, 0.26, 0.24, 0, 0.44, 0.07]] },
+  mutant: { name: '变种蕨（Cyclosorus）', maps: [
+    [0, 0, 0, 0.25, 0, -0.4, 0.02],
+    [0.95, 0.005, -0.005, 0.93, -0.002, 0.5, 0.84],
+    [0.035, -0.2, 0.16, 0.04, -0.09, 0.02, 0.07],
+    [-0.04, 0.2, 0.16, 0.04, 0.083, 0.12, 0.07]] },
+  sier: { name: 'Sierpinski 三角', maps: [
+    [0.5, 0, 0, 0.5, 0, 0, 1 / 3],
+    [0.5, 0, 0, 0.5, 0.5, 0, 1 / 3],
+    [0.5, 0, 0, 0.5, 0.25, 0.4330127, 1 / 3]] },
+  tree: { name: '树', maps: [
+    [0, 0, 0, 0.5, 0, 0, 0.05],
+    [0.42, -0.42, 0.42, 0.42, 0, 0.2, 0.40],
+    [0.42, 0.42, -0.42, 0.42, 0, 0.2, 0.40],
+    [0.1, 0, 0, 0.1, 0, 0.2, 0.15]] },
+  spiral: { name: '螺旋', maps: [
+    [0.787879, -0.424242, 0.242424, 0.859848, 1.758647, 1.408065, 0.90],
+    [-0.121212, 0.257576, 0.151515, 0.053030, -6.721654, 1.377236, 0.05],
+    [0.181818, -0.136364, 0.090909, 0.181818, 6.086107, 1.568035, 0.05]] },
+  levy: { name: 'Lévy C 曲线', maps: [
+    [0.5, -0.5, 0.5, 0.5, 0, 0, 0.5],
+    [0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5]] },
+  dragon: { name: 'Heighway 龙', maps: [
+    [0.5, -0.5, 0.5, 0.5, 0, 0, 0.5],
+    [-0.5, -0.5, 0.5, -0.5, 1, 0, 0.5]] },
+};
+const COLORS = [[255, 122, 107], [124, 214, 122], [111, 179, 255], [255, 209, 102],
+  [199, 146, 234], [77, 208, 225], [255, 159, 243], [190, 210, 140]];
+const MAX_MAPS = 8;
+
+const P = { preset: 'fern', maps: [], n: 2e6, batch: 4e4, gain: 1, col: false, box: false, hl: -1 };
+const view = { cx: null, cy: null, zoom: 1 };   // centre in attractor coordinates (null = bbox centre)
+
+const $ = id => document.getElementById(id);
+const fmt = x => Math.abs(x) >= 1e6 ? (x / 1e6).toFixed(x >= 1e7 ? 0 : 1) + 'M' : Math.abs(x) >= 1e3 ? Math.round(x / 1e3) + 'k' : String(Math.round(x));
+
+// ---------- maths ----------
+const det = m => m[0] * m[3] - m[1] * m[2];
+// largest singular value of the 2x2 linear part = contraction factor of the map
+function sigmaMax([a, b, c, d]) {
+  const s1 = a * a + b * b + c * c + d * d, dt = det([a, b, c, d]);
+  return Math.sqrt((s1 + Math.sqrt(Math.max(0, s1 * s1 - 4 * dt * dt))) / 2);
+}
+
+function rng(seed) {   // mulberry32: same seed, same picture
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+
+// cumulative probabilities (normalised; all zero -> uniform)
+function cumulative(maps) {
+  let s = 0; for (const m of maps) s += Math.max(0, m[6]);
+  const cum = []; let acc = 0;
+  for (const m of maps) { acc += s > 0 ? Math.max(0, m[6]) / s : 1 / maps.length; cum.push(acc); }
+  cum[cum.length - 1] = 1;
+  return cum;
+}
+
+// bounding box of the attractor. The attractor does not depend on p, but a short chaos game with a
+// skewed p never reaches the sparse tips, so take the union of runs with the user's p and with p ∝ |det A|.
+function estimateBox(maps) {
+  const sd = maps.reduce((s, m) => s + Math.abs(det(m)), 0) || 1;
+  const byDet = maps.map(m => { const c = m.slice(); c[6] = Math.max(Math.abs(det(m)), 0.02 * sd); return c; });
+  const a = boxRun(maps, cumulative(maps)), b = boxRun(maps, cumulative(byDet));
+  if (!a || !b) return null;
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+}
+function boxRun(maps, cum) {
+  const rand = rng(12345);
+  let x = 0, y = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < 60000; i++) {
+    const r = rand(); let k = 0; while (r > cum[k]) k++;
+    const m = maps[k], nx = m[0] * x + m[1] * y + m[4];
+    y = m[2] * x + m[3] * y + m[5]; x = nx;
+    if (!Number.isFinite(x) || Math.abs(x) + Math.abs(y) > 1e9) return null;
+    if (i < 50) continue;   // let the point fall onto the attractor first
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const w = x1 - x0, h = y1 - y0, e = 1e-6 + 0.002 * Math.max(w, h);
+  return [x0 - e, y0 - e, x1 + e, y1 + e];
+}
+
+// ---------- accumulation buffers ----------
+const cv = $('c'), ctx = cv.getContext('2d'), ov = $('ov'), octx = ov.getContext('2d');
+let W = 1, H = 1, hits, sumR, sumG, sumB, img, maxHit = 0, count = 0;
+let bbox = [-1, -1, 1, 1], cum = [1], rand = rng(1), px = 0, py = 0;
+let running = true, dirtyImg = true, dirtyOv = true;
+
+function transform() {
+  const [x0, y0, x1, y1] = bbox, pad = 24 * devicePixelRatio;
+  const fit = Math.min((W - 2 * pad) / Math.max(1e-9, x1 - x0), (H - 2 * pad) / Math.max(1e-9, y1 - y0));
+  const sc = fit * view.zoom;
+  const cx = view.cx ?? (x0 + x1) / 2, cy = view.cy ?? (y0 + y1) / 2;
+  return { sc, cx, cy };
+}
+
+function colouring() { return P.hl >= 0 || P.col; }
+
+// clear the picture and start the chaos game again (after any change of maps, view or colouring)
+function reset() {
+  hits = new Uint32Array(W * H);
+  if (colouring()) { sumR = new Float32Array(W * H); sumG = new Float32Array(W * H); sumB = new Float32Array(W * H); }
+  else sumR = sumG = sumB = null;
+  img = ctx.createImageData(W, H);
+  maxHit = 0; count = 0; rand = rng(7); px = 0; py = 0;
+  // burn-in: after ~30 steps the point is within float precision of the attractor
+  for (let i = 0; i < 30 && P.maps.length; i++) step(false);
+  dirtyImg = dirtyOv = true; window.__done = false;
+}
+
+let T = null;
+function step(plot) {
+  const r = rand(); let k = 0; while (r > cum[k]) k++;
+  const m = P.maps[k], nx = m[0] * px + m[1] * py + m[4];
+  py = m[2] * px + m[3] * py + m[5]; px = nx;
+  if (!plot) return;
+  const ix = Math.floor(W / 2 + (px - T.cx) * T.sc), iy = Math.floor(H / 2 - (py - T.cy) * T.sc);
+  if (ix < 0 || iy < 0 || ix >= W || iy >= H) return;
+  const i = iy * W + ix, h = ++hits[i];
+  if (h > maxHit) maxHit = h;
+  if (sumR) {
+    const c = P.hl >= 0 && k !== P.hl ? GREY : COLORS[k % COLORS.length];
+    sumR[i] += c[0]; sumG[i] += c[1]; sumB[i] += c[2];
+  }
+}
+const GREY = [70, 78, 72];
+
+function accumulate() {
+  if (!running || !P.maps.length || count >= P.n) return false;
+  const todo = Math.min(P.batch, P.n - count);
+  T = transform();
+  for (let i = 0; i < todo; i++) step(true);
+  if (!Number.isFinite(px) || Math.abs(px) + Math.abs(py) > 1e9) { px = py = 0; }
+  count += todo;
+  if (count >= P.n) window.__done = true;
+  return true;
+}
+
+// density colour map for the plain view: dark green -> leaf green -> pale yellow
+const RAMP = [[13, 18, 14], [22, 80, 36], [70, 170, 70], [190, 235, 120], [250, 255, 220]];
+const LUT = new Uint8Array(256 * 3);
+for (let i = 0; i < 256; i++) {
+  const t = i / 255 * (RAMP.length - 1), j = Math.min(RAMP.length - 2, Math.floor(t)), f = t - j;
+  for (let c = 0; c < 3; c++) LUT[i * 3 + c] = Math.round(RAMP[j][c] + (RAMP[j + 1][c] - RAMP[j][c]) * f);
+}
+
+function drawImage() {
+  const d = img.data, n = W * H, L = Math.log(1 + Math.max(1, maxHit)), g = P.gain;
+  const BG = RAMP[0];
+  for (let i = 0, o = 0; i < n; i++, o += 4) {
+    const h = hits[i];
+    if (!h) { d[o] = BG[0]; d[o + 1] = BG[1]; d[o + 2] = BG[2]; d[o + 3] = 255; continue; }
+    // log density: a pixel hit once is still visible, the densest pixel is full brightness
+    const v = Math.min(1, g * (0.18 + 0.82 * Math.log(1 + h) / L));
+    if (sumR) {
+      d[o] = BG[0] + (sumR[i] / h - BG[0]) * v; d[o + 1] = BG[1] + (sumG[i] / h - BG[1]) * v;
+      d[o + 2] = BG[2] + (sumB[i] / h - BG[2]) * v;
+    } else {
+      const k = Math.round(v * 255) * 3; d[o] = LUT[k]; d[o + 1] = LUT[k + 1]; d[o + 2] = LUT[k + 2];
+    }
+    d[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// overlay: bounding rectangle R (dashed) and its image f_i(R) under every map
+function drawOverlay() {
+  octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, W, H);
+  if (!P.box || !P.maps.length) return;
+  const { sc, cx, cy } = transform(), dpr = devicePixelRatio;
+  const X = x => W / 2 + (x - cx) * sc, Y = y => H / 2 - (y - cy) * sc;
+  const [x0, y0, x1, y1] = bbox;
+  const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const poly = pts => { octx.beginPath(); pts.forEach(([x, y], i) => i ? octx.lineTo(X(x), Y(y)) : octx.moveTo(X(x), Y(y))); octx.closePath(); };
+  octx.lineWidth = 1.2 * dpr; octx.setLineDash([6 * dpr, 4 * dpr]); octx.strokeStyle = 'rgba(255,255,255,.7)';
+  poly(corners); octx.stroke(); octx.setLineDash([]);
+  // the bottom-left corner of R and of each image is marked so rotations and reflections are visible
+  const dot = (x, y, c) => { octx.fillStyle = c; octx.beginPath(); octx.arc(X(x), Y(y), 3.5 * dpr, 0, 7); octx.fill(); };
+  dot(x0, y0, '#fff');
+  P.maps.forEach((m, k) => {
+    const img = corners.map(([x, y]) => [m[0] * x + m[1] * y + m[4], m[2] * x + m[3] * y + m[5]]);
+    const c = COLORS[k % COLORS.length], on = P.hl < 0 || P.hl === k;
+    poly(img);
+    if (P.hl === k) { octx.fillStyle = `rgba(${c},.18)`; octx.fill(); }
+    octx.lineWidth = (P.hl === k ? 3 : 1.8) * dpr;
+    octx.strokeStyle = `rgba(${c},${on ? 0.95 : 0.35})`; octx.stroke();
+    dot(img[0][0], img[0][1], `rgba(${c},${on ? 1 : 0.4})`);
+    // label at the centre of the image
+    const mx = img.reduce((s, p) => s + p[0], 0) / 4, my = img.reduce((s, p) => s + p[1], 0) / 4;
+    octx.font = `bold ${12 * dpr}px -apple-system, sans-serif`; octx.textAlign = 'center'; octx.textBaseline = 'middle';
+    octx.fillStyle = `rgba(${c},${on ? 1 : 0.45})`;
+    octx.fillText('f' + (k + 1), X(mx) + 14 * dpr, Y(my));
+  });
+}
+
+function drawStat() {
+  const m = maxHit;
+  $('stat').innerHTML = `已画 <b>${count.toLocaleString()}</b> / ${Math.round(P.n).toLocaleString()} 个点` +
+    ` · 最密的像素被击中 ${m.toLocaleString()} 次` + (running ? '' : ' · 已暂停');
+}
+
+// ---------- map table ----------
+function buildTable() {
+  const g = $('maps'); g.innerHTML = '';
+  for (const h of ['', 'a', 'b', 'c', 'd', 'e', 'f', 'p', '']) {
+    const s = document.createElement('div'); s.className = 'hd'; s.textContent = h; g.appendChild(s);
+  }
+  P.maps.forEach((m, k) => {
+    const sw = document.createElement('div');
+    sw.className = 'sw' + (P.hl === k ? ' hl' : ''); sw.textContent = k + 1;
+    sw.style.background = `rgb(${COLORS[k % COLORS.length]})`;
+    sw.title = '高亮这个变换'; sw.onclick = () => { P.hl = P.hl === k ? -1 : k; buildTable(); reset(); };
+    g.appendChild(sw);
+    for (let j = 0; j < 7; j++) {
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.spellcheck = false; inp.value = +m[j].toFixed(6);
+      inp.oninput = () => {
+        const v = parseFloat(inp.value.replace(/[−–]/g, '-'));
+        if (!Number.isFinite(v)) return;
+        m[j] = v; P.preset = ''; markPresets(); rebuild(false);
+      };
+      g.appendChild(inp);
+    }
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '×'; del.title = '删除这个变换';
+    del.onclick = () => {
+      if (P.maps.length <= 1) return;
+      P.maps.splice(k, 1); if (P.hl >= P.maps.length) P.hl = -1;
+      P.preset = ''; markPresets(); buildTable(); rebuild(true);
+    };
+    g.appendChild(del);
+  });
+  $('add').disabled = P.maps.length >= MAX_MAPS;
+}
+
+function mapInfo() {
+  let sp = 0, sd = 0; for (const m of P.maps) { sp += Math.max(0, m[6]); sd += Math.abs(det(m)); }
+  const rows = P.maps.map((m, k) => {
+    const s = sigmaMax(m), warn = s >= 1 ? ' <span style="color:#ff8f8f">不收缩</span>' : '';
+    return `f${k + 1}: |det A| = ${Math.abs(det(m)).toFixed(4)}  压缩比 ${s.toFixed(3)}${warn}`;
+  });
+  $('mapInfo').innerHTML = rows.join('<br>') + `<br>Σp = ${+sp.toFixed(4)} · Σ|det A| = ${sd.toFixed(4)}`;
+}
+
+// maps changed: new probabilities and bounding box; refit the view only if asked
+function rebuild(refit) {
+  $('err').textContent = '';
+  mapInfo();
+  if (!P.maps.length) return;
+  cum = cumulative(P.maps);
+  const b = estimateBox(P.maps);
+  if (!b) { $('err').textContent = '点跑到了无穷远：至少有一个变换不是压缩映射（压缩比 ≥ 1）。'; return; }
+  bbox = b;
+  if (refit) Object.assign(view, { cx: null, cy: null, zoom: 1 });
+  reset();
+}
+
+// ---------- UI ----------
+const logSlider = (id, v) => { $(id).value = Math.log10(v); };
+function syncUI() {
+  logSlider('N', P.n); logSlider('B', P.batch); $('G').value = P.gain;
+  $('vN').textContent = fmt(P.n); $('vB').textContent = fmt(P.batch); $('vG').textContent = P.gain.toFixed(2);
+  $('col').checked = P.col; $('box').checked = P.box;
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  markPresets();
+}
+function markPresets() { document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset)); }
+
+function loadPreset(key) {
+  P.preset = key; P.maps = PRESETS[key].maps.map(m => m.slice()); P.hl = -1;
+  buildTable(); syncUI(); rebuild(true);
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+
+$('N').oninput = e => { P.n = Math.round(10 ** +e.target.value); syncUI(); dirtyImg = true; window.__done = count >= P.n; };
+$('B').oninput = e => { P.batch = Math.round(10 ** +e.target.value); syncUI(); };
+$('G').oninput = e => { P.gain = +e.target.value; syncUI(); dirtyImg = true; };
+$('col').onchange = e => { P.col = e.target.checked; reset(); };
+$('box').onchange = e => { P.box = e.target.checked; dirtyOv = true; };
+$('play').onclick = () => { running = !running; syncUI(); dirtyImg = true; };
+$('restart').onclick = () => { running = true; syncUI(); reset(); };
+$('add').onclick = () => {
+  if (P.maps.length >= MAX_MAPS) return;
+  P.maps.push([0.3, 0, 0, 0.3, 0, 0, 0.1]); P.preset = ''; markPresets(); buildTable(); rebuild(false);
+};
+const setP = f => { const w = P.maps.map(f), s = w.reduce((a, b) => a + b, 0) || 1;
+  P.maps.forEach((m, k) => m[6] = +(w[k] / s).toFixed(4)); P.preset = ''; markPresets(); buildTable(); rebuild(false); };
+// |det A| is the area factor of the map; maps with det 0 (a segment, like the fern stem) still get a small share
+$('detP').onclick = () => { const sd = P.maps.reduce((a, m) => a + Math.abs(det(m)), 0) || 1;
+  setP(m => Math.max(Math.abs(det(m)), 0.01 * sd)); };
+$('eqP').onclick = () => setP(() => 1);
+
+// pan / zoom (any change restarts the accumulation at the new resolution)
+let drag = null;
+ov.style.pointerEvents = 'none';
+cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const { sc, cx, cy } = transform(), dpr = devicePixelRatio;
+  view.cx = cx - (e.clientX - drag[0]) * dpr / sc; view.cy = cy + (e.clientY - drag[1]) * dpr / sc;
+  drag = [e.clientX, e.clientY]; reset();
+});
+cv.addEventListener('pointerup', () => drag = null);
+cv.addEventListener('dblclick', () => { Object.assign(view, { cx: null, cy: null, zoom: 1 }); reset(); });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY * 0.0015), r = cv.getBoundingClientRect(), dpr = devicePixelRatio;
+  const { sc, cx, cy } = transform();
+  const mx = (e.clientX - r.left - r.width / 2) * dpr, my = (e.clientY - r.top - r.height / 2) * dpr;
+  // keep the attractor point under the cursor fixed
+  const ax = cx + mx / sc, ay = cy - my / sc;
+  view.zoom *= f;
+  view.cx = ax - mx / (sc * f); view.cy = ay + my / (sc * f);
+  reset();
+}, { passive: false });
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * devicePixelRatio));
+  H = Math.max(1, Math.round(r.height * devicePixelRatio));
+  cv.width = ov.width = W; cv.height = ov.height = H;
+  reset();
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=sier&n=200000&col=1  or custom maps ?m=0.5,0,0,0.5,0,0,1;0.5,0,0,0.5,0.5,0,1
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = +q.get(k); if (Number.isFinite(x)) f(x); } };
+P.preset = PRESETS[q.get('p')] ? q.get('p') : 'fern';
+P.maps = PRESETS[P.preset].maps.map(m => m.slice());
+if (q.has('m')) {
+  const maps = q.get('m').split(';').map(s => s.split(',').map(Number))
+    .filter(m => m.length >= 6 && m.slice(0, 6).every(Number.isFinite)).slice(0, MAX_MAPS)
+    .map(m => [...m.slice(0, 6), Number.isFinite(m[6]) ? m[6] : 1]);
+  if (maps.length) { P.maps = maps; P.preset = ''; }
+}
+num('n', x => P.n = Math.max(1e3, Math.min(1e7, Math.round(x))));
+num('b', x => P.batch = Math.max(100, Math.min(1e6, Math.round(x))));
+num('g', x => P.gain = Math.max(0.3, Math.min(3, x)));
+num('hl', x => { const k = Math.round(x) - 1; if (k >= 0 && k < P.maps.length) P.hl = k; });
+if (q.get('col') === '1') P.col = true;
+if (q.get('box') === '1') P.box = true;
+if (q.get('run') === '0') running = false;
+
+buildTable(); syncUI();
+const r0 = cv.getBoundingClientRect();
+W = Math.max(1, Math.round(r0.width * devicePixelRatio)); H = Math.max(1, Math.round(r0.height * devicePixelRatio));
+cv.width = ov.width = W; cv.height = ov.height = H;
+rebuild(true);
+num('z', x => view.zoom = Math.max(0.05, x)); num('cx', x => view.cx = x); num('cy', x => view.cy = x);
+if (q.has('z') || q.has('cx') || q.has('cy')) reset();
+
+(function loop() {
+  if (accumulate()) dirtyImg = true;
+  if (dirtyImg && hits) { dirtyImg = false; drawImage(); drawStat(); window.__ready = true; }
+  if (dirtyOv) { dirtyOv = false; drawOverlay(); }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
