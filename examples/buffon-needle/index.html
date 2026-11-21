@@ -32,6 +32,7 @@
   body.noui #panel, body.noui #stat { display: none; }
   body.noui #view { left: 0; }
   @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #view { left: 0; top: 0; }   /* after @media so ui=0 also wins on small screens */
 </style>
 </head>
 <body>
