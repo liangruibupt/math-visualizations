@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>双摆 · 最简单的混沌</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0e16; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(22,27,40,.93); border: 1px solid #323a52; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a4b4d8; border-top: 1px solid #323a52; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8b93a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #283047; color: #e6e6e6; border: 1px solid #3a4462;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #333d5a; }
+  button.on { background: #3f5a8a; border-color: #5f7fb8; }
+  #err { color: #ff8f8f; }
+  .info { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #a9b2c8; margin-top: 4px; white-space: pre-line; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #pl { position: absolute; right: 10px; bottom: 10px; width: 380px; height: 220px; pointer-events: none;
+    border: 1px solid #323a52; border-radius: 6px; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(11,14,22,.8); color: #cdd4e4; font-size: 12px; font-variant-numeric: tabular-nums; max-width: calc(100% - 420px); }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; }
+    #pl { width: 280px; height: 170px; } #stat { max-width: calc(100% - 320px); } }
+  body.noui #panel, body.noui #stat, body.noui #pl { display: none !important; }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>双摆 · 最简单的混沌</h1>
+  <small>一根摆下面再挂一根摆，只有两个角度 θ₁、θ₂。小角度时它是两个简谐振动的叠加；摆幅一大，起点只差 10⁻⁹ 弧度的一群双摆几十秒后就各走各的。长度单位 l₁，时间单位 √(l₁/g)，g = l₁ = m₁ = 1。</small>
+
+  <h2>视图</h2>
+  <div class="presets" id="views"></div>
+
+  <h2>系统</h2>
+  <div class="row">
+    <label>质量比 m₂/m₁ <b id="vMr"></b></label>
+    <input id="Mr" type="range" min="-1" max="1" step="0.01">
+  </div>
+  <div class="row">
+    <label>长度比 l₂/l₁ <b id="vLr"></b></label>
+    <input id="Lr" type="range" min="0.2" max="3" step="0.01">
+  </div>
+  <div class="info" id="modeInfo"></div>
+
+  <div id="secPend">
+  <h2>初始条件（可直接拖动白色摆锤）</h2>
+  <div class="row">
+    <label>θ₁ 上臂初始角 <b id="vA1"></b></label>
+    <input id="A1" type="range" min="-180" max="180" step="0.1">
+  </div>
+  <div class="row">
+    <label>θ₂ 下臂初始角 <b id="vA2"></b></label>
+    <input id="A2" type="range" min="-180" max="180" step="0.1">
+  </div>
+  <div class="presets"><span style="align-self:center;color:#8b93a8">小角度模态：</span>
+    <button id="mIn">同相</button><button id="mAnti">反相</button></div>
+  <div class="row">
+    <label>双摆个数 <b id="vN"></b></label>
+    <input id="N" type="range" min="0" max="2.69897" step="0.01">
+  </div>
+  <div class="row">
+    <label>相邻两个的 θ₁ 之差 ε（弧度） <b id="vE"></b></label>
+    <input id="E" type="range" min="-12" max="-3" step="0.5">
+    <small>第 i 个双摆从 θ₁ + i·ε、θ₂ 出发，初速度为零；第 0 个是白色参考摆</small>
+  </div>
+
+  <h2>积分（RK4）</h2>
+  <div class="row">
+    <label>步长 dt <b id="vDt"></b></label>
+    <input id="Dt" type="range" min="0.001" max="0.02" step="0.001">
+  </div>
+  <div class="row">
+    <label>每帧步数 <b id="vV"></b></label>
+    <input id="V" type="range" min="1" max="50" step="1">
+    <small>dt = 0.005、每帧 10 步、每秒 60 帧时，l₁ = 1 m 的摆大致按真实速度运动</small>
+  </div>
+  <div class="row">
+    <label>下摆锤尾迹（步） <b id="vL"></b></label>
+    <input id="L" type="range" min="0" max="20000" step="100">
+    <small>参考摆用全长；其余双摆的尾迹总点数限制在 15 万以内</small>
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button>
+    <span style="align-self:center;color:#8b93a8;margin-left:6px">右下插图：</span>
+    <button data-ins="sep">距离</button><button data-ins="spec">频谱</button><button data-ins="cfg">θ₁–θ₂</button><button data-ins="none">关</button></div>
+  </div>
+
+  <div id="secFlip">
+  <h2>翻转图</h2>
+  <small>每个像素是一个从静止出发的初始条件 (θ₁, θ₂)，颜色是下臂第一次翻过头顶（|θ₂| 超过 π）所用的时间。单击像素，用这组初始角打开摆视图。</small>
+  <div class="row">
+    <label>分辨率 <b id="vRes"></b></label>
+    <input id="Res" type="range" min="64" max="512" step="32">
+  </div>
+  <div class="row">
+    <label>最长等待时间 T <b id="vTc"></b></label>
+    <input id="Tc" type="range" min="1" max="3" step="0.1">
+  </div>
+  <div class="row">
+    <label>翻转图步长 dt <b id="vMdt"></b></label>
+    <input id="Mdt" type="range" min="0.005" max="0.05" step="0.005">
+  </div>
+  <div class="info" id="mapInfo"></div>
+  </div>
+
+  <div id="secPc">
+  <h2>Poincaré 截面</h2>
+  <small>固定总能量 E，每当上臂向右摆过竖直线（θ₁ = 0，ω₁ &gt; 0）就记下 (θ₂, p₂)。p₂ 是 θ₂ 的共轭动量。规则轨道留下闭合曲线，混沌轨道撒成一片。单击截面图在那一点加一条轨道。</small>
+  <div class="row">
+    <label>能量 E − E_min <b id="vH"></b></label>
+    <input id="H" type="range" min="0.05" max="12" step="0.05">
+  </div>
+  <div class="row">
+    <label>轨道条数 <b id="vK"></b></label>
+    <input id="K" type="range" min="1" max="80" step="1">
+  </div>
+  <div class="presets"><button id="pcClear">↺ 重新撒点</button></div>
+  <div class="info" id="pcInfo"></div>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small id="err"></small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><canvas id="pl"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- presets and limits ----------
+const PRESETS = {
+  chaos: { name: '大角度 · 100 个双摆', view: 'pend', a1: 120, a2: 0, n: 100, eps: -9, ins: 'sep' },
+  e6: { name: 'ε = 10⁻⁶', view: 'pend', a1: 120, a2: 0, n: 100, eps: -6, ins: 'sep' },
+  single: { name: '一个双摆 · 长尾迹', view: 'pend', a1: 135, a2: 135, n: 1, trail: 20000, ins: 'spec' },
+  inphase: { name: '小角度 · 同相模态', view: 'pend', mode: 'in', n: 50, eps: -9, ins: 'spec' },
+  anti: { name: '小角度 · 反相模态', view: 'pend', mode: 'anti', n: 50, eps: -9, ins: 'spec' },
+  beat: { name: '小角度 · 两个模态叠加', view: 'pend', a1: 5, a2: 0, n: 50, eps: -9, ins: 'cfg' },
+  flip: { name: '翻转图', view: 'flip' },
+  pcLow: { name: '截面 E = −2', view: 'poinc', h: 1 },
+  pcMid: { name: '截面 E = −1.5', view: 'poinc', h: 1.5, orbits: 60 },
+  pcFlip: { name: '截面 E = −1', view: 'poinc', h: 2 },
+  pcHigh: { name: '截面 E = 0', view: 'poinc', h: 3 },
+};
+const VIEWS = { pend: '摆', flip: '翻转图', poinc: 'Poincaré 截面' };
+const INSETS = { sep: 1, spec: 1, cfg: 1, none: 1 };
+const DEF = { mr: 1, lr: 1, a1: 120, a2: 0, n: 100, eps: -9, dt: 0.005, speed: 10, trail: 1500, ins: 'sep',
+  res: 256, tcap: 2.5, mdt: 0.02, h: 2, orbits: 40 };
+const LIM = {   // every slider range; URL params are clamped to these
+  mr: [0.1, 10], lr: [0.2, 3], a1: [-180, 180], a2: [-180, 180], n: [1, 500], eps: [-12, -3],
+  dt: [0.001, 0.02], speed: [1, 50], trail: [0, 20000], res: [64, 512], tcap: [1, 3], mdt: [0.005, 0.05],
+  h: [0.05, 12], orbits: [1, 80], t: [0, 400],
+};
+const MODE_AMP = 3;            // degrees of θ₁ for the 同相 / 反相 buttons when the current θ₁ is not already small
+const STEP_BUDGET = 2e5;       // RK4 steps per frame summed over all pendulums
+const FF_BUDGET = 6e5;         // same, while fast-forwarding to ?t=
+const TRAIL_BUDGET = 1.5e5;    // stored and drawn trail points of the non-reference pendulums
+const SAMPLE_DT = 0.1, HMAX = 4096;   // separation and spectrum samples: up to 409.6 time units
+const SPEC_BINS = 480;
+const MAP_MS = 14, MAP_STEP_CAP = 4e5; // flip map: per-frame wall-clock and step budget
+const PC_STEPS = 1.5e5, PC_DT = 0.005, PMAX = 600;  // Poincaré: steps per frame, step, points per orbit
+
+const P = { preset: 'chaos', view: 'pend', ...DEF };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+const TAU = 2 * Math.PI, DEG = Math.PI / 180;
+const wrapPi = a => a - TAU * Math.round(a / TAU);
+
+function rng(seed) {   // mulberry32
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+
+// ---------- the system ----------
+// g = l₁ = m₁ = 1. State of one pendulum: [θ₁, θ₂, ω₁, ω₂], angles from the downward vertical.
+let m2 = 1, l2 = 1, Mt = 2;
+function setSystem() { m2 = P.mr; l2 = P.lr; Mt = 1 + m2; }
+const Acc = new Float64Array(2);
+// Euler–Lagrange equations of L = ½Mt ω₁² + ½m₂l₂² ω₂² + m₂l₂ ω₁ω₂ cos(θ₁−θ₂) + Mt cos θ₁ + m₂l₂ cos θ₂, solved for α₁, α₂:
+//   | Mt        m₂l₂ cos Δ | |α₁|   | −m₂l₂ ω₂² sin Δ − Mt sin θ₁ |
+//   | cos Δ     l₂         | |α₂| = |  ω₁² sin Δ − sin θ₂         |
+function acc(t1, t2, w1, w2) {
+  const s1 = Math.sin(t1), c1 = Math.cos(t1), s2 = Math.sin(t2), c2 = Math.cos(t2);
+  const sd = s1 * c2 - c1 * s2, cd = c1 * c2 + s1 * s2;
+  const r1 = -m2 * l2 * w2 * w2 * sd - Mt * s1, r2 = w1 * w1 * sd - s2;
+  const det = l2 * (Mt - m2 * cd * cd);
+  Acc[0] = (l2 * r1 - m2 * l2 * cd * r2) / det;
+  Acc[1] = (Mt * r2 - cd * r1) / det;
+}
+function rk4(S, k, h) {
+  const t1 = S[k], t2 = S[k + 1], w1 = S[k + 2], w2 = S[k + 3], h2 = h / 2, h6 = h / 6;
+  acc(t1, t2, w1, w2); const p1 = Acc[0], q1 = Acc[1];
+  const u1 = w1 + h2 * p1, u2 = w2 + h2 * q1;
+  acc(t1 + h2 * w1, t2 + h2 * w2, u1, u2); const p2 = Acc[0], q2 = Acc[1];
+  const v1 = w1 + h2 * p2, v2 = w2 + h2 * q2;
+  acc(t1 + h2 * u1, t2 + h2 * u2, v1, v2); const p3 = Acc[0], q3 = Acc[1];
+  const x1 = w1 + h * p3, x2 = w2 + h * q3;
+  acc(t1 + h * v1, t2 + h * v2, x1, x2); const p4 = Acc[0], q4 = Acc[1];
+  S[k] = t1 + h6 * (w1 + 2 * u1 + 2 * v1 + x1); S[k + 1] = t2 + h6 * (w2 + 2 * u2 + 2 * v2 + x2);
+  S[k + 2] = w1 + h6 * (p1 + 2 * p2 + 2 * p3 + p4); S[k + 3] = w2 + h6 * (q1 + 2 * q2 + 2 * q3 + q4);
+}
+const potential = (t1, t2) => -Mt * Math.cos(t1) - m2 * l2 * Math.cos(t2);
+function energy(S, k) {
+  const t1 = S[k], t2 = S[k + 1], w1 = S[k + 2], w2 = S[k + 3];
+  return 0.5 * Mt * w1 * w1 + 0.5 * m2 * l2 * l2 * w2 * w2 + m2 * l2 * w1 * w2 * Math.cos(t1 - t2) + potential(t1, t2);
+}
+const eScale = () => Mt + m2 * l2;          // depth of the potential well: E_min = −(Mt + m₂l₂)
+const eFlip = () => -Mt + m2 * l2;          // lowest energy at which the lower arm can point straight up (θ₁ = 0, θ₂ = π)
+
+// small oscillations: mass matrix [[Mt, m₂l₂],[m₂l₂, m₂l₂²]], stiffness diag(Mt, m₂l₂);
+// det(K − λM) = 0 gives λ²·m₂l₂² − λ·Mt m₂l₂(1 + l₂) + Mt m₂l₂ = 0, ω = √λ, and θ₂/θ₁ = Mt(1 − λ)/(λ m₂l₂)
+function normalModes() {
+  const a = m2 * l2 * l2, b = Mt * m2 * l2 * (1 + l2), c = Mt * m2 * l2;
+  const d = Math.sqrt(b * b - 4 * a * c), lam = [(b - d) / (2 * a), (b + d) / (2 * a)];
+  return lam.map(L => ({ w: Math.sqrt(L), r: Mt * (1 - L) / (L * m2 * l2) }));
+}
+let MODES = normalModes();
+
+function showSystem() {
+  setSystem(); MODES = normalModes();
+  const [a, b] = MODES;
+  $('modeInfo').textContent =
+    `小角度模态（线性化）：\n` +
+    `  同相 ω₁ = ${a.w.toFixed(4)}  周期 ${(TAU / a.w).toFixed(3)}  θ₂/θ₁ = ${a.r >= 0 ? '+' : '−'}${Math.abs(a.r).toFixed(4)}\n` +
+    `  反相 ω₂ = ${b.w.toFixed(4)}  周期 ${(TAU / b.w).toFixed(3)}  θ₂/θ₁ = ${b.r >= 0 ? '+' : '−'}${Math.abs(b.r).toFixed(4)}\n` +
+    `能量 E_min = ${(-eScale()).toFixed(3)}；下臂能翻转需要 E ≥ ${eFlip().toFixed(3)}`;
+}
+
+// ---------- pendulum view: ensemble ----------
+let N = 0, S = null, E0 = null, flipT = null, simT = 0, steps = 0, running = true, ffT = 0, dragging = 0;
+let Tr = null, To = null, Lt = 1, rec = 0, colors = [], eDrift = 0;
+let HT, HM, HLo, HHi, X1, X2, hn = 0;
+let spec = null, specAge = 0;
+
+function allocTrails() {
+  const L = Math.max(1, P.trail);
+  Lt = Math.max(1, Math.min(L, Math.floor(TRAIL_BUDGET / Math.max(1, N - 1))));
+  Tr = new Float32Array(L * 2); To = new Float32Array(N * Lt * 2); rec = 0;
+}
+function bob2(k, out) {
+  const t1 = S[k], t2 = S[k + 1];
+  out[0] = Math.sin(t1) + l2 * Math.sin(t2); out[1] = -Math.cos(t1) - l2 * Math.cos(t2);
+}
+const tmp = [0, 0], tmp2 = [0, 0];
+function record() {
+  const L = Math.max(1, P.trail);
+  bob2(0, tmp); const a = (rec % L) * 2; Tr[a] = tmp[0]; Tr[a + 1] = tmp[1];
+  const o = (rec % Lt) * 2;
+  for (let i = 1; i < N; i++) { bob2(4 * i, tmp); const j = i * Lt * 2 + o; To[j] = tmp[0]; To[j + 1] = tmp[1]; }
+  rec++;
+}
+function clearHistory() {
+  HT = new Float64Array(HMAX); HM = new Float64Array(HMAX); HLo = new Float64Array(HMAX); HHi = new Float64Array(HMAX);
+  X1 = new Float64Array(HMAX); X2 = new Float64Array(HMAX);
+  hn = 0; simT = 0; steps = 0; eDrift = 0; spec = null; specAge = 0;
+}
+function sample() {
+  const es = eScale();
+  for (let i = 0; i < N; i++) { const d = Math.abs(energy(S, 4 * i) - E0[i]) / es; if (d > eDrift) eDrift = d; }
+  if (hn >= HMAX) return;
+  HT[hn] = simT; X1[hn] = S[0]; X2[hn] = S[1];
+  let sum = 0, lo = Infinity, hi = -Infinity;
+  bob2(0, tmp);
+  for (let i = 1; i < N; i++) {
+    bob2(4 * i, tmp2);
+    const l = Math.log(Math.max(Math.hypot(tmp2[0] - tmp[0], tmp2[1] - tmp[1]), 1e-300));
+    sum += l; if (l < lo) lo = l; if (l > hi) hi = l;
+  }
+  HM[hn] = N > 1 ? sum / (N - 1) : 0; HLo[hn] = lo; HHi[hn] = hi; hn++;
+}
+function restart() {
+  N = Math.round(P.n); S = new Float64Array(4 * N); E0 = new Float64Array(N); flipT = new Float64Array(N).fill(NaN);
+  const e = 10 ** P.eps;
+  colors = [];
+  for (let i = 0; i < N; i++) {
+    S[4 * i] = P.a1 * DEG + i * e; S[4 * i + 1] = P.a2 * DEG;
+    E0[i] = energy(S, 4 * i);
+    colors.push(`hsl(${(N > 2 ? 300 * (i - 1) / (N - 2) : 0).toFixed(1)},85%,62%)`);
+  }
+  allocTrails(); clearHistory(); record(); sample();
+}
+function advance(n) {
+  const every = Math.max(1, Math.round(SAMPLE_DT / P.dt));
+  for (let k = 0; k < n; k++) {
+    for (let i = 0; i < N; i++) {
+      rk4(S, 4 * i, P.dt);
+      if (flipT[i] !== flipT[i] && Math.abs(S[4 * i + 1]) > Math.PI) flipT[i] = simT + P.dt;
+    }
+    steps++; simT = steps * P.dt;
+    if (steps % every === 0) sample();
+    record();
+  }
+}
+
+// spectrum of θ₁(t) and θ₂(t) of the reference pendulum: Hann window, DFT on a grid, then the two top peaks refined
+function dft(x, n, ds, w) {
+  let re = 0, im = 0, zr = 1, zi = 0;
+  const cr = Math.cos(w * ds), ci = -Math.sin(w * ds);
+  let mean = 0; for (let j = 0; j < n; j++) mean += x[j]; mean /= n;
+  for (let j = 0; j < n; j++) {
+    const v = (x[j] - mean) * (0.5 - 0.5 * Math.cos(TAU * j / (n - 1)));
+    re += v * zr; im += v * zi;
+    const t = zr * cr - zi * ci; zi = zr * ci + zi * cr; zr = t;
+  }
+  return re * re + im * im;
+}
+function computeSpectrum() {
+  const n = hn; if (n < 64) return null;
+  const ds = HT[1] - HT[0], wMax = Math.max(3, 1.6 * MODES[1].w), dw = wMax / SPEC_BINS;
+  const p1 = new Float64Array(SPEC_BINS + 1), p2 = new Float64Array(SPEC_BINS + 1);
+  const pw = w => dft(X1, n, ds, w) + dft(X2, n, ds, w);
+  for (let k = 0; k <= SPEC_BINS; k++) { p1[k] = dft(X1, n, ds, k * dw); p2[k] = dft(X2, n, ds, k * dw); }
+  let mx = 0; for (let k = 0; k <= SPEC_BINS; k++) mx = Math.max(mx, p1[k] + p2[k]);
+  const cand = [];
+  for (let k = 1; k < SPEC_BINS; k++) {
+    const v = p1[k] + p2[k];
+    if (v > 0.002 * mx && v >= p1[k - 1] + p2[k - 1] && v > p1[k + 1] + p2[k + 1]) cand.push([v, k]);
+  }
+  cand.sort((a, b) => b[0] - a[0]);
+  const peaks = cand.slice(0, 2).map(([v, k]) => {
+    let lo = (k - 1) * dw, hi = (k + 1) * dw;
+    for (let it = 0; it < 40; it++) {    // golden-section search for the maximum
+      const a = hi - 0.618 * (hi - lo), b = lo + 0.618 * (hi - lo);
+      if (pw(a) > pw(b)) hi = b; else lo = a;
+    }
+    return { w: (lo + hi) / 2, rel: v / mx };
+  }).sort((a, b) => a.w - b.w);
+  return { p1, p2, mx, dw, wMax, peaks, n, T: n * ds };
+}
+
+// ---------- flip map ----------
+const MAP = { res: 0, val: null, order: null, size: null, cur: 0, s: new Float64Array(4), t: 0, active: false,
+  img: null, off: document.createElement('canvas'), steps: 0, ms: 0, t0: 0, done: false, counts: [0, 0, 0] };
+function mapReset() {
+  const R = MAP.res = Math.round(P.res);
+  MAP.val = new Float32Array(R * R).fill(NaN);
+  const ord = [], sz = [];
+  // coarse to fine: every 16th pixel first, drawn as a 16×16 block, then the gaps at 8, 4, 2, 1
+  for (let s = 16; s >= 1; s >>= 1)
+    for (let y = 0; y < R; y += s) for (let x = 0; x < R; x += s)
+      if (s === 16 || x % (2 * s) || y % (2 * s)) { ord.push(y * R + x); sz.push(s); }
+  MAP.order = Int32Array.from(ord); MAP.size = Uint8Array.from(sz);
+  MAP.cur = 0; MAP.active = false; MAP.steps = 0; MAP.ms = 0; MAP.done = false; MAP.counts = [0, 0, 0];
+  MAP.off.width = MAP.off.height = R;
+  MAP.img = new ImageData(R, R);
+  const d = MAP.img.data; for (let i = 0; i < d.length; i += 4) { d[i] = 20; d[i + 1] = 24; d[i + 2] = 36; d[i + 3] = 255; }
+  MAP.t0 = performance.now();
+}
+const mapAngle = i => -Math.PI + (i + 0.5) * TAU / MAP.res;          // column → θ₁, row (top first) → −θ₂
+const STOPS = [[0, [255, 246, 196]], [0.2, [255, 196, 92]], [0.42, [240, 98, 72]], [0.62, [196, 52, 128]],
+  [0.82, [104, 50, 170]], [1, [38, 46, 128]]];
+function flipColour(v, out) {
+  if (v === -1) { out[0] = 4; out[1] = 5; out[2] = 9; return; }            // energy forbids a flip
+  if (v === Infinity) { out[0] = 22; out[1] = 30; out[2] = 52; return; }   // no flip before T
+  const u = clamp(Math.log10(Math.max(v, 1)) / P.tcap, [0, 1]);
+  let k = 1; while (k < STOPS.length - 1 && STOPS[k][0] < u) k++;
+  const [ua, ca] = STOPS[k - 1], [ub, cb] = STOPS[k], f = (u - ua) / (ub - ua);
+  for (let j = 0; j < 3; j++) out[j] = ca[j] + f * (cb[j] - ca[j]);
+}
+const col = [0, 0, 0];
+function mapFinish(v) {
+  const idx = MAP.order[MAP.cur], R = MAP.res, s = MAP.size[MAP.cur], x0 = idx % R, y0 = (idx / R) | 0;
+  MAP.val[idx] = v; MAP.counts[v === -1 ? 0 : v === Infinity ? 1 : 2]++;
+  flipColour(v, col);
+  const d = MAP.img.data;
+  for (let y = y0; y < Math.min(R, y0 + s); y++) for (let x = x0; x < Math.min(R, x0 + s); x++) {
+    const o = 4 * (y * R + x); d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2];
+  }
+  MAP.cur++; MAP.active = false;
+}
+function mapWork() {
+  if (MAP.done) return;
+  const t0 = performance.now(), R = MAP.res, h = P.mdt, Tc = 10 ** P.tcap, ef = eFlip();
+  let steps = 0;
+  while (MAP.cur < MAP.order.length && steps < MAP_STEP_CAP) {
+    if (!MAP.active) {
+      const idx = MAP.order[MAP.cur], t1 = mapAngle(idx % R), t2 = -mapAngle((idx / R) | 0);
+      if (potential(t1, t2) < ef) { mapFinish(-1); continue; }
+      MAP.s[0] = t1; MAP.s[1] = t2; MAP.s[2] = 0; MAP.s[3] = 0; MAP.t = 0; MAP.active = true;
+    }
+    for (let k = 0; k < 256; k++) {
+      rk4(MAP.s, 0, h); MAP.t += h; steps++;
+      if (Math.abs(MAP.s[1]) > Math.PI) { mapFinish(MAP.t); break; }
+      if (MAP.t >= Tc) { mapFinish(Infinity); break; }
+    }
+    if (performance.now() - t0 > MAP_MS) break;
+  }
+  MAP.steps += steps; MAP.ms += performance.now() - t0;
+  MAP.off.getContext('2d').putImageData(MAP.img, 0, 0);
+  if (MAP.cur >= MAP.order.length) MAP.done = true;
+}
+function mapRect() {   // square plot area inside the canvas, with room for axes and the colour bar
+  const dpr = devicePixelRatio, m = 46 * dpr, side = Math.max(10, Math.min(W - 2 * m - 70 * dpr, H - 2 * m));
+  return { x: (W - side - 70 * dpr) / 2 + 10 * dpr, y: (H - side) / 2, s: side };
+}
+
+// ---------- Poincaré section ----------
+const PC = { orbits: [], layer: document.createElement('canvas'), steps: 0, drift: 0 };
+const pcE = () => -eScale() + P.h;
+// on the section θ₁ = 0: T = ½(Mt − m₂ cos²θ₂) ω₁² + p₂²/(2m₂l₂²), so ω₁ follows from (θ₂, p₂, E)
+function pcOrbit(th2, p2, hue) {
+  const c = m2 * l2 * l2, C = Math.cos(th2), K = pcE() - potential(0, th2) - p2 * p2 / (2 * c);
+  if (!(K > 0)) return null;
+  const w1 = Math.sqrt(2 * K / (Mt - m2 * C * C)), w2 = (p2 - m2 * l2 * C * w1) / c;
+  const s = Float64Array.from([0, th2, w1, w2]);
+  return { s, e0: energy(s, 0), pts: new Float32Array(2 * PMAX), n: 0, drawn: 0, prev: 0, hue,
+    pt2: th2, pp2: p2 };
+}
+const p2of = s => m2 * l2 * l2 * s[3] + m2 * l2 * s[2] * Math.cos(s[0] - s[1]);
+const pcPmax = () => Math.sqrt(2 * m2 * l2 * l2 * P.h);
+function pcReset() {
+  PC.orbits = []; PC.steps = 0; PC.drift = 0;
+  const rand = rng(11), pm = pcPmax(), K = Math.round(P.orbits);
+  // seeds come in mirror pairs (θ₂, p₂), (−θ₂, p₂): the section is symmetric under θ₂ → −θ₂ (with time reversed)
+  for (let a = 0; a < 4000 && PC.orbits.length < K; a++) {
+    const th = (2 * rand() - 1) * Math.PI, p = (2 * rand() - 1) * pm;
+    for (const t of PC.orbits.length + 1 < K ? [th, -th] : [th]) {
+      const o = pcOrbit(t, p, (PC.orbits.length * 137.508) % 360);
+      if (o) { o.pts[0] = t; o.pts[1] = p; o.n = 1; PC.orbits.push(o); }
+    }
+  }
+  pcRedraw();
+}
+function pcAdd(th2, p2) {
+  const o = pcOrbit(th2, p2, (PC.orbits.length * 137.508) % 360);
+  if (!o) return false;
+  o.pts[0] = th2; o.pts[1] = p2; o.n = 1;
+  PC.orbits.push(o);
+  while (PC.orbits.length > LIM.orbits[1]) PC.orbits.shift();
+  pcRedraw(); return true;
+}
+function pcWork() {
+  const K = PC.orbits.length; if (!K) return;
+  const per = Math.max(1, Math.floor(PC_STEPS / K)), h = PC_DT;
+  for (const o of PC.orbits) {
+    if (o.n >= PMAX) continue;
+    const s = o.s;
+    for (let k = 0; k < per && o.n < PMAX; k++) {
+      const a0 = wrapPi(s[0]), t20 = s[1], q0 = p2of(s);
+      rk4(s, 0, h);
+      const a1 = wrapPi(s[0]);
+      if (a0 < 0 && a1 >= 0 && a1 - a0 < 1) {      // upward through θ₁ = 0, not the jump at ±π
+        const f = -a0 / (a1 - a0);
+        o.pts[2 * o.n] = wrapPi(t20 + f * (s[1] - t20)); o.pts[2 * o.n + 1] = q0 + f * (p2of(s) - q0); o.n++;
+      }
+    }
+    PC.steps += per;
+    const d = Math.abs(energy(s, 0) - o.e0) / eScale(); if (d > PC.drift) PC.drift = d;
+  }
+}
+function pcRect() {
+  const dpr = devicePixelRatio, ml = 56 * dpr, mr = 20 * dpr, mt = 36 * dpr, mb = 44 * dpr;
+  return { x: ml, y: mt, w: Math.max(10, W - ml - mr), h: Math.max(10, H - mt - mb) };
+}
+const pcMap = r => { const pm = 1.08 * pcPmax();
+  return [th => r.x + (th + Math.PI) / TAU * r.w, p => r.y + (pm - p) / (2 * pm) * r.h, pm]; };
+function pcRedraw() { for (const o of PC.orbits) o.drawn = 0; PC.layer.width = W; PC.layer.height = H; }
+function pcDrawNew() {
+  const c = PC.layer.getContext('2d'), r = pcRect(), [X, Y] = pcMap(r), dpr = devicePixelRatio, s = 1.6 * dpr;
+  for (const o of PC.orbits) {
+    if (o.drawn >= o.n) continue;
+    c.fillStyle = `hsl(${o.hue.toFixed(1)},80%,64%)`;
+    for (let i = o.drawn; i < o.n; i++) c.fillRect(X(o.pts[2 * i]) - s / 2, Y(o.pts[2 * i + 1]) - s / 2, s, s);
+    o.drawn = o.n;
+  }
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d'), pl = $('pl'), pctx = pl.getContext('2d');
+let W = 1, H = 1, PW = 1, PH = 1;
+function pendFrame() {
+  const dpr = devicePixelRatio, sc = 0.4 * Math.min(W, H) / (1 + l2), oy = 0.42 * H;
+  return { ox: W / 2, oy, sc, X: x => W / 2 + x * sc, Y: y => oy - y * sc, dpr };
+}
+function drawPend() {
+  const F = pendFrame(), { X, Y, dpr } = F;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // other pendulums' lower-bob trails
+  const mt = Math.min(rec, Lt), st = rec - mt;
+  ctx.globalAlpha = N > 100 ? 0.5 : 0.75; ctx.lineWidth = (N > 100 ? 1 : 1.3) * dpr;
+  if (mt > 1 && P.trail > 0) for (let i = 1; i < N; i++) {
+    ctx.strokeStyle = colors[i]; ctx.beginPath();
+    const base = i * Lt * 2;
+    for (let j = st; j < rec; j++) { const o = base + (j % Lt) * 2; j === st ? ctx.moveTo(X(To[o]), Y(To[o + 1])) : ctx.lineTo(X(To[o]), Y(To[o + 1])); }
+    ctx.stroke();
+  }
+  // reference trail, older parts fainter
+  const L = Math.max(1, P.trail), m = Math.min(rec, L), start = rec - m, CH = 12;
+  if (P.trail > 0) {
+    ctx.lineWidth = 1.2 * dpr; ctx.strokeStyle = '#dfe6ff';
+    for (let c = 0; c < CH; c++) {
+      const a = start + Math.floor(m * c / CH), b = start + Math.floor(m * (c + 1) / CH);
+      if (b - a < 1) continue;
+      ctx.globalAlpha = 0.08 + 0.6 * (c + 1) / CH; ctx.beginPath();
+      for (let j = Math.max(start, a - 1); j < b; j++) {
+        const o = (j % L) * 2; j === Math.max(start, a - 1) ? ctx.moveTo(X(Tr[o]), Y(Tr[o + 1])) : ctx.lineTo(X(Tr[o]), Y(Tr[o + 1]));
+      }
+      ctx.stroke();
+    }
+  }
+  // arms and bobs, reference last
+  const r1 = 7 * dpr * Math.cbrt(1 / Math.max(1, m2)) , r2 = 7 * dpr * Math.cbrt(m2 / Math.max(1, m2));
+  for (let i = N - 1; i >= 0; i--) {
+    const k = 4 * i, x1 = Math.sin(S[k]), y1 = -Math.cos(S[k]), x2 = x1 + l2 * Math.sin(S[k + 1]), y2 = y1 - l2 * Math.cos(S[k + 1]);
+    const ref = i === 0;
+    ctx.globalAlpha = ref ? 1 : N > 100 ? 0.35 : 0.6;
+    ctx.strokeStyle = ref ? '#ffffff' : colors[i]; ctx.lineWidth = (ref ? 2.2 : 1.2) * dpr;
+    ctx.beginPath(); ctx.moveTo(F.ox, F.oy); ctx.lineTo(X(x1), Y(y1)); ctx.lineTo(X(x2), Y(y2)); ctx.stroke();
+    ctx.fillStyle = ref ? '#ffffff' : colors[i];
+    const f = ref ? 1 : 0.55;
+    ctx.beginPath(); ctx.arc(X(x1), Y(y1), r1 * f, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(X(x2), Y(y2), r2 * f, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.fillStyle = '#8b93a8';
+  ctx.beginPath(); ctx.arc(F.ox, F.oy, 3.5 * dpr, 0, 7); ctx.fill();
+}
+function drawFlip() {
+  const r = mapRect(), dpr = devicePixelRatio;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(MAP.off, r.x, r.y, r.s, r.s);
+  ctx.strokeStyle = '#323a52'; ctx.lineWidth = 1; ctx.strokeRect(r.x - 0.5, r.y - 0.5, r.s + 1, r.s + 1);
+  ctx.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; ctx.fillStyle = '#8b93a8';
+  const lab = ['−π', '−π/2', '0', 'π/2', 'π'];
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let k = 0; k < 5; k++) ctx.fillText(lab[k], r.x + r.s * k / 4, r.y + r.s + 6 * dpr);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let k = 0; k < 5; k++) ctx.fillText(lab[4 - k], r.x - 6 * dpr, r.y + r.s * k / 4);
+  ctx.fillStyle = '#cdd4e4'; ctx.font = `${13 * dpr}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('θ₁', r.x + r.s / 2, r.y + r.s + 22 * dpr);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('θ₂', r.x - 34 * dpr, r.y + r.s / 2);
+  // colour bar: log₁₀ of the flip time
+  const bx = r.x + r.s + 22 * dpr, bw = 14 * dpr, bh = r.s * 0.7, by = r.y + (r.s - bh) / 2;
+  for (let j = 0; j < bh; j++) {
+    flipColour(10 ** (P.tcap * (1 - j / bh)), col);
+    ctx.fillStyle = `rgb(${col[0] | 0},${col[1] | 0},${col[2] | 0})`; ctx.fillRect(bx, by + j, bw, 1.5);
+  }
+  ctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; ctx.fillStyle = '#8b93a8'; ctx.textAlign = 'left';
+  for (let e = 0; e <= Math.floor(P.tcap); e++) ctx.fillText(`${10 ** e}`, bx + bw + 4 * dpr, by + bh * (1 - e / P.tcap));
+  ctx.fillText('翻转时间', bx - 4 * dpr, by - 12 * dpr);
+  const sw = (c, y, t) => { ctx.fillStyle = c; ctx.fillRect(bx, y, bw, bw); ctx.fillStyle = '#8b93a8'; ctx.fillText(t, bx + bw + 4 * dpr, y + bw / 2); };
+  sw('rgb(22,30,52)', by + bh + 14 * dpr, `> T`); sw('rgb(4,5,9)', by + bh + 32 * dpr, '能量不够');
+}
+function drawPoinc() {
+  const r = pcRect(), [X, Y, pm] = pcMap(r), dpr = devicePixelRatio;
+  ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
+  ctx.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; ctx.fillStyle = '#8b93a8';
+  const lab = ['−π', '−π/2', '0', 'π/2', 'π'];
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let k = 0; k < 5; k++) { const x = r.x + r.w * k / 4; ctx.beginPath(); ctx.moveTo(x, r.y); ctx.lineTo(x, r.y + r.h); ctx.stroke(); ctx.fillText(lab[k], x, r.y + r.h + 6 * dpr); }
+  const step = pm > 4 ? 2 : pm > 2 ? 1 : pm > 0.8 ? 0.5 : 0.2;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let v = -Math.floor(pm / step) * step; v <= pm + 1e-9; v += step) {
+    ctx.beginPath(); ctx.moveTo(r.x, Y(v)); ctx.lineTo(r.x + r.w, Y(v)); ctx.stroke(); ctx.fillText(+v.toFixed(2), r.x - 6 * dpr, Y(v));
+  }
+  ctx.fillStyle = '#cdd4e4'; ctx.font = `${13 * dpr}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('θ₂', r.x + r.w / 2, r.y + r.h + 22 * dpr);
+  ctx.save(); ctx.translate(16 * dpr, r.y + r.h / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText('p₂', 0, 0); ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`E = ${pcE().toFixed(3)}（E − E_min = ${P.h.toFixed(2)}），截面 θ₁ = 0、ω₁ > 0`, r.x, 10 * dpr);
+  // boundary of the allowed region: p₂² = 2m₂l₂²(E − V(0, θ₂))
+  ctx.strokeStyle = '#5f6b8a'; ctx.lineWidth = 1.2 * dpr;
+  for (const sg of [1, -1]) {
+    ctx.beginPath(); let on = false;
+    for (let k = 0; k <= 400; k++) {
+      const th = -Math.PI + TAU * k / 400, K = pcE() - potential(0, th);
+      if (K < 0) { on = false; continue; }
+      const p = sg * Math.sqrt(2 * m2 * l2 * l2 * K);
+      on ? ctx.lineTo(X(th), Y(p)) : ctx.moveTo(X(th), Y(p)); on = true;
+    }
+    ctx.stroke();
+  }
+  pcDrawNew();
+  ctx.drawImage(PC.layer, 0, 0);
+}
+
+function drawPlot() {
+  const show = P.view === 'pend' && P.ins !== 'none';
+  pl.style.display = show ? '' : 'none';
+  if (!show) return;
+  const dpr = devicePixelRatio, c = pctx;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.fillStyle = 'rgba(11,14,22,.88)'; c.fillRect(0, 0, PW, PH);
+  const ml = 40 * dpr, mr = 10 * dpr, mt = 22 * dpr, mb = 24 * dpr;
+  c.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 1;
+  if (P.ins === 'sep') {
+    const tMax = Math.max(20, Math.ceil((hn ? HT[hn - 1] : 0) / 10) * 10);
+    let yLo = P.eps * Math.LN10 - 3, yHi = Math.log(2 * (1 + l2)) + 1;
+    for (let i = 0; i < hn; i++) if (HLo[i] < yLo) yLo = HLo[i];
+    yLo = Math.max(yLo, -60);
+    const X = t => ml + (t / tMax) * (PW - ml - mr), Y = v => mt + (yHi - v) / (yHi - yLo) * (PH - mt - mb);
+    c.fillStyle = '#8b93a8'; c.textAlign = 'right'; c.textBaseline = 'middle';
+    for (let v = Math.ceil(yLo / 5) * 5; v <= yHi; v += 5) { c.beginPath(); c.moveTo(ml, Y(v)); c.lineTo(PW - mr, Y(v)); c.stroke(); c.fillText(v, ml - 4 * dpr, Y(v)); }
+    c.textAlign = 'center'; c.textBaseline = 'top';
+    const tStep = tMax > 200 ? 100 : tMax > 80 ? 20 : 10;
+    for (let t = 0; t <= tMax; t += tStep) { c.beginPath(); c.moveTo(X(t), mt); c.lineTo(X(t), PH - mb); c.stroke(); c.fillText(t, X(t), PH - mb + 4 * dpr); }
+    c.textAlign = 'left'; c.fillStyle = '#cdd4e4'; c.font = `${11 * dpr}px -apple-system, sans-serif`;
+    c.fillText(N > 1 ? 'ln d 对 t（d = 下摆锤到参考摆下摆锤的距离）' : '只有一个双摆，没有距离可画', ml, 5 * dpr);
+    if (hn > 1 && N > 1) {
+      c.fillStyle = 'rgba(255,211,138,.15)'; c.beginPath();
+      for (let i = 0; i < hn; i++) i ? c.lineTo(X(HT[i]), Y(HHi[i])) : c.moveTo(X(HT[i]), Y(HHi[i]));
+      for (let i = hn - 1; i >= 0; i--) c.lineTo(X(HT[i]), Y(Math.max(HLo[i], yLo)));
+      c.fill();
+      c.strokeStyle = '#ffd38a'; c.lineWidth = 1.6 * dpr; c.beginPath();
+      for (let i = 0; i < hn; i++) i ? c.lineTo(X(HT[i]), Y(HM[i])) : c.moveTo(X(HT[i]), Y(HM[i]));
+      c.stroke();
+    }
+    return;
+  }
+  if (P.ins === 'cfg') {   // configuration space: the reference's (θ₁, θ₂) path and the two mode directions
+    let m = 1e-9; for (let i = 0; i < hn; i++) m = Math.max(m, Math.abs(wrapPi(X1[i])), Math.abs(wrapPi(X2[i])));
+    m = Math.min(m, Math.PI) * 1.1;
+    const cx = ml + (PW - ml - mr) / 2, cy = mt + (PH - mt - mb) / 2, sc = Math.min(PW - ml - mr, PH - mt - mb) / (2 * m);
+    c.textAlign = 'left'; c.textBaseline = 'top'; c.fillStyle = '#cdd4e4'; c.font = `${11 * dpr}px -apple-system, sans-serif`;
+    c.fillText('参考摆在 θ₁–θ₂ 平面的路径；虚线是两个模态方向', 10 * dpr, 5 * dpr);
+    c.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; c.fillStyle = '#8b93a8';
+    c.fillText(`横轴 θ₁、纵轴 θ₂，半宽 ${(m / DEG).toFixed(2)}°`, 10 * dpr, PH - 16 * dpr);
+    c.beginPath(); c.moveTo(cx - m * sc, cy); c.lineTo(cx + m * sc, cy); c.moveTo(cx, cy - m * sc); c.lineTo(cx, cy + m * sc); c.stroke();
+    c.setLineDash([4 * dpr, 4 * dpr]); c.strokeStyle = '#ff8f8f'; c.lineWidth = 1 * dpr;
+    for (const md of MODES) {
+      const k = m / Math.max(1, Math.abs(md.r));
+      c.beginPath(); c.moveTo(cx - k * sc, cy + md.r * k * sc); c.lineTo(cx + k * sc, cy - md.r * k * sc); c.stroke();
+    }
+    c.setLineDash([]); c.strokeStyle = '#ffd38a'; c.lineWidth = 1 * dpr; c.globalAlpha = 0.8; c.beginPath();
+    for (let i = 0; i < hn; i++) {   // angles are wrapped to (−π, π]; lift the pen where a wrap jumps across the box
+      const a = wrapPi(X1[i]), b = wrapPi(X2[i]), x = cx + a * sc, y = cy - b * sc;
+      const jump = i && (Math.abs(a - wrapPi(X1[i - 1])) > Math.PI || Math.abs(b - wrapPi(X2[i - 1])) > Math.PI);
+      i && !jump ? c.lineTo(x, y) : c.moveTo(x, y);
+    }
+    c.stroke(); c.globalAlpha = 1;
+    return;
+  }
+  // spectrum
+  if (!spec || (++specAge > 30 && spec.n < hn)) { spec = computeSpectrum(); specAge = 0; }
+  c.textAlign = 'left'; c.textBaseline = 'top'; c.fillStyle = '#cdd4e4'; c.font = `${11 * dpr}px -apple-system, sans-serif`;
+  c.fillText('参考摆的频谱 |Θ(ω)|：θ₁ 黄、θ₂ 蓝；虚线是线性理论', ml - 30 * dpr, 5 * dpr);
+  if (!spec) { c.fillStyle = '#8b93a8'; c.fillText('采样中…', ml, 30 * dpr); return; }
+  const X = w => ml + (w / spec.wMax) * (PW - ml - mr), Y = v => PH - mb - v * (PH - mt - mb);
+  c.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; c.fillStyle = '#8b93a8'; c.textAlign = 'center';
+  for (let w = 0; w <= spec.wMax + 1e-9; w += 0.5) { c.beginPath(); c.moveTo(X(w), mt); c.lineTo(X(w), PH - mb); c.stroke(); c.fillText(w, X(w), PH - mb + 4 * dpr); }
+  c.textAlign = 'right'; c.fillText('ω', PW - mr, PH - mb - 12 * dpr);
+  for (const [arr, colr] of [[spec.p1, '#ffd38a'], [spec.p2, '#8ab4ff']]) {
+    c.strokeStyle = colr; c.lineWidth = 1.4 * dpr; c.beginPath();
+    for (let k = 0; k <= SPEC_BINS; k++) { const y = Y(Math.sqrt(arr[k] / spec.mx)); k ? c.lineTo(X(k * spec.dw), y) : c.moveTo(X(k * spec.dw), y); }
+    c.stroke();
+  }
+  c.setLineDash([4 * dpr, 4 * dpr]); c.strokeStyle = '#ff8f8f'; c.lineWidth = 1 * dpr;
+  for (const m of MODES) { c.beginPath(); c.moveTo(X(m.w), mt); c.lineTo(X(m.w), PH - mb); c.stroke(); }
+  c.setLineDash([]);
+}
+
+function drawStat() {
+  let parts = [];
+  if (P.view === 'pend') {
+    let fl = 0; for (let i = 0; i < N; i++) if (flipT[i] === flipT[i]) fl++;
+    let dmax = 0; if (N > 1 && hn) dmax = Math.exp(HHi[hn - 1]);
+    parts = [`t = ${simT.toFixed(2)}`, `${N} 个双摆`, `能量漂移 max|ΔE|/${eScale().toFixed(2)} = ${eDrift.toExponential(1)}`];
+    if (N > 1) parts.push(`最大距离 d = ${dmax.toExponential(2)}`);
+    parts.push(`下臂已翻转 ${fl}/${N}`);
+    if (flipT[0] === flipT[0]) parts.push(`参考摆 t = ${flipT[0].toFixed(2)} 翻转`);
+    if (P.ins === 'spec' && spec && spec.peaks.length)
+      parts.push('频谱峰 ' + spec.peaks.map(p => `ω = ${p.w.toFixed(4)}`).join('、'));
+    if (!running) parts.push('已暂停');
+  } else if (P.view === 'flip') {
+    const tot = MAP.order.length, pct = 100 * MAP.cur / tot;
+    parts = [`${MAP.res}×${MAP.res}`, MAP.done ? `完成，用时 ${(MAP.ms / 1000).toFixed(1)} s` : `已算 ${pct.toFixed(1)}%`,
+      `RK4 步数 ${(MAP.steps / 1e6).toFixed(1)} 百万`];
+    if (hover) parts.push(hover);
+    mapInfo();
+  } else {
+    let n = 0; for (const o of PC.orbits) n += o.n;
+    parts = [`${PC.orbits.length} 条轨道`, `截面点 ${n}`, `能量漂移 ${PC.drift.toExponential(1)}`];
+  }
+  $('stat').textContent = parts.join(' · ');
+  let fl = 0; if (flipT) for (let i = 0; i < N; i++) if (flipT[i] === flipT[i]) fl++;
+  window.__dp = { view: P.view, t: simT, n: N, eDrift, flipped: fl, flipRef: flipT ? flipT[0] : null,
+    maxD: N > 1 && hn ? Math.exp(HHi[hn - 1]) : null, meanLnD: hn ? HM[hn - 1] : null, samples: hn,
+    peaks: spec ? spec.peaks : null, modes: MODES.map(m => ({ ...m })),
+    map: { res: MAP.res, done: MAP.done, cur: MAP.cur, total: MAP.order ? MAP.order.length : 0, ms: MAP.ms, steps: MAP.steps, counts: [...MAP.counts] },
+    pc: { orbits: PC.orbits.length, points: PC.orbits.reduce((a, o) => a + o.n, 0), drift: PC.drift, E: pcE() },
+    P: { ...P } };
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  ctx.fillStyle = '#0b0e16'; ctx.fillRect(0, 0, W, H);
+  if (P.view === 'pend') drawPend(); else if (P.view === 'flip') drawFlip(); else drawPoinc();
+  drawPlot(); drawStat();
+}
+
+// ---------- UI ----------
+function mapInfo() {
+  $('mapInfo').textContent = MAP.order ? `从静止出发，下臂能翻转需要 V(θ₁, θ₂) ≥ ${eFlip().toFixed(3)}，即\n` +
+    `${Mt.toFixed(2)}·cos θ₁ + ${(m2 * l2).toFixed(2)}·cos θ₂ ≤ ${(Mt - m2 * l2).toFixed(2)}。黑色区域永远不会翻转。\n` +
+    `能量不够 ${MAP.counts[0]} · T 内未翻转 ${MAP.counts[1]} · 已翻转 ${MAP.counts[2]}` : '';
+}
+function syncUI() {
+  $('Mr').value = Math.log10(P.mr); $('Lr').value = P.lr; $('A1').value = P.a1; $('A2').value = P.a2;
+  $('N').value = Math.log10(P.n); $('E').value = P.eps; $('Dt').value = P.dt; $('V').value = P.speed; $('L').value = P.trail;
+  $('Res').value = P.res; $('Tc').value = P.tcap; $('Mdt').value = P.mdt; $('H').value = P.h; $('K').value = P.orbits;
+  $('vMr').textContent = P.mr.toFixed(2); $('vLr').textContent = P.lr.toFixed(2);
+  $('vA1').textContent = `${P.a1.toFixed(2)}°`; $('vA2').textContent = `${P.a2.toFixed(2)}°`;
+  $('vN').textContent = Math.round(P.n); $('vE').textContent = `1e${P.eps}`; $('vDt').textContent = P.dt.toFixed(3);
+  $('vV').textContent = P.speed; $('vL').textContent = P.trail;
+  $('vRes').textContent = `${P.res}×${P.res}`; $('vTc').textContent = `${(10 ** P.tcap).toFixed(0)}`; $('vMdt').textContent = P.mdt.toFixed(3);
+  $('vH').textContent = `${P.h.toFixed(2)}（E = ${pcE().toFixed(2)}）`; $('vK').textContent = Math.round(P.orbits);
+  $('secPend').style.display = P.view === 'pend' ? '' : 'none';
+  $('secFlip').style.display = P.view === 'flip' ? '' : 'none';
+  $('secPc').style.display = P.view === 'poinc' ? '' : 'none';
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  document.querySelectorAll('[data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === P.view));
+  document.querySelectorAll('[data-ins]').forEach(b => b.classList.toggle('on', b.dataset.ins === P.ins));
+  mapInfo();
+  $('pcInfo').textContent = `E_min = ${(-eScale()).toFixed(3)}；E − E_min > ${(2 * m2 * l2).toFixed(2)} 时下臂能翻转，> ${(2 * Mt).toFixed(2)} 时上臂能翻转`;
+}
+const custom = () => { P.preset = ''; };
+const modeAngles = which => {
+  const a = Math.abs(P.a1) <= 10 && P.a1 !== 0 ? Math.abs(P.a1) : MODE_AMP, r = MODES[which === 'in' ? 0 : 1].r;
+  P.a1 = a; P.a2 = clamp(Math.round(r * a * 100) / 100, LIM.a2);
+};
+function setView(v) {
+  P.view = v;
+  if (v === 'flip' && (!MAP.order || MAP.res !== Math.round(P.res))) mapReset();
+  if (v === 'poinc' && !PC.orbits.length) pcReset();
+  syncUI();
+}
+function loadPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { ...DEF, preset: key, view: p.view });
+  for (const k of ['a1', 'a2', 'n', 'eps', 'ins', 'trail', 'h', 'orbits']) if (p[k] !== undefined) P[k] = p[k];
+  showSystem();
+  if (p.mode) modeAngles(p.mode);
+  running = true; restart(); mapReset(); pcReset(); setView(p.view);
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+for (const [key, name] of Object.entries(VIEWS)) {
+  const b = document.createElement('button');
+  b.textContent = name; b.dataset.v = key; b.onclick = () => { custom(); setView(key); };
+  $('views').appendChild(b);
+}
+document.querySelectorAll('[data-ins]').forEach(b => b.onclick = () => { P.ins = b.dataset.ins; spec = null; syncUI(); });
+
+function systemChanged() { showSystem(); restart(); mapReset(); pcReset(); syncUI(); }
+$('Mr').oninput = e => { P.mr = Math.round(10 ** +e.target.value * 100) / 100; custom(); systemChanged(); };
+$('Lr').oninput = e => { P.lr = +e.target.value; custom(); systemChanged(); };
+$('A1').oninput = e => { P.a1 = +e.target.value; custom(); syncUI(); restart(); };
+$('A2').oninput = e => { P.a2 = +e.target.value; custom(); syncUI(); restart(); };
+$('mIn').onclick = () => { modeAngles('in'); custom(); P.ins = 'spec'; syncUI(); restart(); };
+$('mAnti').onclick = () => { modeAngles('anti'); custom(); P.ins = 'spec'; syncUI(); restart(); };
+$('N').oninput = e => { P.n = Math.round(10 ** +e.target.value); custom(); syncUI(); restart(); };
+$('E').oninput = e => { P.eps = +e.target.value; custom(); syncUI(); restart(); };
+$('Dt').oninput = e => { P.dt = +e.target.value; syncUI(); restart(); };
+$('V').oninput = e => { P.speed = +e.target.value; syncUI(); };
+$('L').oninput = e => { P.trail = +e.target.value; syncUI(); allocTrails(); record(); };
+$('play').onclick = () => { running = !running; syncUI(); };
+$('restart').onclick = () => { running = true; syncUI(); restart(); };
+$('Res').oninput = e => { P.res = +e.target.value; custom(); mapReset(); syncUI(); };
+$('Tc').oninput = e => { P.tcap = +e.target.value; custom(); mapReset(); syncUI(); };
+$('Mdt').oninput = e => { P.mdt = +e.target.value; custom(); mapReset(); syncUI(); };
+$('H').oninput = e => { P.h = +e.target.value; custom(); pcReset(); syncUI(); };
+$('K').oninput = e => { P.orbits = +e.target.value; custom(); pcReset(); syncUI(); };
+$('pcClear').onclick = () => { pcReset(); };
+
+// pointer: drag the reference bobs (pendulum view), pick an initial condition (flip map), add an orbit (Poincaré)
+let hover = '';
+const canvasXY = e => { const r = cv.getBoundingClientRect(), d = devicePixelRatio; return [(e.clientX - r.left) * d, (e.clientY - r.top) * d]; };
+function pickBob(x, y) {
+  const F = pendFrame(), x1 = F.X(Math.sin(S[0])), y1 = F.Y(-Math.cos(S[0]));
+  const x2 = x1 + F.sc * l2 * Math.sin(S[1]), y2 = y1 + F.sc * l2 * Math.cos(S[1]), R = 22 * F.dpr;
+  const d1 = Math.hypot(x - x1, y - y1), d2 = Math.hypot(x - x2, y - y2);
+  return d2 < R && d2 <= d1 ? 2 : d1 < R ? 1 : 0;
+}
+function dragTo(x, y) {
+  const F = pendFrame();
+  if (dragging === 1) P.a1 = Math.round(Math.atan2(x - F.ox, y - F.oy) / DEG * 10) / 10;
+  else { const x1 = F.X(Math.sin(P.a1 * DEG)), y1 = F.Y(-Math.cos(P.a1 * DEG)); P.a2 = Math.round(Math.atan2(x - x1, y - y1) / DEG * 10) / 10; }
+  custom(); syncUI(); restart();
+}
+cv.addEventListener('pointerdown', e => {
+  const [x, y] = canvasXY(e);
+  if (P.view === 'pend') {
+    dragging = pickBob(x, y);
+    if (dragging) { cv.setPointerCapture(e.pointerId); dragTo(x, y); }
+  } else if (P.view === 'flip') {
+    const r = mapRect();
+    if (x >= r.x && x < r.x + r.s && y >= r.y && y < r.y + r.s) {
+      P.a1 = Math.round((-180 + 360 * (x - r.x) / r.s) * 10) / 10; P.a2 = Math.round((180 - 360 * (y - r.y) / r.s) * 10) / 10;
+      custom(); running = true; restart(); setView('pend');
+    }
+  } else {
+    const r = pcRect(), [, , pm] = pcMap(r);
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+      pcAdd(-Math.PI + TAU * (x - r.x) / r.w, pm - 2 * pm * (y - r.y) / r.h);
+  }
+});
+cv.addEventListener('pointermove', e => {
+  const [x, y] = canvasXY(e);
+  if (P.view === 'pend') { if (dragging) dragTo(x, y); else cv.style.cursor = pickBob(x, y) ? 'grab' : ''; return; }
+  if (P.view === 'flip') {
+    const r = mapRect(), i = Math.floor((x - r.x) / r.s * MAP.res), j = Math.floor((y - r.y) / r.s * MAP.res);
+    cv.style.cursor = 'crosshair'; hover = '';
+    if (i >= 0 && j >= 0 && i < MAP.res && j < MAP.res) {
+      const v = MAP.val[j * MAP.res + i];
+      hover = `θ₁ = ${(mapAngle(i) / DEG).toFixed(1)}°, θ₂ = ${(-mapAngle(j) / DEG).toFixed(1)}°：` +
+        (v !== v ? '未算' : v === -1 ? '能量不够，不会翻转' : v === Infinity ? `T 内没翻转` : `t = ${v.toFixed(2)} 翻转`);
+    }
+    return;
+  }
+  cv.style.cursor = 'crosshair';
+});
+cv.addEventListener('pointerup', () => { dragging = 0; });
+cv.addEventListener('pointerleave', () => { hover = ''; });
+
+function resize() {
+  const r = cv.getBoundingClientRect(), q = pl.getBoundingClientRect(), dpr = devicePixelRatio;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+  PW = pl.width = Math.max(1, Math.round(q.width * dpr)); PH = pl.height = Math.max(1, Math.round(q.height * dpr));
+  pcRedraw();
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=flip  or  ?v=pend&a1=120&a2=0&n=100&e=-9&t=30&run=0  or  ?v=poinc&h=2&k=60&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const pk = q.get('p');
+const okPreset = pk !== null && Object.hasOwn(PRESETS, pk);
+if (okPreset) {
+  const p = PRESETS[pk];
+  Object.assign(P, { preset: pk, view: p.view });
+  for (const k of ['a1', 'a2', 'n', 'eps', 'ins', 'trail', 'h', 'orbits']) if (p[k] !== undefined) P[k] = p[k];
+}
+const urlKeys = { mr: 'mr', lr: 'lr', a1: 'a1', a2: 'a2', n: 'n', e: 'eps', dt: 'dt', sp: 'speed', L: 'trail',
+  res: 'res', T: 'tcap', mdt: 'mdt', h: 'h', k: 'orbits' };
+for (const [k, key] of Object.entries(urlKeys)) num(k, x => { P[key] = clamp(x, LIM[key]); custom(); });
+P.n = Math.round(P.n); P.speed = Math.round(P.speed); P.trail = Math.round(P.trail / 100) * 100;
+P.eps = Math.round(P.eps * 2) / 2; P.dt = Math.round(P.dt * 1000) / 1000; P.res = Math.round(P.res / 32) * 32;
+P.mdt = Math.round(P.mdt * 200) / 200; P.orbits = Math.round(P.orbits); P.mr = Math.round(P.mr * 100) / 100;
+if (q.has('v')) { const v = q.get('v'); if (Object.hasOwn(VIEWS, v)) P.view = v; }
+if (q.has('ins')) { const v = q.get('ins'); if (Object.hasOwn(INSETS, v)) P.ins = v; }
+if (okPreset && [...q.keys()].every(k => ['p', 't', 'run', 'ui'].includes(k))) P.preset = pk;
+num('t', x => ffT = clamp(x, LIM.t));
+if (q.get('run') === '0') running = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); showSystem();
+if (okPreset && PRESETS[pk].mode) modeAngles(PRESETS[pk].mode);
+restart(); mapReset(); pcReset(); setView(P.view);
+
+(function loop() {
+  if (P.view === 'pend' && !dragging) {
+    const per = Math.max(1, N);
+    if (simT < ffT - 1e-9) advance(Math.min(Math.ceil((ffT - simT) / P.dt - 1e-9), Math.max(1, Math.floor(FF_BUDGET / per))));
+    else if (running) advance(Math.min(P.speed, Math.max(1, Math.floor(STEP_BUDGET / per))));
+  } else if (P.view === 'flip') mapWork();
+  else if (P.view === 'poinc' && running) pcWork();
+  draw();
+  if (P.view !== 'pend' || simT >= ffT - 1e-9) window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

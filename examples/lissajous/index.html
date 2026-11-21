@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>李萨如图形与谐波图 · 两个振动的合成</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0a1013; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(20,30,34,.93); border: 1px solid #2c4048; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #9fd3d0; border-top: 1px solid #2c4048; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8b9a9e; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #253439; color: #e6e6e6; border: 1px solid #36505a;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #31464d; }
+  button.on { background: #2f6a6a; border-color: #4f9a96; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #a9babd; margin-top: 4px; white-space: pre-wrap; }
+  #cov { width: 100%; height: 70px; display: block; margin-top: 4px; background: #10191c; border-radius: 4px; }
+  /* pendulum table: one row per pendulum, columns name f φ A d */
+  #pend { display: grid; grid-template-columns: 34px repeat(4, 1fr); gap: 2px 6px; align-items: center; margin-top: 4px; }
+  #pend .hd { color: #8b9a9e; font: 11px ui-monospace, Menlo, Consolas, monospace; }
+  #pend .cell b { color: #ffd38a; font: 10.5px ui-monospace, Menlo, Consolas, monospace; display: block; text-align: right; }
+  #pend .off { opacity: .35; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(10,16,19,.8); color: #cfdcdc; font-size: 12px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>李萨如图形与谐波图 · 两个振动的合成</h1>
+  <small>一个点同时做两个互相垂直的简谐振动：<span class="mono">x = sin(a·t + δ)</span>，<span class="mono">y = sin(b·t)</span>。频率比 a : b 是有理数时曲线闭合，是无理数时永不闭合、越画越密。</small>
+
+  <h2>模式</h2>
+  <div class="presets" id="modes"></div>
+
+  <div id="secL">
+    <h2>频率</h2>
+    <div class="row"><label>x 方向频率 a <b id="va"></b></label><input id="a" type="range" min="1" max="12" step="1"></div>
+    <div class="row"><label>y 方向频率 b <b id="vb"></b></label><input id="b" type="range" min="1" max="12" step="1"></div>
+    <div class="presets" id="irr"></div>
+    <small>选一个无理数时 a 换成它、b = 1，曲线永不闭合，看覆盖率一点点涨上去。</small>
+  </div>
+
+  <div id="secT">
+    <h2>表格</h2>
+    <div class="row"><label>行列数 <b id="vn"></b></label><input id="n" type="range" min="3" max="9" step="1"></div>
+    <div class="row"><label>画一圈用时 <b id="vts"></b></label><input id="ts" type="range" min="2" max="30" step="0.5"></div>
+    <small>第 j 列顶上的圆以频率 a = j 转，竖线把它的横坐标送下去；第 i 行左边的圆以频率 b = i 转，横线送来纵坐标。两线交点就是格子里的笔尖。</small>
+  </div>
+
+  <div id="secD">
+    <h2>相位</h2>
+    <div class="row"><label>相位差 δ <b id="vd"></b></label><input id="d" type="range" min="0" max="360" step="0.5"></div>
+    <div class="row"><label>δ 转速 <b id="vw"></b></label><input id="w" type="range" min="-90" max="90" step="1"></div>
+    <small>让 δ 匀速变化，平面曲线看起来像一根绕竖轴旋转的立体线圈：它就是圆柱面上一条曲线的投影。示波器上两路频率差一点点时，看到的正是这种转动。</small>
+  </div>
+
+  <div id="secL2">
+    <div class="row"><label>笔速（t 每秒走多少） <b id="vv"></b></label><input id="v" type="range" min="0.2" max="100" step="0.1"></div>
+    <div class="checks">
+      <label><input id="depth" type="checkbox"> 圆柱前后（后半圈变暗）</label>
+      <label><input id="mk" type="checkbox"> 切点</label>
+      <label><input id="scope" type="checkbox"> 示波器</label>
+    </div>
+    <div class="info" id="info"></div>
+    <canvas id="cov"></canvas>
+    <small>把方框分成 100 × 100 格，曲线经过的格子占多少。闭合曲线很快停在一个值上；无理比会一直涨向 100%。</small>
+  </div>
+
+  <div id="secH">
+    <h2>摆 <span class="mono">x = Σ Aᵢ sin(fᵢt + φᵢ) e<sup>−dᵢt</sup></span></h2>
+    <div id="pend"></div>
+    <div class="checks"><label><input id="rot" type="checkbox"> 旋转摆（第二个 x 摆让画纸转圈，代替第二个 y 摆）</label></div>
+    <div class="row"><label>时长 <b id="vT"></b></label><input id="T" type="range" min="20" max="600" step="1"></div>
+    <div class="row"><label>绘制速度 <b id="vhs"></b></label><input id="hs" type="range" min="5" max="300" step="1"></div>
+    <div class="presets"><button id="redraw">↺ 重画</button><button id="finish">⏭ 一次画完</button></div>
+    <div class="info" id="hinfo"></div>
+  </div>
+
+  <h2>播放与声音</h2>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="snd">🔊 听两个频率</button></div>
+  <small>声音由你点击后才开始：左声道 110·a Hz，右声道 110·b Hz（谐波图用两个主摆的频率）。</small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+const TAU = 2 * Math.PI, RAD = Math.PI / 180;
+const GRID = 100;             // coverage grid: GRID × GRID cells over the square [-1, 1]²
+const CELL_STEP = 0.008;      // longest straight step when marking cells (cell size is 0.02)
+const IRR_DT = 0.004;         // time step of the never-closing curve
+const IRR_TMAX = 20000;       // the never-closing curve stops at this t
+const MAX_STEPS = 6000;       // most curve steps drawn in one frame
+const MAX_HIST = 2000;        // coverage history kept for the little chart
+const H_DT = 0.02;            // harmonograph time step
+
+const MODES = { liss: '李萨如图形', table: '李萨如表', harm: '谐波图' };
+const IRR = { '': { name: '整数比', v: 0 }, sqrt2: { name: '√2 : 1', v: Math.SQRT2 },
+  phi: { name: 'φ : 1', v: (1 + Math.sqrt(5)) / 2 }, sqrt3: { name: '√3 : 1', v: Math.sqrt(3) }, pi: { name: 'π : 1', v: Math.PI } };
+const PEND = ['x₁', 'x₂', 'y₁', 'y₂'];
+const PEND_R = { f: [0.5, 8, 0.001], ph: [0, 360, 1], A: [0, 1, 0.01], d: [0, 0.03, 0.0001] };
+
+// pendulums: [f, φ°, A, d] for x₁ x₂ y₁ y₂
+const hp = rows => rows.map(([f, ph, A, d]) => ({ f, ph, A, d }));
+const PRESETS = {
+  ellipse: { name: '1:1 椭圆', m: 'liss', a: 1, b: 1, d: 60, w: 0 },
+  eight: { name: '1:2 八字', m: 'liss', a: 1, b: 2, d: 0, w: 0 },
+  r32: { name: '3:2', m: 'liss', a: 3, b: 2, d: 90, w: 0 },
+  r54: { name: '5:4', m: 'liss', a: 5, b: 4, d: 90, w: 0 },
+  spin: { name: '3:4 旋转幻觉', m: 'liss', a: 3, b: 4, d: 90, w: 30 },
+  cheb3: { name: 'Chebyshev x = T₃(y)', m: 'liss', a: 3, b: 1, d: 180, w: 0 },
+  cheb5: { name: 'Chebyshev x = T₅(y)', m: 'liss', a: 5, b: 1, d: 0, w: 0 },
+  sqrt2: { name: '√2:1 无理', m: 'liss', irr: 'sqrt2', d: 90, w: 0, v: 40 },
+  phi: { name: 'φ:1 无理', m: 'liss', irr: 'phi', d: 90, w: 0, v: 40 },
+  table: { name: '7 × 7 表格', m: 'table', n: 7, d: 90, w: 0 },
+  near21: { name: '谐波图 2:1 失谐', m: 'harm', rot: false, T: 400,
+    H: hp([[2.006, 0, 0.6, 0.004], [6.0, 90, 0.12, 0.012], [1.0, 0, 0.6, 0.003], [3.003, 180, 0.12, 0.01]]) },
+  near32: { name: '谐波图 3:2 失谐', m: 'harm', rot: false, T: 450,
+    H: hp([[3.004, 90, 0.55, 0.003], [1.0, 0, 0.08, 0.006], [2.0, 0, 0.55, 0.0025], [6.002, 45, 0.08, 0.008]]) },
+  unison: { name: '谐波图 1:1 失谐', m: 'harm', rot: false, T: 600,
+    H: hp([[2.0, 0, 0.55, 0.0025], [1, 0, 0, 0], [2.006, 90, 0.55, 0.0025], [1, 0, 0, 0]]) },
+  rotary: { name: '旋转谐波图', m: 'harm', rot: true, T: 500,
+    H: hp([[2.0, 0, 0.5, 0.0035], [2.007, 0, 0.45, 0.003], [3.0, 90, 0.5, 0.004], [1, 0, 0, 0]]) },
+};
+
+const P = { mode: 'liss', preset: 'r32', a: 3, b: 2, irr: '', delta: 90, spin: 0, v: 2, depth: true, mk: true, scope: false,
+  n: 7, ts: 8, H: PRESETS.near21.H.map(h => ({ ...h })), rot: false, T: 400, hs: 60 };
+let running = true;
+
+const $ = id => document.getElementById(id);
+const gcd = (x, y) => { for (let i = 0; i < 64 && y; i++) [x, y] = [y, x % y]; return x; };
+const mod = (x, m) => ((x % m) + m) % m;
+
+// ---------- the single Lissajous curve ----------
+// L: everything measured from the current a, b, δ. Rational ratios are reduced; one period is t ∈ [0, 2π).
+let L = null;
+function freqs() {
+  if (P.irr) return { a: IRR[P.irr].v, b: 1, irr: true };
+  const g = gcd(P.a, P.b);
+  return { a: P.a / g, b: P.b / g, irr: false };
+}
+
+// δ values (mod 180°) at which the closed curve folds onto itself and becomes an open arc:
+// the reflection t → t₀ − t with b·t₀ = (2k+1)π maps it to itself when δ ≡ 90° − a(2k+1)·90°/b (mod 180°)
+function degenerate(a, b, delta) {
+  for (let k = 0; k < b; k++) {
+    const d = mod(delta - (90 - a * (2 * k + 1) * 90 / b), 180);
+    if (Math.min(d, 180 - d) < 0.05) return (2 * k + 1) * Math.PI / b;   // t₀
+  }
+  return null;
+}
+
+// stats = false (while δ spins): resample the curve but keep the last crossing count and coverage
+function analyse(stats = true) {
+  const { a, b, irr } = freqs(), dl = P.delta * RAD, old = L;
+  L = { a, b, irr, pts: null, open: false, cross: 0, crossPts: [], touchX: [], touchY: [], formula: 0, cov: 0 };
+  if (irr) return;
+  const t0 = degenerate(a, b, P.delta);
+  L.open = t0 !== null;
+  const S = 300 * (a + b), span = L.open ? Math.PI : TAU, start = L.open ? t0 / 2 : 0;
+  const pts = new Float64Array(2 * (S + 1));
+  for (let i = 0; i <= S; i++) {
+    const t = start + span * i / S;
+    pts[2 * i] = Math.sin(a * t + dl); pts[2 * i + 1] = Math.sin(b * t);
+  }
+  L.pts = pts; L.S = S;
+  L.formula = L.open ? (a - 1) * (b - 1) / 2 : 2 * a * b - a - b;
+  // a full period for the tangencies, so an open arc counts each touch point once after de-duplication
+  L.touchX = touches(t => Math.sin(a * t + dl), t => Math.sin(b * t), S);
+  L.touchY = touches(t => Math.sin(b * t), t => Math.sin(a * t + dl), S).map(([u, w]) => [w, u]);
+  if (stats || !old || old.irr) { countCrossings(); L.cov = coverage(pts, S); }
+  else { L.cross = old.cross; L.crossPts = []; L.cov = old.cov; }
+}
+
+// points over one period where the coordinate u(t) reaches its maximum 1 (the right or top edge).
+// Each sampled maximum is refined by a parabola through its neighbours; an open arc passes each touch
+// point twice, so points at the same position are counted once.
+function touches(u, w, S) {
+  const out = [], h = TAU / S;
+  for (let i = 0; i < S; i++) {
+    const c = u(i * h), p = u((i - 1) * h), n = u((i + 1) * h);
+    if (!(c >= p && c > n && c > 1 - 1e-3)) continue;
+    const den = p - 2 * c + n, y = w((i + (den < 0 ? 0.5 * (p - n) / den : 0)) * h);
+    if (!out.some(q => Math.abs(q[1] - y) < 1e-4)) out.push([1, y]);
+  }
+  return out;
+}
+
+// self-intersections of the sampled polyline, found with a bucket grid
+function countCrossings() {
+  const { pts, S } = L, G = 48, cells = Array.from({ length: G * G }, () => []);
+  const cell = v => Math.min(G - 1, Math.max(0, Math.floor((v + 1) / 2 * G)));
+  for (let i = 0; i < S; i++) {
+    const x0 = cell(Math.min(pts[2 * i], pts[2 * i + 2])), x1 = cell(Math.max(pts[2 * i], pts[2 * i + 2]));
+    const y0 = cell(Math.min(pts[2 * i + 1], pts[2 * i + 3])), y1 = cell(Math.max(pts[2 * i + 1], pts[2 * i + 3]));
+    for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) cells[gy * G + gx].push(i);
+  }
+  const seen = new Set(), found = [];
+  for (const list of cells) {
+    for (let p = 0; p < list.length; p++) for (let r = p + 1; r < list.length; r++) {
+      const i = Math.min(list[p], list[r]), j = Math.max(list[p], list[r]);
+      if (j - i <= 1 || (!L.open && i === 0 && j === S - 1)) continue;
+      const key = i * S + j;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const hit = segHit(pts, i, j);
+      if (hit && !found.some(f => Math.hypot(f[0] - hit[0], f[1] - hit[1]) < 1e-6)) found.push(hit);
+    }
+  }
+  L.crossPts = found; L.cross = found.length;
+}
+// crossing of segments i and j, with a little slack so a crossing that falls on a sample point is not missed
+// (the caller merges the duplicates this produces)
+function segHit(p, i, j) {
+  const ax = p[2 * i], ay = p[2 * i + 1], bx = p[2 * i + 2] - ax, by = p[2 * i + 3] - ay;
+  const cx = p[2 * j], cy = p[2 * j + 1], dx = p[2 * j + 2] - cx, dy = p[2 * j + 3] - cy;
+  const den = bx * dy - by * dx;
+  if (Math.abs(den) < 1e-14) return null;
+  const s = ((cx - ax) * dy - (cy - ay) * dx) / den, u = ((cx - ax) * by - (cy - ay) * bx) / den;
+  const e = 1e-9;
+  return s >= -e && s <= 1 + e && u >= -e && u <= 1 + e ? [ax + s * bx, ay + s * by] : null;
+}
+
+// ---------- coverage of the square ----------
+const covGrid = new Uint8Array(GRID * GRID);
+let covCount = 0;
+function mark(x, y) {
+  const i = Math.min(GRID - 1, Math.floor((x + 1) / 2 * GRID)), j = Math.min(GRID - 1, Math.floor((y + 1) / 2 * GRID));
+  if (i >= 0 && j >= 0 && !covGrid[j * GRID + i]) { covGrid[j * GRID + i] = 1; covCount++; }
+}
+function markSeg(x0, y0, x1, y1) {
+  const k = Math.min(64, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / CELL_STEP));
+  for (let s = 1; s <= k; s++) mark(x0 + (x1 - x0) * s / k, y0 + (y1 - y0) * s / k);
+}
+function coverage(pts, S) {
+  covGrid.fill(0); covCount = 0; mark(pts[0], pts[1]);
+  for (let i = 0; i < S; i++) markSeg(pts[2 * i], pts[2 * i + 1], pts[2 * i + 2], pts[2 * i + 3]);
+  return covCount / (GRID * GRID);
+}
+
+// ---------- canvases ----------
+const cv = $('c'), ctx = cv.getContext('2d'), trail = document.createElement('canvas'), tctx = trail.getContext('2d');
+const cc = $('cov'), cctx = cc.getContext('2d');
+let W = 1, H = 1, tPen = 0, hist = [];
+// never-closing curve and harmonograph both draw incrementally onto the trail canvas
+const run = { t: 0, x: 0, y: 0, done: false };
+
+function box() { const U = Math.min(W, H) * 0.42; return { U, ox: W / 2, oy: H / 2 }; }
+
+function restartTrail() {
+  tctx.setTransform(1, 0, 0, 1, 0, 0); tctx.clearRect(0, 0, W, H);
+  run.t = 0; run.done = false; hist = [];
+  if (P.mode === 'liss' && L && L.irr) {
+    covGrid.fill(0); covCount = 0;
+    run.x = Math.sin(P.delta * RAD); run.y = 0; mark(run.x, run.y); pushHist(0, covCount / (GRID * GRID));
+  } else if (P.mode === 'harm') { const [x, y] = harmPt(0); run.x = x; run.y = y; }
+}
+
+// advance the never-closing Lissajous curve by sim time dt
+function stepIrr(dt) {
+  if (run.done) return;
+  const { a } = L, dl = P.delta * RAD, { U, ox, oy } = box(), dpr = devicePixelRatio;
+  const n = Math.min(MAX_STEPS, Math.ceil(dt / IRR_DT));
+  tctx.strokeStyle = 'rgba(255,211,138,.55)'; tctx.lineWidth = 1.1 * dpr; tctx.lineJoin = 'round';
+  tctx.beginPath(); tctx.moveTo(ox + run.x * U, oy - run.y * U);
+  for (let s = 0; s < n && run.t < IRR_TMAX; s++) {
+    run.t += IRR_DT;
+    const x = Math.sin(a * run.t + dl), y = Math.sin(run.t);
+    markSeg(run.x, run.y, x, y); run.x = x; run.y = y;
+    tctx.lineTo(ox + x * U, oy - y * U);
+    if (s % 500 === 499) pushHist(run.t, covCount / (GRID * GRID));
+  }
+  tctx.stroke();
+  if (run.t >= IRR_TMAX) run.done = true;
+  pushHist(run.t, covCount / (GRID * GRID));
+}
+function pushHist(t, c) {
+  if (hist.length >= MAX_HIST) hist = hist.filter((_, i) => i % 2 === 0);
+  hist.push([t, c]);
+}
+
+// ---------- harmonograph ----------
+function harmPt(t) {
+  const h = P.H, term = (p, shift) => p.A * Math.sin(p.f * t + p.ph * RAD + shift) * Math.exp(-p.d * t);
+  const x = term(h[0], 0) + term(h[1], 0);
+  const y = term(h[2], 0) + (P.rot ? term(h[1], Math.PI / 2) : term(h[3], 0));
+  return [x, y];
+}
+function harmScale() {
+  const h = P.H, ax = h[0].A + h[1].A, ay = h[2].A + (P.rot ? h[1].A : h[3].A);
+  return Math.min(W, H) * 0.45 / Math.max(0.05, ax, ay);
+}
+function stepHarm(dt) {
+  if (run.done) return;
+  const U = harmScale(), ox = W / 2, oy = H / 2, dpr = devicePixelRatio;
+  const n = Math.min(MAX_STEPS, Math.ceil(dt / H_DT));
+  tctx.lineWidth = 1 * dpr; tctx.lineJoin = 'round';
+  for (let s = 0; s < n && run.t < P.T; s++) {
+    const t = run.t + H_DT, [x, y] = harmPt(t);
+    tctx.strokeStyle = `hsla(${190 + 150 * t / P.T},80%,${68 - 18 * t / P.T}%,.8)`;
+    tctx.beginPath(); tctx.moveTo(ox + run.x * U, oy - run.y * U); tctx.lineTo(ox + x * U, oy - y * U); tctx.stroke();
+    run.t = t; run.x = x; run.y = y;
+  }
+  if (run.t >= P.T) run.done = true;
+}
+
+// ---------- drawing ----------
+function drawFrame() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = P.scope && P.mode === 'liss' ? '#06110b' : '#0a1013'; ctx.fillRect(0, 0, W, H);
+  ctx.lineJoin = ctx.lineCap = 'round';
+  if (P.mode === 'liss') drawLiss();
+  else if (P.mode === 'table') drawTable();
+  else drawHarm();
+}
+
+function drawFrameBox(U, ox, oy) {
+  const dpr = devicePixelRatio;
+  if (P.scope) {
+    ctx.strokeStyle = 'rgba(80,200,120,.18)'; ctx.lineWidth = 1 * dpr; ctx.beginPath();
+    for (let k = -4; k <= 4; k++) {
+      ctx.moveTo(ox + k / 4 * U * 1.1, oy - U * 1.1); ctx.lineTo(ox + k / 4 * U * 1.1, oy + U * 1.1);
+      ctx.moveTo(ox - U * 1.1, oy + k / 4 * U * 1.1); ctx.lineTo(ox + U * 1.1, oy + k / 4 * U * 1.1);
+    }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = P.scope ? 'rgba(80,200,120,.35)' : 'rgba(160,190,200,.28)'; ctx.lineWidth = 1 * dpr;
+  ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.strokeRect(ox - U, oy - U, 2 * U, 2 * U); ctx.setLineDash([]);
+}
+
+function drawLiss() {
+  const { U, ox, oy } = box(), dpr = devicePixelRatio, X = x => ox + x * U, Y = y => oy - y * U;
+  drawFrameBox(U, ox, oy);
+  const front = P.scope ? '#7dffa8' : '#ffd38a', back = P.scope ? 'rgba(80,200,120,.3)' : 'rgba(120,150,210,.38)';
+  const { a, b } = L, dl = P.delta * RAD;
+  if (L.irr) {
+    ctx.drawImage(trail, 0, 0);
+    const t = run.t;
+    pen(X(Math.sin(a * t + dl)), Y(Math.sin(t)), U, ox, oy);
+    return;
+  }
+  // the curve, split into the front and back halves of the cylinder (depth z = cos(a t + δ))
+  const { pts, S } = L, span = L.open ? Math.PI : TAU;
+  const t0 = L.open ? degenerate(a, b, P.delta) / 2 : 0;
+  const paths = [new Path2D(), new Path2D()];
+  for (let i = 0; i < S; i++) {
+    const tm = t0 + span * (i + 0.5) / S, side = P.depth && Math.cos(a * tm + dl) < 0 ? 1 : 0;
+    paths[side].moveTo(X(pts[2 * i]), Y(pts[2 * i + 1])); paths[side].lineTo(X(pts[2 * i + 2]), Y(pts[2 * i + 3]));
+  }
+  ctx.lineWidth = 1.6 * dpr; ctx.strokeStyle = back; ctx.stroke(paths[1]);
+  ctx.lineWidth = 2.2 * dpr; ctx.strokeStyle = front; ctx.stroke(paths[0]);
+  if (P.mk) {
+    ctx.fillStyle = '#ff7a6b';
+    for (const [x, y] of L.touchX) { ctx.beginPath(); ctx.arc(X(x), Y(y), 4.5 * dpr, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#6fd3ff';
+    for (const [x, y] of L.touchY) { ctx.beginPath(); ctx.arc(X(x), Y(y), 4.5 * dpr, 0, TAU); ctx.fill(); }
+    ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.2 * dpr;
+    for (const [x, y] of L.crossPts) { ctx.beginPath(); ctx.arc(X(x), Y(y), 3 * dpr, 0, TAU); ctx.stroke(); }
+    ctx.font = `${12 * dpr}px -apple-system, "PingFang SC", sans-serif`; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ff9a8e'; ctx.textAlign = 'left';
+    ctx.fillText(`右边切点 ${L.touchX.length}`, X(1) + 10 * dpr, Y(0));
+    ctx.fillStyle = '#8fdcff'; ctx.textAlign = 'center';
+    ctx.fillText(`上边切点 ${L.touchY.length}`, X(0), Y(1) - 14 * dpr);
+  }
+  pen(X(Math.sin(a * tPen + dl)), Y(Math.sin(b * tPen)), U, ox, oy);
+}
+
+// the pen, with dashed projections to the two axes it oscillates along
+function pen(px, py, U, ox, oy) {
+  const dpr = devicePixelRatio;
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1 * dpr; ctx.setLineDash([3 * dpr, 3 * dpr]);
+  ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, oy + U * 1.08); ctx.moveTo(px, py); ctx.lineTo(ox - U * 1.08, py); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#ff7a6b';
+  for (const [x, y] of [[px, oy + U * 1.08], [ox - U * 1.08, py]]) { ctx.beginPath(); ctx.arc(x, y, 3.5 * dpr, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(px, py, 4 * dpr, 0, TAU); ctx.fill();
+}
+
+function drawTable() {
+  const n = P.n, dpr = devicePixelRatio, c = Math.min(W, H) / (n + 1.15), r = c * 0.38;
+  const x0 = (W - c * (n + 1)) / 2, y0 = (H - c * (n + 1)) / 2, dl = P.delta * RAD, t = tPen;
+  const cx = j => x0 + c * (j + 0.5), cy = i => y0 + c * (i + 0.5), SAMP = 360;
+  ctx.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#8b9a9e'; ctx.fillText('a →', cx(0) + c * 0.18, cy(0) - c * 0.18); ctx.fillText('b ↓', cx(0) - c * 0.18, cy(0) + c * 0.18);
+  const hx = [], hy = [];
+  for (let j = 1; j <= n; j++) {   // column headers: x = sin(a t + δ)
+    const th = j * t + dl, px = cx(j) + r * Math.sin(th), py = cy(0) - r * Math.cos(th);
+    hx[j] = px;
+    ctx.strokeStyle = 'rgba(160,190,200,.35)'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.arc(cx(j), cy(0), r, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#ffd38a'; ctx.beginPath(); ctx.arc(px, py, 3 * dpr, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#8b9a9e'; ctx.fillText(j, cx(j), cy(0));
+  }
+  for (let i = 1; i <= n; i++) {   // row headers: y = sin(b t)
+    const th = i * t, px = cx(0) + r * Math.cos(th), py = cy(i) - r * Math.sin(th);
+    hy[i] = py;
+    ctx.strokeStyle = 'rgba(160,190,200,.35)'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.arc(cx(0), cy(i), r, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#6fd3ff'; ctx.beginPath(); ctx.arc(px, py, 3 * dpr, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#8b9a9e'; ctx.fillText(i, cx(0), cy(i));
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1 * dpr; ctx.beginPath();
+  for (let j = 1; j <= n; j++) { ctx.moveTo(hx[j], cy(0)); ctx.lineTo(hx[j], y0 + c * (n + 1)); }
+  for (let i = 1; i <= n; i++) { ctx.moveTo(cx(0), hy[i]); ctx.lineTo(x0 + c * (n + 1), hy[i]); }
+  ctx.stroke();
+  const k = Math.min(SAMP, Math.ceil(SAMP * t / TAU));
+  for (let i = 1; i <= n; i++) for (let j = 1; j <= n; j++) {
+    const ox = cx(j), oy = cy(i), hue = 200 + 140 * ((i + j) % n) / n;
+    ctx.strokeStyle = 'rgba(160,190,200,.12)'; ctx.lineWidth = 1 * dpr; ctx.beginPath();
+    for (let s = 0; s <= SAMP; s++) { const u = TAU * s / SAMP, X = ox + r * Math.sin(j * u + dl), Y = oy - r * Math.sin(i * u); s ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+    ctx.stroke();
+    ctx.strokeStyle = `hsl(${hue},75%,68%)`; ctx.lineWidth = 1.4 * dpr; ctx.beginPath();
+    for (let s = 0; s <= k; s++) { const u = Math.min(t, TAU * s / SAMP), X = ox + r * Math.sin(j * u + dl), Y = oy - r * Math.sin(i * u); s ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ox + r * Math.sin(j * t + dl), oy - r * Math.sin(i * t), 2.2 * dpr, 0, TAU); ctx.fill();
+  }
+}
+
+function drawHarm() {
+  ctx.drawImage(trail, 0, 0);
+  const U = harmScale(), dpr = devicePixelRatio;
+  if (!run.done) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(W / 2 + run.x * U, H / 2 - run.y * U, 3.5 * dpr, 0, TAU); ctx.fill(); }
+}
+
+// coverage history: coverage (0–100%) against t
+function drawCov() {
+  const dpr = devicePixelRatio, w = Math.max(1, Math.round(cc.clientWidth * dpr)), h = Math.max(1, Math.round(cc.clientHeight * dpr));
+  if (cc.width !== w || cc.height !== h) { cc.width = w; cc.height = h; }
+  cctx.clearRect(0, 0, w, h);
+  cctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; cctx.textBaseline = 'top'; cctx.fillStyle = '#6f8286';
+  if (!L.irr) {
+    const yy = h - L.cov * (h - 4);
+    cctx.strokeStyle = '#ffd38a'; cctx.lineWidth = 1.5 * dpr; cctx.beginPath(); cctx.moveTo(0, yy); cctx.lineTo(w, yy); cctx.stroke();
+    cctx.fillText(`闭合曲线：覆盖率恒为 ${(100 * L.cov).toFixed(1)}%`, 4 * dpr, 3 * dpr);
+    return;
+  }
+  const tMax = Math.max(50, run.t);
+  cctx.strokeStyle = '#ffd38a'; cctx.lineWidth = 1.5 * dpr; cctx.beginPath();
+  hist.forEach(([t, c], i) => { const x = t / tMax * w, y = h - c * (h - 4); i ? cctx.lineTo(x, y) : cctx.moveTo(x, y); });
+  cctx.stroke();
+  cctx.fillText(`覆盖率 vs t（t 到 ${Math.round(tMax)}）`, 4 * dpr, 3 * dpr);
+}
+
+function drawInfo() {
+  const sAB = `${+L.a.toFixed(4)} : ${L.b}`;
+  if (L.irr) {
+    $('info').textContent = `a : b = ${IRR[P.irr].name} ≈ ${sAB}，无理数，曲线永不闭合\n` +
+      `t = ${run.t.toFixed(0)}${run.done ? '（已到上限）' : ''} · 已覆盖 ${covCount} / ${GRID * GRID} 格 = ${(100 * covCount / GRID / GRID).toFixed(1)}%`;
+    $('stat').textContent = `x = sin(${IRR[P.irr].name.split(' ')[0]}·t + ${P.delta.toFixed(1)}°), y = sin(t) · t = ${run.t.toFixed(0)} · 覆盖 ${(100 * covCount / GRID / GRID).toFixed(1)}%` + (running ? '' : ' · 已暂停');
+    return;
+  }
+  const { a, b } = L, g = gcd(P.a, P.b), red = g > 1 ? `（${P.a}:${P.b} 约分）` : '';
+  const kind = L.open ? `退化相位：曲线折回成一段弧，公式 (a−1)(b−1)/2 = ${L.formula}` : `一般相位：公式 2ab − a − b = ${L.formula}`;
+  const cheb = b === 1 && a > 1 && L.open ? `\n这是 Chebyshev 多项式的图像：x = ${Math.abs(mod(P.delta - (1 - a) * 90 + 180, 360) - 180) < 1 ? '' : '−'}T${a}(y)` : '';
+  $('info').textContent = `a : b = ${a} : ${b}${red}，有理数，周期 2π 后闭合\n` +
+    `右边切点 ${L.touchX.length} · 上边切点 ${L.touchY.length}${L.open ? '（退化：来回走同一段弧，切点会重合）' : '（= a 和 b）'}\n` +
+    `测得自交点 ${L.cross} · ${kind}${cheb}\n覆盖 ${(100 * L.cov).toFixed(1)}% 的格子`;
+  $('stat').textContent = `x = sin(${a}t + ${P.delta.toFixed(1)}°), y = sin(${b}t) · 自交点 ${L.cross} · 切点 ${L.touchX.length} : ${L.touchY.length}` + (running ? '' : ' · 已暂停');
+}
+function drawHInfo() {
+  const h = P.H, rx = h[0].f / h[2].f;
+  $('hinfo').textContent = `主摆频率比 f(x₁) : f(y₁) = ${h[0].f.toFixed(3)} : ${h[2].f.toFixed(3)} = ${rx.toFixed(4)}\n` +
+    `t = ${run.t.toFixed(0)} / ${P.T} · 此时振幅剩 e^(−d·t) = ${Math.exp(-h[0].d * run.t).toFixed(3)}（x₁）`;
+  $('stat').textContent = `谐波图${P.rot ? '（旋转摆）' : ''} · t = ${run.t.toFixed(0)} / ${P.T}` + (running ? '' : ' · 已暂停');
+}
+function drawTInfo() {
+  $('stat').textContent = `李萨如表 ${P.n} × ${P.n} · δ = ${P.delta.toFixed(1)}° · 格子 (b = i, a = j) 里是 x = sin(jt + δ), y = sin(it)` + (running ? '' : ' · 已暂停');
+}
+
+// ---------- UI ----------
+const SL = { a: 'a', b: 'b', d: 'delta', w: 'spin', v: 'v', n: 'n', ts: 'ts', T: 'T', hs: 'hs' };
+function syncUI() {
+  for (const [id, k] of Object.entries(SL)) $(id).value = P[k];
+  $('va').textContent = P.irr ? `${IRR[P.irr].name.split(' ')[0]}（无理）` : P.a; $('vb').textContent = P.irr ? 1 : P.b;
+  $('vd').textContent = P.delta.toFixed(1) + '°'; $('vw').textContent = P.spin + '°/秒'; $('vv').textContent = P.v.toFixed(1);
+  $('vn').textContent = P.n; $('vts').textContent = P.ts.toFixed(1) + ' 秒';
+  $('vT').textContent = P.T; $('vhs').textContent = P.hs + ' /秒';
+  for (const k of ['depth', 'mk', 'scope', 'rot']) $(k).checked = P[k];
+  $('secL').style.display = $('secL2').style.display = P.mode === 'liss' ? '' : 'none';
+  $('secT').style.display = P.mode === 'table' ? '' : 'none';
+  $('secD').style.display = P.mode === 'harm' ? 'none' : '';
+  $('secH').style.display = P.mode === 'harm' ? '' : 'none';
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  $('snd').textContent = audio ? '🔇 关掉声音' : '🔊 听两个频率';
+  document.querySelectorAll('[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === P.mode));
+  document.querySelectorAll('[data-i]').forEach(b => b.classList.toggle('on', b.dataset.i === P.irr));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  P.H.forEach((h, i) => { for (const k of Object.keys(PEND_R)) { $(`h${k}${i}`).value = h[k]; $(`hv${k}${i}`).textContent = fmtH(k, h[k]); } });
+  $('prow3').classList.toggle('off', P.rot);
+}
+const fmtH = (k, v) => k === 'f' ? v.toFixed(3) : k === 'ph' ? v.toFixed(0) + '°' : k === 'A' ? v.toFixed(2) : v.toFixed(4);
+
+// pendulum table
+(function buildPend() {
+  const g = $('pend');
+  for (const t of ['', 'f', 'φ', 'A', 'd']) { const s = document.createElement('div'); s.className = 'hd'; s.textContent = t; g.appendChild(s); }
+  PEND.forEach((name, i) => {
+    const row = document.createElement('div'); row.style.display = 'contents'; row.id = `prow${i}`;
+    const s = document.createElement('div'); s.className = 'hd'; s.textContent = name; row.appendChild(s);
+    for (const [k, [lo, hi, st]] of Object.entries(PEND_R)) {
+      const c = document.createElement('div'); c.className = 'cell';
+      const inp = document.createElement('input'); inp.type = 'range'; inp.min = lo; inp.max = hi; inp.step = st; inp.id = `h${k}${i}`;
+      inp.oninput = () => { P.H[i][k] = +inp.value; P.preset = ''; syncUI(); restartTrail(); setAudio(); };
+      const b = document.createElement('b'); b.id = `hv${k}${i}`;
+      c.appendChild(inp); c.appendChild(b); row.appendChild(c);
+    }
+    g.appendChild(row);
+  });
+})();
+
+function changed() { P.preset = ''; analyse(); restartTrail(); syncUI(); setAudio(); }
+for (const [key, name] of Object.entries(MODES)) {
+  const b = document.createElement('button'); b.textContent = name; b.dataset.m = key;
+  b.onclick = () => { P.mode = key; tPen = 0; changed(); };
+  $('modes').appendChild(b);
+}
+for (const [key, r] of Object.entries(IRR)) {
+  const b = document.createElement('button'); b.textContent = r.name; b.dataset.i = key;
+  b.onclick = () => { P.irr = key; if (key && P.v < 20) P.v = 40; if (!key && P.v > 10) P.v = 2; changed(); };
+  $('irr').appendChild(b);
+}
+function loadPreset(key) {
+  const p = PRESETS[key];
+  P.mode = p.m; P.irr = p.irr || '';
+  for (const k of ['a', 'b', 'n', 'rot', 'T', 'v']) if (k in p) P[k] = p[k];
+  if ('d' in p) P.delta = p.d;
+  if ('w' in p) P.spin = p.w;
+  if (!('v' in p) && p.m === 'liss') P.v = 2;
+  if (p.H) P.H = p.H.map(h => ({ ...h }));
+  tPen = 0; analyse(); restartTrail(); P.preset = key; syncUI(); setAudio();
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button'); b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+$('a').oninput = e => { P.a = Math.round(+e.target.value); P.irr = ''; changed(); };
+$('b').oninput = e => { P.b = Math.round(+e.target.value); P.irr = ''; changed(); };
+$('d').oninput = e => { P.delta = +e.target.value; changed(); };
+$('w').oninput = e => { P.spin = +e.target.value; P.preset = ''; syncUI(); };
+$('v').oninput = e => { P.v = +e.target.value; syncUI(); };
+$('n').oninput = e => { P.n = Math.round(+e.target.value); P.preset = ''; syncUI(); };
+$('ts').oninput = e => { P.ts = +e.target.value; syncUI(); };
+$('T').oninput = e => { P.T = Math.round(+e.target.value); P.preset = ''; syncUI(); restartTrail(); };
+$('hs').oninput = e => { P.hs = Math.round(+e.target.value); syncUI(); };
+for (const k of ['depth', 'mk', 'scope']) $(k).onchange = e => { P[k] = e.target.checked; };
+$('rot').onchange = e => { P.rot = e.target.checked; P.preset = ''; syncUI(); restartTrail(); };
+$('play').onclick = () => { running = !running; syncUI(); };
+$('redraw').onclick = () => { restartTrail(); running = true; syncUI(); };
+$('finish').onclick = () => { for (let i = 0; i < 8 && !run.done; i++) stepHarm(P.T + 1); };   // 8 × MAX_STEPS covers the longest T
+
+// ---------- sound: a stereo pair, started only by a click ----------
+let audio = null;
+function audioFreqs() {
+  if (P.mode === 'harm') return [110 * P.H[0].f, 110 * P.H[2].f];
+  return [110 * L.a, 110 * L.b];
+}
+function setAudio() {
+  if (!audio) return;
+  const [fl, fr] = audioFreqs(), now = audio.ac.currentTime;
+  audio.l.frequency.setTargetAtTime(fl, now, 0.02); audio.r.frequency.setTargetAtTime(fr, now, 0.02);
+}
+$('snd').onclick = () => {
+  if (audio) { audio.ac.close(); audio = null; syncUI(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  const ac = new AC(), g = ac.createGain();
+  g.gain.value = 0.06; g.connect(ac.destination);
+  const mk = pan => { const o = ac.createOscillator(), p = ac.createStereoPanner(); p.pan.value = pan; o.connect(p); p.connect(g); o.start(); return o; };
+  audio = { ac, l: mk(-1), r: mk(1) };
+  setAudio(); syncUI();
+};
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * devicePixelRatio));
+  H = Math.max(1, Math.round(r.height * devicePixelRatio));
+  cv.width = trail.width = W; cv.height = trail.height = H;
+  restartTrail();
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=r54  or  ?m=liss&a=5&b=4&d=90&w=20  or  ?p=near21&f1=2.01&T=500&ui=0. Numbers are clamped to their slider ranges.
+const q = new URLSearchParams(location.search);
+const num = (k, lo, hi, f) => { if (q.has(k) && q.get(k).trim() !== '') { const x = Number(q.get(k)); if (Number.isFinite(x)) f(Math.min(hi, Math.max(lo, x))); } };
+const flag = (k, f) => num(k, 0, 1, x => f(Math.round(x) === 1));
+analyse();
+if (Object.hasOwn(PRESETS, q.get('p'))) loadPreset(q.get('p')); else loadPreset('r32');
+if (Object.hasOwn(MODES, q.get('m'))) { P.mode = q.get('m'); P.preset = ''; }
+if (Object.hasOwn(IRR, q.get('irr'))) { P.irr = q.get('irr'); P.preset = ''; }
+const rng = id => [+$(id).min, +$(id).max];
+num('a', ...rng('a'), x => { P.a = Math.round(x); P.preset = ''; });
+num('b', ...rng('b'), x => { P.b = Math.round(x); P.preset = ''; });
+num('d', ...rng('d'), x => { P.delta = x; P.preset = ''; });
+num('w', ...rng('w'), x => { P.spin = Math.round(x); P.preset = ''; });
+num('v', ...rng('v'), x => P.v = x);
+num('n', ...rng('n'), x => P.n = Math.round(x));
+num('ts', ...rng('ts'), x => P.ts = x);
+num('T', ...rng('T'), x => { P.T = Math.round(x); P.preset = ''; });
+num('hs', ...rng('hs'), x => P.hs = Math.round(x));
+num('t', 0, TAU, x => tPen = x);
+P.H.forEach((h, i) => { for (const [k, [lo, hi]] of Object.entries(PEND_R)) num(`${k}${i + 1}`, lo, hi, x => { h[k] = x; P.preset = ''; }); });
+flag('depth', v => P.depth = v); flag('mk', v => P.mk = v); flag('scope', v => P.scope = v); flag('rot', v => P.rot = v);
+flag('run', v => running = v);
+if (q.get('ui') === '0') document.body.classList.add('noui');
+analyse(); resize(); syncUI();
+// harmonograph or irrational curve already drawn up to time `pre` (for screenshots), bounded by the step caps
+num('pre', 0, IRR_TMAX, x => {
+  const step = P.mode === 'harm' ? stepHarm : P.mode === 'liss' && L.irr ? stepIrr : null;
+  for (let i = 0; step && i < 1000 && run.t < x && !run.done; i++) step(x - run.t);
+});
+
+// test hook: read-only views of the current state
+window.__liss = { P, L: () => ({ ...L, pts: null, crossPts: L.crossPts.length }), cov: () => covCount / (GRID * GRID), t: () => run.t };
+
+let last = performance.now(), statT = 0;
+(function loop(now) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  if (running) {
+    if (P.mode !== 'harm' && P.spin && !(P.mode === 'liss' && L.irr)) {
+      P.delta = mod(P.delta + P.spin * dt, 360);
+      statT += dt;
+      if (P.mode === 'liss') { const full = statT > 0.15; if (full) statT = 0; analyse(full); }   // crossings every 150 ms
+      $('d').value = P.delta; $('vd').textContent = P.delta.toFixed(1) + '°';
+    }
+    if (P.mode === 'liss' && L.irr) stepIrr(P.v * dt);
+    else if (P.mode === 'liss') tPen = mod(tPen + P.v * dt / Math.max(L.a, L.b), TAU);
+    else if (P.mode === 'table') tPen = (tPen + TAU * dt / P.ts) % TAU;
+    else stepHarm(P.hs * dt);
+  }
+  drawFrame();
+  if (P.mode === 'liss') { drawInfo(); drawCov(); } else if (P.mode === 'harm') drawHInfo(); else drawTInfo();
+  window.__ready = true;
+  requestAnimationFrame(loop);
+})(last);
+</script>
+</body>
+</html>
