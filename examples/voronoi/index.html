@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Voronoi 图 · 长颈鹿的花纹</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0f1216; color: #e6e3dc;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(24,29,36,.94); border: 1px solid #353f4b; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #e3b778; border-top: 1px solid #353f4b; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #929aa5; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2a323c; color: #e6e3dc; border: 1px solid #3f4a57;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #36404c; }
+  button.on { background: #7a5424; border-color: #a87a3c; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  select { background: #222931; color: #e6e3dc; border: 1px solid #3f4a57; border-radius: 4px; font-size: 12px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #b8c0ca; margin-top: 4px; white-space: pre-wrap; }
+  .info b { color: #ffd38a; font-weight: normal; } .info .ok { color: #8fe08f; } .info .bad { color: #ff8f8f; }
+  #chart { width: 100%; height: 110px; display: block; margin-top: 4px;
+    background: #161b21; border: 1px solid #353f4b; border-radius: 4px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(15,18,22,.84); color: #d6d2ca; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #stat b { color: #fff; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; top: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Voronoi 图 · 长颈鹿的花纹</h1>
+  <small>平面上撒一些站点，每个位置归给离它最近的站点。这样分出来的凸多边形就是 Voronoi 图；把相邻的站点连起来得到它的对偶：Delaunay 三角剖分。</small>
+
+  <h2>站点</h2>
+  <div class="row">
+    <label>站点数 n（约） <b id="vN"></b></label>
+    <input id="N" type="range" min="3" max="1000" step="1">
+  </div>
+  <div class="row">
+    <label>撒点方式 <select id="dist">
+      <option value="rand">均匀随机</option><option value="jitter">抖动的六边形格点</option>
+      <option value="hex">六边形格点</option><option value="square">正方形格点</option><option value="wing">翅膀形状</option>
+    </select></label>
+  </div>
+  <div class="row" id="jitRow">
+    <label>抖动幅度（× 格距） <b id="vJ"></b></label>
+    <input id="J" type="range" min="0" max="1" step="0.01">
+  </div>
+  <div class="row">
+    <label>随机种子 <b id="vS"></b></label>
+    <input id="S" type="range" min="1" max="999" step="1">
+  </div>
+  <div class="presets"><button id="regen">↺ 重新撒点</button><button id="clear">清空</button></div>
+  <small>单击空白处加一个站点，拖动站点移动它，Shift + 单击删除。最多 1000 个。</small>
+
+  <h2>距离</h2>
+  <div class="presets" id="metrics"></div>
+  <small id="metricNote"></small>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="vor" type="checkbox"> Voronoi 胞</label>
+    <label><input id="del" type="checkbox"> <span style="color:#6fd3ff">Delaunay 三角剖分</span></label>
+    <label><input id="sites" type="checkbox"> 站点</label>
+    <label><input id="nb" type="checkbox"> 按邻居数着色</label>
+    <label><input id="bis" type="checkbox"> <span style="color:#ff8fb4">选中点的中垂线</span></label>
+    <label><input id="cc" type="checkbox"> <span style="color:#9dff9d">选中点的外接圆</span></label>
+  </div>
+  <div class="row">
+    <label>边框宽度（× 平均间距） <b id="vB"></b></label>
+    <input id="B" type="range" min="0" max="0.4" step="0.005">
+  </div>
+  <label>样式 <select id="style">
+    <option value="math">数学</option><option value="giraffe">长颈鹿</option><option value="wing">蜻蜓翅膀</option>
+    <option value="mud">干裂泥地</option><option value="basalt">玄武岩柱</option>
+  </select></label>
+  <small>单击或拖动一个站点就选中它。邻居数着色：<span style="color:#7aa7ff">5</span> · <span style="color:#a6b8a0">6</span> · <span style="color:#e0a050">7</span> · <span style="color:#e06060">8+</span>，碰到边框的胞是灰色。</small>
+  <div class="info" id="chk"></div>
+
+  <h2>Lloyd 松弛</h2>
+  <div class="presets"><button id="play">▶ 动画</button><button id="step1">单步</button></div>
+  <div class="row">
+    <label>每秒步数 <b id="vV"></b></label>
+    <input id="V" type="range" min="1" max="60" step="1">
+  </div>
+  <canvas id="chart"></canvas>
+  <small>每一步把每个站点挪到自己胞的质心。曲线：<span style="color:#e0a84a">G = n·Σ∫|x−p<sub>i</sub>|² / 面积²</span>（虚线 0.1604 是正六边形的值），<span style="color:#6fd3ff">内部胞里六边形的比例</span>（0–100%）。</small>
+
+  <h2>加权（power 图）</h2>
+  <div class="checks"><label><input id="wt" type="checkbox"> 给每个站点一个权重 w<sub>i</sub></label></div>
+  <div class="row">
+    <label>权重幅度 <b id="vW"></b></label>
+    <input id="Wa" type="range" min="0" max="1" step="0.01">
+  </div>
+  <small>距离换成 power 距离 <span class="mono">|x−p<sub>i</sub>|² − w<sub>i</sub></span>，圆半径 √w<sub>i</sub>。分界线仍是直线，但不再在两点正中间，有的站点甚至没有胞。只用于欧氏距离。</small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- constants ----------
+const MAX_SITES = 1000, LLOYD_MAX = 2000, PRE_LLOYD_MAX = 300;
+const HEX_G = 5 * Math.sqrt(3) / 54;            // normalised second moment of a regular hexagon: 0.16038
+const METRICS = {
+  l2: { name: '欧氏', note: 'd = √(Δx² + Δy²)。两点的分界线是连线的垂直平分线，胞是凸多边形（精确计算）。' },
+  l1: { name: '曼哈顿', note: 'd = |Δx| + |Δy|。分界线由水平、竖直和 45° 线段拼成；按像素计算。' },
+  linf: { name: '切比雪夫', note: 'd = max(|Δx|, |Δy|)。像国王走棋的步数；分界线同样由 0°、45°、90° 线段组成；按像素计算。' },
+};
+const DISTS = { rand: 1, jitter: 1, hex: 1, square: 1, wing: 1 };
+const STYLES = { math: 1, giraffe: 1, wing: 1, mud: 1, basalt: 1 };
+const PRESETS = {
+  random: { name: '随机 60 点', n: 60, dist: 'rand' },
+  lloyd: { name: 'Lloyd → 六边形', n: 250, dist: 'rand', nb: true, run: true },
+  hexlat: { name: '六边形格点', n: 120, dist: 'hex', nb: true },
+  square: { name: '正方形格点', n: 100, dist: 'square', jit: 0 },
+  giraffe: { name: '长颈鹿', n: 70, dist: 'jitter', jit: 0.75, style: 'giraffe', bw: 0.2, sites: false },
+  wing: { name: '蜻蜓翅膀', n: 330, dist: 'wing', style: 'wing', bw: 0.05, sites: false },
+  mud: { name: '干裂泥地', n: 55, dist: 'rand', style: 'mud', bw: 0.09, sites: false, lloyd: 1 },
+  basalt: { name: '玄武岩柱', n: 170, dist: 'rand', style: 'basalt', bw: 0.06, sites: false, run: true },
+  power: { name: '加权 power 图', n: 45, dist: 'jitter', jit: 0.9, wt: true, wa: 0.75 },
+  l1: { name: '曼哈顿距离', n: 40, dist: 'rand', metric: 'l1' },
+  linf: { name: '切比雪夫距离', n: 40, dist: 'rand', metric: 'linf' },
+};
+const LIM = { n: [3, MAX_SITES], jit: [0, 1], seed: [1, 999], bw: [0, 0.4], speed: [1, 60], wa: [0, 1] };
+const clamp = (x, [lo, hi]) => Math.max(lo, Math.min(hi, x));
+const DEFAULTS = { preset: 'random', n: 60, dist: 'rand', jit: 0.6, seed: 1, metric: 'l2', vor: true, del: false, sites: true,
+  nb: false, bis: false, cc: false, bw: 0.02, style: 'math', speed: 12, wt: false, wa: 0.5 };
+const P = { ...DEFAULTS };
+
+const $ = id => document.getElementById(id);
+function rng(seed) {   // mulberry32: same seed, same picture
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+const hash = id => rng(id * 7919 + 13)();     // a stable random number per site id
+
+// ---------- sites: { x, y, u, id } in CSS pixels of the view; u in [0,1) sets the weight ----------
+let sites = [], nextId = 0, W = 1, H = 1, sel = -1;
+const spacing = () => Math.sqrt(W * H / Math.max(1, sites.length));
+const weight = s => P.wt && P.metric === 'l2' ? (P.wa * s.u * spacing()) ** 2 : 0;
+const newSite = (x, y, r) => ({ x, y, u: r(), id: nextId++ });
+
+// the wing outline: u in [0,1] from the body to the tip, leading edge on top
+function wingShape() {
+  const x0 = 0.05 * W, L = 0.9 * W, cy = 0.5 * H, hh = Math.min(0.75 * H, 0.26 * L);
+  const centre = u => cy - 0.12 * hh + 0.25 * hh * (u - 0.45) ** 2;
+  const half = u => hh * Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, u))), 0.55) * (0.62 + 0.38 * u * (1.6 - u));
+  const top = u => centre(u) - 0.42 * half(u), bot = u => centre(u) + 0.58 * half(u);
+  return { x0, L, top, bot, half };
+}
+function inWing(x, y, w) { const u = (x - w.x0) / w.L; return u > 0 && u < 1 && y > w.top(u) && y < w.bot(u); }
+
+function generate() {
+  const r = rng(P.seed * 1013 + 7), n = P.n, out = [];
+  if (P.dist === 'rand') {
+    for (let i = 0; i < n; i++) out.push(newSite(r() * W, r() * H, r));
+  } else if (P.dist === 'square') {
+    const a = Math.sqrt(W * H / n), nx = Math.max(1, Math.round(W / a)), ny = Math.max(1, Math.round(H / a));
+    for (let j = 0; j < ny && out.length < MAX_SITES; j++) for (let i = 0; i < nx && out.length < MAX_SITES; i++)
+      out.push(newSite((i + 0.5) * W / nx + P.jit * W / nx * (r() - 0.5) + 1e-3 * r(), (j + 0.5) * H / ny + P.jit * H / ny * (r() - 0.5) + 1e-3 * r(), r));
+  } else if (P.dist === 'hex' || P.dist === 'jitter') {
+    const a = Math.sqrt(2 * W * H / (Math.sqrt(3) * n)), dy = a * Math.sqrt(3) / 2, jit = P.dist === 'hex' ? 0 : P.jit;
+    const ny = Math.max(1, Math.round(H / dy)), y0 = (H - (ny - 1) * dy) / 2, x0 = (W - Math.floor(W / a) * a) / 2;
+    for (let j = 0; j < ny && out.length < MAX_SITES; j++) {
+      const xs = x0 + (j % 2 ? a / 2 : 0);   // odd rows sit half a spacing over
+      for (let x = xs; x < W && out.length < MAX_SITES; x += a)
+        out.push(newSite(x + jit * a * (r() - 0.5) + 1e-3 * r(), y0 + j * dy + jit * a * (r() - 0.5) + 1e-3 * r(), r));
+    }
+  } else {   // wing: denser near the leading edge and the body, like a real dragonfly wing
+    const w = wingShape();
+    for (let tries = 0; out.length < n && tries < 400 * n; tries++) {
+      const x = r() * W, y = r() * H;
+      if (!inWing(x, y, w)) continue;
+      const u = (x - w.x0) / w.L, t = (y - w.top(u)) / Math.max(1e-9, w.bot(u) - w.top(u));
+      const dens = 0.25 + 0.75 * Math.exp(-t / 0.18) + 0.6 * Math.exp(-u / 0.12) + 0.3 * Math.exp(-(1 - u) / 0.1);
+      if (r() * 1.9 < dens) out.push(newSite(x, y, r));
+    }
+  }
+  sites = out.filter(s => Number.isFinite(s.x) && Number.isFinite(s.y)).slice(0, MAX_SITES)
+    .map(s => ({ ...s, x: clamp(s.x, [0, W]), y: clamp(s.y, [0, H]) }));
+  sel = -1; resetLloyd();
+}
+
+// ---------- exact cells for the Euclidean / power distance ----------
+// Clip a convex polygon (pts, labs[k] = neighbour owning edge k->k+1, −1 = frame) to a·x ≤ c.
+function clip(pts, labs, ax, ay, c, lab) {
+  const n = pts.length, op = [], ol = [];
+  for (let k = 0; k < n; k++) {
+    const p = pts[k], q = pts[(k + 1) % n], dp = ax * p[0] + ay * p[1] - c, dq = ax * q[0] + ay * q[1] - c;
+    if (dp <= 0) { op.push(p); ol.push(labs[k]); }
+    if ((dp <= 0) !== (dq <= 0)) {
+      const t = dp / (dp - dq), I = [p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])];
+      op.push(I); ol.push(dp <= 0 ? lab : labs[k]);
+    }
+  }
+  return [op, ol];
+}
+
+function buildGrid(cell) {
+  const gw = Math.max(1, Math.ceil(W / cell)), gh = Math.max(1, Math.ceil(H / cell)), b = Array.from({ length: gw * gh }, () => []);
+  sites.forEach((s, i) => b[clamp(Math.floor(s.y / cell), [0, gh - 1]) * gw + clamp(Math.floor(s.x / cell), [0, gw - 1])].push(i));
+  return { cell, gw, gh, b };
+}
+
+// Each cell is the box cut by one half-plane per other site, |x−p_i|² − w_i ≤ |x−p_j|² − w_j.
+// Sites are visited ring by ring; a site at distance d can only cut the cell if d ≤ R + √(R² + w_max),
+// where R is the farthest vertex of the cell so far.
+function computeCells() {
+  const n = sites.length, g = buildGrid(Math.max(4, spacing())), w = sites.map(weight), wmax = Math.max(0, ...w);
+  const cells = [];
+  for (let i = 0; i < n; i++) {
+    const pi = sites[i], gx = clamp(Math.floor(pi.x / g.cell), [0, g.gw - 1]), gy = clamp(Math.floor(pi.y / g.cell), [0, g.gh - 1]);
+    let pts = [[0, 0], [W, 0], [W, H], [0, H]], labs = [-1, -1, -1, -1];
+    const maxR = Math.max(g.gw, g.gh);
+    for (let r = 0; r <= maxR && pts.length; r++) {
+      if (r >= 2) {
+        let R2 = 0; for (const v of pts) R2 = Math.max(R2, (v[0] - pi.x) ** 2 + (v[1] - pi.y) ** 2);
+        const R = Math.sqrt(R2);
+        if ((r - 1) * g.cell > R + Math.sqrt(R2 + wmax)) break;
+      }
+      for (let yy = gy - r; yy <= gy + r; yy++) {
+        if (yy < 0 || yy >= g.gh) continue;
+        const edge = yy === gy - r || yy === gy + r;
+        for (let xx = gx - r; xx <= gx + r; xx += edge ? 1 : 2 * r || 1) {
+          if (xx < 0 || xx >= g.gw) continue;
+          for (const j of g.b[yy * g.gw + xx]) {
+            if (j === i) continue;
+            const pj = sites[j], ax = 2 * (pj.x - pi.x), ay = 2 * (pj.y - pi.y);
+            if (ax === 0 && ay === 0) { if (j < i) { pts = []; labs = []; } continue; }   // duplicate: the lower index owns it
+            [pts, labs] = clip(pts, labs, ax, ay, pj.x * pj.x + pj.y * pj.y - pi.x * pi.x - pi.y * pi.y + w[i] - w[j], j);
+            if (!pts.length) break;
+          }
+        }
+      }
+    }
+    // area, centroid and second moment ∫|x − p_i|² by a fan of triangles from p_i
+    let A = 0, cx = 0, cy = 0, J = 0;
+    for (let k = 0; k < pts.length; k++) {
+      const a = pts[k], b = pts[(k + 1) % pts.length], ux = a[0] - pi.x, uy = a[1] - pi.y, vx = b[0] - pi.x, vy = b[1] - pi.y;
+      const t = (ux * vy - uy * vx) / 2;
+      A += t; cx += t * (pi.x + a[0] + b[0]) / 3; cy += t * (pi.y + a[1] + b[1]) / 3;
+      J += t / 6 * (ux * ux + uy * uy + ux * vx + uy * vy + vx * vx + vy * vy);
+    }
+    cells.push({ pts, labs, A, J, cx: A > 1e-12 ? cx / A : pi.x, cy: A > 1e-12 ? cy / A : pi.y });
+  }
+  return cells;
+}
+
+// neighbours whose shared edge is longer than 1% of the mean spacing; boundary = touches the frame
+function cellStats(cells) {
+  const minEdge = 0.01 * spacing();
+  let inner = 0, nbSum = 0, hex = 0, J = 0, Jin = 0, Ain = 0;
+  const pairs = new Set();
+  cells.forEach((c, i) => {
+    J += c.J;
+    let deg = 0, boundary = c.pts.length === 0;
+    for (let k = 0; k < c.pts.length; k++) {
+      const a = c.pts[k], b = c.pts[(k + 1) % c.pts.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (c.labs[k] < 0) { boundary = true; continue; }
+      if (len > 1e-9) pairs.add(Math.min(i, c.labs[k]) * 4096 + Math.max(i, c.labs[k]));
+      if (len > minEdge) deg++;
+    }
+    c.deg = deg; c.boundary = boundary;
+    if (!boundary) { inner++; nbSum += deg; if (deg === 6) hex++; Jin += c.J; Ain += c.A; }
+  });
+  return { inner, meanNb: inner ? nbSum / inner : NaN, hexFrac: inner ? hex / inner : NaN, G: J * cells.length / (W * H) ** 2,
+    Gin: inner ? Jin * inner / (Ain * Ain) : NaN, empty: cells.filter(c => c.A < 1e-9).length, pairs };
+}
+
+// ---------- Bowyer–Watson with a ghost vertex at infinity ----------
+// Triangles are [a, b, c] with orient > 0. A ghost [a, b, G] sits outside hull edge a→b; its
+// "circumcircle" is the open half-plane beyond that edge plus the open edge itself.
+const G_ = -1;
+const orient = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+function inCircle(a, b, c, p) {
+  const adx = a.x - p.x, ady = a.y - p.y, bdx = b.x - p.x, bdy = b.y - p.y, cdx = c.x - p.x, cdy = c.y - p.y;
+  return (adx * adx + ady * ady) * (bdx * cdy - cdx * bdy) + (bdx * bdx + bdy * bdy) * (cdx * ady - adx * cdy)
+    + (cdx * cdx + cdy * cdy) * (adx * bdy - bdx * ady);
+}
+function delaunay(pts) {
+  const n = pts.length;
+  if (n < 3) return null;
+  let i2 = -1;
+  for (let k = 2; k < n; k++) if (Math.abs(orient(pts[0], pts[1], pts[k])) > 1e-9) { i2 = k; break; }
+  if (i2 < 0) return null;
+  let [a, b, c] = orient(pts[0], pts[1], pts[i2]) > 0 ? [0, 1, i2] : [1, 0, i2];
+  let tris = [[a, b, c], [b, a, G_], [c, b, G_], [a, c, G_]];
+  const used = [0, 1, i2];
+  for (let p = 0; p < n; p++) {
+    if (p === 0 || p === 1 || p === i2) continue;
+    const P_ = pts[p];
+    if (used.some(q => pts[q].x === P_.x && pts[q].y === P_.y)) continue;
+    const bad = tris.map(([u, v, w]) => {
+      if (w !== G_) return inCircle(pts[u], pts[v], pts[w], P_) > 0;
+      const o = orient(pts[u], pts[v], P_);
+      if (o > 0) return true;
+      if (o < 0) return false;
+      const U = pts[u], V = pts[v];
+      return (P_.x - U.x) * (P_.x - V.x) + (P_.y - U.y) * (P_.y - V.y) < 0;
+    });
+    const edges = new Map();
+    tris.forEach((t, k) => { if (bad[k]) for (let e = 0; e < 3; e++) edges.set(t[e] + ',' + t[(e + 1) % 3], [t[e], t[(e + 1) % 3]]); });
+    const next = tris.filter((t, k) => !bad[k]);
+    for (const [key, [u, v]] of edges) {
+      if (edges.has(v + ',' + u)) continue;                // interior edge of the cavity
+      next.push(v === G_ ? [p, u, G_] : u === G_ ? [v, p, G_] : [u, v, p]);
+    }
+    tris = next; used.push(p);
+  }
+  const real = tris.filter(t => t[2] !== G_), hull = tris.length - real.length;
+  return { tris: real, hull, verts: used.length };
+}
+
+// numerical checks: empty circumcircles, Euler's formula, local optimality of the minimum angle
+function minAngle(a, b, c) {
+  const ang = (p, q, r) => { const ux = q.x - p.x, uy = q.y - p.y, vx = r.x - p.x, vy = r.y - p.y;
+    return Math.abs(Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)); };
+  return Math.min(ang(a, b, c), ang(b, c, a), ang(c, a, b));
+}
+function checkDelaunay(D, pairs, cells) {
+  const pts = sites, T = D.tris, g = buildGrid(Math.max(4, spacing()));
+  let viol = 0, margin = Infinity, worst = Infinity;
+  for (const [a, b, c] of T) {
+    const A = pts[a], B = pts[b], C = pts[c], d = 2 * orient(A, B, C);
+    const ux = ((A.x * A.x + A.y * A.y) * (C.y - B.y) + (B.x * B.x + B.y * B.y) * (A.y - C.y) + (C.x * C.x + C.y * C.y) * (B.y - A.y)) / -d;
+    const uy = ((A.x * A.x + A.y * A.y) * (C.x - B.x) + (B.x * B.x + B.y * B.y) * (A.x - C.x) + (C.x * C.x + C.y * C.y) * (B.x - A.x)) / d;
+    const R = Math.hypot(A.x - ux, A.y - uy);
+    // hull slivers (huge R) are forced by the frame: margin and angle are reported for triangles of interior cells
+    // only sites within S of the centre can violate (S = R) or set the margin (S = 2.2R, so the margin caps at 1.2)
+    const inner = !cells[a].boundary && !cells[b].boundary && !cells[c].boundary, S = (inner ? 2.2 : 1) * R;
+    const x0 = clamp(Math.floor((ux - S) / g.cell), [0, g.gw - 1]), x1 = clamp(Math.floor((ux + S) / g.cell), [0, g.gw - 1]);
+    const y0 = clamp(Math.floor((uy - S) / g.cell), [0, g.gh - 1]), y1 = clamp(Math.floor((uy + S) / g.cell), [0, g.gh - 1]);
+    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) for (const k of g.b[yy * g.gw + xx]) {
+      if (k === a || k === b || k === c) continue;
+      const m = Math.hypot(pts[k].x - ux, pts[k].y - uy) / R - 1;
+      if (inner && m < margin) margin = m;
+      if (m < -1e-9) viol++;
+    }
+    if (inner) worst = Math.min(worst, minAngle(A, B, C));
+  }
+  // Euler: V − E + F = 2 with the outer face, and E = 3V − 3 − h for a triangulation with h hull vertices
+  const edgeOf = new Map();
+  T.forEach((t, k) => { for (let e = 0; e < 3; e++) edgeOf.set(t[e] + ',' + t[(e + 1) % 3], k); });
+  const und = new Set(); for (const key of edgeOf.keys()) { const [u, v] = key.split(',').map(Number); und.add(Math.min(u, v) * 4096 + Math.max(u, v)); }
+  // flipping any interior edge of a convex quadrilateral must not raise the smaller minimum angle
+  let interior = 0, better = 0;
+  T.forEach((t, k) => {
+    for (let e = 0; e < 3; e++) {
+      const u = t[e], v = t[(e + 1) % 3], w = t[(e + 2) % 3], k2 = edgeOf.get(v + ',' + u);
+      if (k2 === undefined || k2 < k) continue;
+      const t2 = T[k2], x = t2.find(q => q !== u && q !== v);
+      interior++;
+      const U = pts[u], V = pts[v], Wp = pts[w], X = pts[x];
+      if (orient(Wp, X, U) * orient(Wp, X, V) >= 0) continue;   // not convex: the edge cannot flip
+      const now = Math.min(minAngle(U, V, Wp), minAngle(V, U, X)), flipped = Math.min(minAngle(Wp, X, U), minAngle(X, Wp, V));
+      if (flipped > now + 1e-12) better++;
+    }
+  });
+  let inDel = 0; for (const p of pairs) if (und.has(p)) inDel++;
+  return { tri: T.length, viol, margin, minAngle: worst * 180 / Math.PI, V: D.verts, E: und.size, F: T.length + 1, hull: D.hull,
+    interior, better, vorPairs: pairs.size, vorInDel: inDel, delOnly: und.size - inDel, und };
+}
+
+// ---------- raster cells for Manhattan / Chebyshev ----------
+function computeRaster() {
+  const step = Math.max(1, Math.ceil(Math.sqrt(W * H / 260000))), gw = Math.ceil(W / step), gh = Math.ceil(H / step);
+  const lab = new Int32Array(gw * gh).fill(-1), g = buildGrid(Math.max(4, spacing())), l1 = P.metric === 'l1';
+  const n = sites.length, sx = new Float64Array(n), sy = new Float64Array(n), cnt = new Float64Array(n), J = new Float64Array(n);
+  const maxR = Math.max(g.gw, g.gh);
+  for (let iy = 0; iy < gh; iy++) for (let ix = 0; ix < gw; ix++) {
+    const x = (ix + 0.5) * step, y = (iy + 0.5) * step;
+    const cx = clamp(Math.floor(x / g.cell), [0, g.gw - 1]), cy = clamp(Math.floor(y / g.cell), [0, g.gh - 1]);
+    let best = Infinity, bi = -1;
+    // every metric here is ≥ the Chebyshev distance, so ring r cannot beat best once (r−1)·cell ≥ best
+    for (let r = 0; r <= maxR; r++) {
+      if (r >= 1 && (r - 1) * g.cell >= best) break;
+      for (let yy = cy - r; yy <= cy + r; yy++) {
+        if (yy < 0 || yy >= g.gh) continue;
+        const edge = yy === cy - r || yy === cy + r;
+        for (let xx = cx - r; xx <= cx + r; xx += edge ? 1 : 2 * r || 1) {
+          if (xx < 0 || xx >= g.gw) continue;
+          for (const j of g.b[yy * g.gw + xx]) {
+            const dx = Math.abs(sites[j].x - x), dy = Math.abs(sites[j].y - y), d = l1 ? dx + dy : Math.max(dx, dy);
+            if (d < best || (d === best && j < bi)) { best = d; bi = j; }
+          }
+        }
+      }
+    }
+    lab[iy * gw + ix] = bi;
+    if (bi >= 0) { sx[bi] += x; sy[bi] += y; cnt[bi]++; J[bi] += (x - sites[bi].x) ** 2 + (y - sites[bi].y) ** 2; }
+  }
+  const pairs = new Set(), nbs = Array.from({ length: n }, () => new Set()), boundary = new Uint8Array(n);
+  for (let iy = 0; iy < gh; iy++) for (let ix = 0; ix < gw; ix++) {
+    const a = lab[iy * gw + ix];
+    if (ix === 0 || iy === 0 || ix === gw - 1 || iy === gh - 1) boundary[a] = 1;
+    const r = ix + 1 < gw ? lab[iy * gw + ix + 1] : a, d = iy + 1 < gh ? lab[(iy + 1) * gw + ix] : a;
+    for (const b of [r, d]) if (b !== a) { pairs.add(Math.min(a, b) * 4096 + Math.max(a, b)); nbs[a].add(b); nbs[b].add(a); }
+  }
+  let inner = 0, nbSum = 0, hex = 0, Jt = 0;
+  const cells = sites.map((s, i) => {
+    Jt += J[i] * step * step;
+    const deg = nbs[i].size;
+    if (!boundary[i]) { inner++; nbSum += deg; if (deg === 6) hex++; }
+    return { cx: cnt[i] ? sx[i] / cnt[i] : s.x, cy: cnt[i] ? sy[i] / cnt[i] : s.y, deg, boundary: !!boundary[i] };
+  });
+  return { step, gw, gh, lab, cells, stats: { inner, meanNb: inner ? nbSum / inner : NaN, hexFrac: inner ? hex / inner : NaN,
+    G: Jt * n / (W * H) ** 2, Gin: NaN, pairs } };
+}
+
+// ---------- geometry state ----------
+let geo = null, dirtyGeo = true, dirtyDraw = true;
+function recompute() {
+  if (P.metric === 'l2') {
+    const cells = computeCells(), stats = cellStats(cells);
+    const D = !P.wt && sites.length >= 3 ? delaunay(sites) : null;
+    geo = { kind: 'poly', cells, stats, D, chk: D ? checkDelaunay(D, stats.pairs, cells) : null };
+  } else {
+    const R = computeRaster();
+    geo = { kind: 'raster', ...R, chk: null };
+  }
+  window.__stats = { n: sites.length, metric: P.metric, weighted: P.wt, iter: lloyd.iter, inner: geo.stats.inner,
+    empty: geo.stats.empty, meanNb: geo.stats.meanNb, hexFrac: geo.stats.hexFrac, G: geo.stats.G, Gin: geo.stats.Gin, hist: lloyd.hist.map(h => h.G), chk: geo.chk && { ...geo.chk, und: undefined } };
+}
+
+// ---------- Lloyd relaxation ----------
+const lloyd = { running: false, iter: 0, hist: [], acc: 0 };
+function resetLloyd() { lloyd.iter = 0; lloyd.hist = []; dirtyGeo = true; }
+function lloydStep() {
+  if (!geo || lloyd.iter >= LLOYD_MAX) { lloyd.running = false; return 0; }
+  let moved = 0;
+  sites.forEach((s, i) => {
+    const c = geo.cells[i]; if (!c) return;
+    moved = Math.max(moved, Math.hypot(c.cx - s.x, c.cy - s.y));
+    s.x = clamp(c.cx, [0, W]); s.y = clamp(c.cy, [0, H]);
+  });
+  lloyd.iter++; dirtyGeo = true;
+  return moved;
+}
+function record() {
+  const h = lloyd.hist, s = geo.stats;
+  if (!h.length || h[h.length - 1].iter !== lloyd.iter) h.push({ iter: lloyd.iter, G: s.G, hex: s.hexFrac });
+  if (h.length > 400) h.splice(0, h.length - 400);
+}
+
+// ---------- colours ----------
+const NB_RGB = d => d <= 4 ? [120, 90, 190] : d === 5 ? [58, 98, 190] : d === 6 ? [70, 88, 70] : d === 7 ? [176, 112, 40] : [170, 56, 56];
+function fillRGB(i, c) {
+  const s = sites[i], h = hash(s.id);
+  if (P.style === 'math') {
+    if (P.nb) return c.boundary ? [44, 49, 56] : NB_RGB(c.deg);
+    return hsl((s.id * 137.508) % 360, 0.38, 0.3);
+  }
+  if (P.style === 'giraffe') return [[139, 74, 31], [154, 85, 36], [122, 62, 24], [165, 96, 42], [135, 68, 32]][Math.floor(h * 5)];
+  if (P.style === 'mud') { const k = 0.86 + 0.22 * h; return [180 * k, 140 * k, 96 * k]; }
+  if (P.style === 'basalt') { const k = 0.8 + 0.3 * h; return [92 * k, 96 * k, 102 * k]; }
+  const u = clamp(s.x / W, [0, 1]);   // wing membrane: faint iridescence along the wing
+  return hsl(170 + 110 * u + 30 * h, 0.45, 0.86);
+}
+function hsl(h, s, l) {
+  const f = n => { const k = (n + h / 30) % 12, a = s * Math.min(l, 1 - l); return 255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))); };
+  return [f(0), f(8), f(4)];
+}
+const BG = { math: [15, 18, 22], giraffe: [239, 224, 189], mud: [42, 29, 20], basalt: [12, 13, 15], wing: [33, 28, 20] };
+const rgb = c => `rgb(${c.map(v => Math.round(clamp(v, [0, 255])))})`;
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let dpr = 1;
+function insetPoly(pts, d) {   // intersection of the cell's edges moved inward by d (cells are convex)
+  let out = pts, labs = pts.map(() => 0);
+  for (let k = 0; k < pts.length && out.length; k++) {
+    const v = pts[k], q = pts[(k + 1) % pts.length], ex = q[0] - v[0], ey = q[1] - v[1], L = Math.hypot(ex, ey);
+    if (L < 1e-9) continue;
+    [out, labs] = clip(out, labs, ey, -ex, ey * v[0] - ex * v[1] - d * L, 0);
+  }
+  return out;
+}
+const pathPoly = p => { ctx.beginPath(); p.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); };
+
+function drawWingFrame(w, stroke) {
+  ctx.beginPath();
+  for (let k = 0; k <= 120; k++) { const u = k / 120; ctx[k ? 'lineTo' : 'moveTo'](w.x0 + u * w.L, w.top(u)); }
+  for (let k = 120; k >= 0; k--) { const u = k / 120; ctx.lineTo(w.x0 + u * w.L, w.bot(u)); }
+  ctx.closePath();
+  if (stroke) ctx.stroke();
+}
+
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const st = P.style, s = spacing(), bw = P.bw * s;
+  if (st === 'wing') {
+    const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#1d2a2e'); g.addColorStop(1, '#2c2a1f');
+    ctx.fillStyle = g;
+  } else ctx.fillStyle = rgb(BG[st]);
+  ctx.fillRect(0, 0, W, H);
+  const wing = st === 'wing' ? wingShape() : null;
+  if (wing) { ctx.save(); drawWingFrame(wing, false); ctx.clip(); }
+
+  if (P.vor) {
+    if (geo.kind === 'raster') drawRaster(bw);
+    else drawPolys(bw);
+  }
+  if (wing) {
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(30,24,16,.95)'; ctx.lineCap = 'round';
+    for (const t of [0.03, 0.16, 0.34]) {   // a few long veins running to the tip
+      ctx.lineWidth = Math.max(1.2, 0.8 * bw); ctx.beginPath();
+      for (let k = 0; k <= 80; k++) { const u = 0.01 + 0.97 * k / 80; ctx[k ? 'lineTo' : 'moveTo'](wing.x0 + u * wing.L, wing.top(u) + t * (wing.bot(u) - wing.top(u))); }
+      ctx.stroke();
+    }
+    ctx.lineWidth = Math.max(2, 1.6 * bw); drawWingFrame(wing, true);
+    // pterostigma: the dark cell near the tip of the leading edge
+    const u = 0.86, x = wing.x0 + u * wing.L, y = wing.top(u) + 0.06 * (wing.bot(u) - wing.top(u));
+    ctx.fillStyle = 'rgba(40,28,16,.9)'; ctx.beginPath(); ctx.ellipse(x, y, 0.03 * wing.L, 0.07 * wing.half(u), 0.04, 0, 7); ctx.fill();
+  }
+  if (P.del) drawDual();
+  if (P.metric === 'l2' && geo.kind === 'poly') drawSelected();
+  if (P.sites || P.wt) drawSites();
+}
+
+function drawPolys(bw) {
+  const st = P.style, s = spacing();
+  geo.cells.forEach((c, i) => {
+    if (c.pts.length < 3) return;
+    const col = fillRGB(i, c);
+    if (st === 'math' || st === 'wing') { pathPoly(c.pts); ctx.fillStyle = st === 'wing' ? `rgba(${col.map(Math.round)},.62)` : rgb(col); ctx.fill(); return; }
+    // nature styles: inset the cell and round its corners so the gaps read as borders / cracks
+    const r = st === 'giraffe' ? Math.min(0.4 * bw + 0.06 * s, 0.18 * s) : 0.15 * bw;
+    const p = insetPoly(c.pts, bw / 2 + r);
+    if (p.length < 3) return;
+    pathPoly(p);
+    if (st === 'basalt') {
+      const g = ctx.createRadialGradient(c.cx - 0.15 * s, c.cy - 0.2 * s, 0, c.cx, c.cy, 0.7 * s);
+      g.addColorStop(0, rgb(col.map(v => v * 1.35))); g.addColorStop(1, rgb(col.map(v => v * 0.6)));
+      ctx.fillStyle = ctx.strokeStyle = g;
+    } else if (st === 'mud') {
+      const g = ctx.createLinearGradient(c.cx - 0.4 * s, c.cy - 0.4 * s, c.cx + 0.4 * s, c.cy + 0.4 * s);
+      g.addColorStop(0, rgb(col.map(v => v * 1.12))); g.addColorStop(1, rgb(col.map(v => v * 0.82)));
+      ctx.fillStyle = ctx.strokeStyle = g;
+    } else ctx.fillStyle = ctx.strokeStyle = rgb(col);
+    ctx.fill();
+    if (r > 0) { ctx.lineJoin = 'round'; ctx.lineWidth = 2 * r; ctx.stroke(); }
+  });
+  if (st === 'math' || st === 'wing') {   // edges as lines
+    ctx.strokeStyle = st === 'wing' ? 'rgba(34,26,16,.92)' : 'rgba(232,228,220,.85)';
+    ctx.lineWidth = Math.max(st === 'wing' ? 0.9 : 0.75, bw); ctx.lineJoin = 'round';
+    ctx.beginPath();
+    geo.cells.forEach((c, i) => {
+      for (let k = 0; k < c.pts.length; k++) {
+        const j = c.labs[k]; if (j >= 0 && j < i) continue;   // each shared edge once
+        const a = c.pts[k], b = c.pts[(k + 1) % c.pts.length];
+        ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+      }
+    });
+    ctx.stroke();
+  }
+}
+
+let off = null;
+function drawRaster(bw) {
+  const { gw, gh, lab, step, cells } = geo;
+  if (!off) off = document.createElement('canvas');
+  if (off.width !== gw || off.height !== gh) { off.width = gw; off.height = gh; }
+  const oc = off.getContext('2d'), img = oc.createImageData(gw, gh), d = img.data;
+  const pal = cells.map((c, i) => fillRGB(i, c));
+  const edge = new Uint8Array(gw * gh);
+  for (let iy = 0; iy < gh; iy++) for (let ix = 0; ix < gw; ix++) {
+    const k = iy * gw + ix, a = lab[k];
+    if ((ix + 1 < gw && lab[k + 1] !== a) || (iy + 1 < gh && lab[k + gw] !== a)) edge[k] = 1;
+  }
+  // thicken the borders: a separable box dilation of radius t samples
+  const t = Math.max(0, Math.round(bw / step / 2)), tmp = new Uint8Array(gw * gh);
+  if (t > 0) {
+    for (let iy = 0; iy < gh; iy++) { let run = 0;
+      for (let ix = -t; ix < gw; ix++) {
+        if (ix + t < gw) run += edge[iy * gw + ix + t];
+        if (ix - t - 1 >= 0) run -= edge[iy * gw + ix - t - 1];
+        if (ix >= 0) tmp[iy * gw + ix] = run > 0;
+      } }
+    for (let ix = 0; ix < gw; ix++) { let run = 0;
+      for (let iy = -t; iy < gh; iy++) {
+        if (iy + t < gh) run += tmp[(iy + t) * gw + ix];
+        if (iy - t - 1 >= 0) run -= tmp[(iy - t - 1) * gw + ix];
+        if (iy >= 0) edge[iy * gw + ix] = run > 0;
+      } }
+  }
+  const border = P.style === 'math' ? [232, 228, 220] : P.style === 'wing' ? [34, 26, 16] : BG[P.style];
+  for (let k = 0, o = 0; k < gw * gh; k++, o += 4) {
+    const c = edge[k] ? border : pal[lab[k]] || border;
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  }
+  oc.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(off, 0, 0, gw * step, gh * step);
+}
+
+function drawDual() {
+  ctx.strokeStyle = 'rgba(111,211,255,.9)'; ctx.lineWidth = 1.2; ctx.beginPath();
+  if (geo.kind === 'poly' && geo.D) {
+    for (const key of geo.chk.und) { const a = sites[Math.floor(key / 4096)], b = sites[key % 4096]; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+  } else {
+    for (const key of geo.stats.pairs) { const a = sites[Math.floor(key / 4096)], b = sites[key % 4096]; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+  }
+  ctx.stroke();
+}
+
+function selectedIndex() {
+  if (sel >= 0 && sel < sites.length) return sel;
+  let best = -1, bd = Infinity;
+  sites.forEach((s, i) => { const d = (s.x - W / 2) ** 2 + (s.y - H / 2) ** 2; if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+
+// perpendicular bisectors (radical axes when weighted) of the selected site with its nearest sites, and the
+// circumcircles of its Delaunay triangles: their centres are exactly the vertices of its cell
+function drawSelected() {
+  if (!P.bis && !P.cc) return;
+  const i = selectedIndex(); if (i < 0) return;
+  const pi = sites[i], c = geo.cells[i], wi = weight(pi);
+  if (P.bis) {
+    const nb = new Set(c.labs.filter(j => j >= 0));
+    const near = sites.map((s, j) => [j, (s.x - pi.x) ** 2 + (s.y - pi.y) ** 2]).filter(([j]) => j !== i)
+      .sort((a, b) => a[1] - b[1]).slice(0, 14).map(([j]) => j);
+    const ext = 2 * (W + H);
+    for (const j of new Set([...near, ...nb])) {
+      const pj = sites[j], dx = pj.x - pi.x, dy = pj.y - pi.y, d2 = dx * dx + dy * dy; if (d2 === 0) continue;
+      const t = 0.5 + (wi - weight(pj)) / (2 * d2), mx = pi.x + t * dx, my = pi.y + t * dy, L = Math.sqrt(d2);
+      const on = nb.has(j);
+      ctx.strokeStyle = on ? 'rgba(255,143,180,.95)' : 'rgba(255,143,180,.35)'; ctx.lineWidth = on ? 1.4 : 1;
+      ctx.setLineDash([6, 5]); ctx.beginPath();
+      ctx.moveTo(mx - dy / L * ext, my + dx / L * ext); ctx.lineTo(mx + dy / L * ext, my - dx / L * ext); ctx.stroke();
+      ctx.setLineDash([]);
+      if (on) { ctx.strokeStyle = 'rgba(255,143,180,.45)'; ctx.beginPath(); ctx.moveTo(pi.x, pi.y); ctx.lineTo(pj.x, pj.y); ctx.stroke(); }
+    }
+    if (c.pts.length) { pathPoly(c.pts); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke(); }
+  }
+  if (P.cc && geo.D) {
+    for (const [a, b, cc] of geo.D.tris) {
+      if (a !== i && b !== i && cc !== i) continue;
+      const A = sites[a], B = sites[b], C = sites[cc], d = 2 * orient(A, B, C);
+      const ux = ((A.x * A.x + A.y * A.y) * (C.y - B.y) + (B.x * B.x + B.y * B.y) * (A.y - C.y) + (C.x * C.x + C.y * C.y) * (B.y - A.y)) / -d;
+      const uy = ((A.x * A.x + A.y * A.y) * (C.x - B.x) + (B.x * B.x + B.y * B.y) * (A.x - C.x) + (C.x * C.x + C.y * C.y) * (B.x - A.x)) / d;
+      const R = Math.hypot(A.x - ux, A.y - uy);
+      ctx.strokeStyle = 'rgba(157,255,157,.7)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(ux, uy, R, 0, 7); ctx.stroke();
+      ctx.fillStyle = '#9dff9d'; ctx.beginPath(); ctx.arc(ux, uy, 3, 0, 7); ctx.fill();
+    }
+  }
+}
+
+function drawSites() {
+  const i0 = selectedIndex();
+  sites.forEach((s, i) => {
+    if (P.wt) { const w = weight(s); if (w > 0) { ctx.strokeStyle = 'rgba(255,211,138,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(s.x, s.y, Math.sqrt(w), 0, 7); ctx.stroke(); } }
+    if (!P.sites) return;
+    const hl = (P.bis || P.cc) && i === i0;
+    ctx.fillStyle = hl ? '#fff' : '#ffd38a'; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(s.x, s.y, hl ? 5 : sites.length > 400 ? 1.8 : 3, 0, 7); ctx.fill(); ctx.stroke();
+  });
+}
+
+// ---------- chart ----------
+const ch = $('chart'), cctx = ch.getContext('2d');
+function drawChart() {
+  const w = ch.clientWidth * dpr, h = ch.clientHeight * dpr;
+  if (!w || !h) return;
+  if (ch.width !== w || ch.height !== h) { ch.width = w; ch.height = h; }
+  cctx.clearRect(0, 0, w, h);
+  const hs = lloyd.hist.filter(p => Number.isFinite(p.G)), pad = 12 * dpr;
+  cctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; cctx.textBaseline = 'top';
+  if (hs.length < 1) { cctx.fillStyle = '#929aa5'; cctx.fillText('按 ▶ 开始松弛', 6 * dpr, 6 * dpr); return; }
+  const i0 = hs[0].iter, i1 = Math.max(i0 + 1, hs[hs.length - 1].iter);
+  const gs = hs.map(p => p.G), lo = Math.min(HEX_G, ...gs), hi = Math.max(HEX_G + 0.002, ...gs);
+  const X = it => (it - i0) / (i1 - i0) * (w - 2 * pad) + pad, Yg = g => h - pad - (g - lo) / (hi - lo) * (h - 2 * pad), Yh = f => h - pad - f * (h - 2 * pad);
+  cctx.strokeStyle = 'rgba(224,168,74,.6)'; cctx.lineWidth = dpr; cctx.setLineDash([4 * dpr, 3 * dpr]);
+  cctx.beginPath(); cctx.moveTo(pad, Yg(HEX_G)); cctx.lineTo(w - pad, Yg(HEX_G)); cctx.stroke(); cctx.setLineDash([]);
+  const line = (f, col) => { cctx.strokeStyle = col; cctx.lineWidth = 1.4 * dpr; cctx.beginPath();
+    hs.forEach((p, k) => { const y = f(p); if (!Number.isFinite(y)) return; k ? cctx.lineTo(X(p.iter), y) : cctx.moveTo(X(p.iter), y); }); cctx.stroke(); };
+  line(p => Yg(p.G), '#e0a84a'); line(p => Yh(p.hex), '#6fd3ff');
+  const last = hs[hs.length - 1];
+  cctx.fillStyle = '#e0a84a'; cctx.textAlign = 'left'; cctx.fillText(`G ${hs[0].G.toFixed(4)} → ${last.G.toFixed(4)}`, pad, 2 * dpr);
+  cctx.fillStyle = '#6fd3ff'; cctx.textAlign = 'right';
+  cctx.fillText(`六边形 ${(100 * hs[0].hex).toFixed(0)}% → ${(100 * last.hex).toFixed(0)}%`, w - pad, 2 * dpr);
+  cctx.fillStyle = '#929aa5'; cctx.textBaseline = 'bottom'; cctx.fillText(`第 ${last.iter} 步`, w - pad, h - 1 * dpr);
+}
+
+// ---------- panel text (all values are numbers computed here) ----------
+const fmtPct = x => Number.isFinite(x) ? (100 * x).toFixed(1) + '%' : '–';
+const fmtN = (x, d) => Number.isFinite(x) ? x.toFixed(d) : '–';
+function describe() {
+  const s = geo.stats, k = geo.chk;
+  $('stat').innerHTML = `<b>${sites.length}</b> 个站点 · ${METRICS[P.metric].name}距离${P.wt && P.metric === 'l2' ? '（加权）' : ''}` +
+    ` · 内部胞 ${s.inner} 个，平均 <b>${fmtN(s.meanNb, 2)}</b> 个邻居 · 六边形 <b>${fmtPct(s.hexFrac)}</b>` +
+    ` · G = <b>${fmtN(s.G, 4)}</b>` + (Number.isFinite(s.Gin) ? `（内部胞 ${fmtN(s.Gin, 4)}）` : '') + (lloyd.iter ? ` · Lloyd 第 <b>${lloyd.iter}</b> 步` : '');
+  let t = '';
+  if (k) {
+    const ok = (c, txt) => `<span class="${c ? 'ok' : 'bad'}">${txt}</span>`;
+    t += `Delaunay（Bowyer–Watson）：${k.tri} 个三角形，内部最小角 <b>${Number.isFinite(k.minAngle) ? k.minAngle.toFixed(2) + '°' : '–'}</b>\n`;
+    t += `空外接圆：${ok(k.viol === 0, k.viol + ' 处违例')}；内部三角形的外接圆外，最近的点在 <b>${Number.isFinite(k.margin) ? (1 + k.margin).toFixed(4) : '–'}</b> R 处\n`;
+    t += `Euler：V − E + F = ${k.V} − ${k.E} + ${k.F} = ${ok(k.V - k.E + k.F === 2, k.V - k.E + k.F)}；外壳 h = ${k.hull}\n`;
+    t += `  E = 3V − 3 − h = ${3 * k.V - 3 - k.hull} ${ok(3 * k.V - 3 - k.hull === k.E, k.E === 3 * k.V - 3 - k.hull ? '✓' : '✗')}，平均度数 2E/V = <b>${(2 * k.E / k.V).toFixed(3)}</b>\n`;
+    t += `翻转对角线：${k.interior} 条内部边，翻转后最小角变大的 ${ok(k.better === 0, k.better)} 条\n`;
+    t += `对偶：Voronoi 邻接 ${k.vorPairs} 对，在 Delaunay 边里 ${ok(k.vorInDel === k.vorPairs, k.vorInDel)} 对；\n  另 ${k.delOnly} 条 Delaunay 边的对偶边落在画框外`;
+  } else if (P.metric !== 'l2') t = `${METRICS[P.metric].name}距离下没有 Delaunay 三角剖分；蓝线画的是像素邻接的胞（对偶图），${s.pairs.size} 对。`;
+  else if (P.wt) t = `加权时 Delaunay 换成“正则三角剖分”；蓝线是 power 图里相邻的胞，${s.pairs.size} 对。`;
+  else t = '站点太少或全部共线，没有三角剖分。';
+  if (P.wt && P.metric === 'l2') t += `\n${s.empty} 个站点的胞是空的：它被权重更大的邻居整个盖住了。`;
+  $('chk').innerHTML = t;
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('N').value = P.n; $('vN').textContent = P.n + (sites.length !== P.n ? `（实际 ${sites.length}）` : '');
+  $('dist').value = P.dist; $('J').value = P.jit; $('vJ').textContent = P.jit.toFixed(2);
+  $('jitRow').style.display = P.dist === 'jitter' || P.dist === 'square' ? '' : 'none';
+  $('S').value = P.seed; $('vS').textContent = P.seed;
+  for (const k of ['vor', 'del', 'sites', 'nb', 'bis', 'cc', 'wt']) $(k).checked = P[k];
+  $('B').value = P.bw; $('vB').textContent = P.bw.toFixed(3); $('style').value = P.style;
+  $('V').value = P.speed; $('vV').textContent = P.speed;
+  $('Wa').value = P.wa; $('vW').textContent = P.wa.toFixed(2);
+  $('metricNote').textContent = METRICS[P.metric].note;
+  $('play').textContent = lloyd.running ? '⏸ 暂停' : '▶ 动画';
+  document.querySelectorAll('[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === P.metric));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+function changed(geoToo) { if (geoToo) dirtyGeo = true; dirtyDraw = true; syncUI(); }
+const regen = () => { generate(); P.preset = ''; changed(true); };
+
+for (const [key, m] of Object.entries(METRICS)) {
+  const b = document.createElement('button'); b.textContent = m.name; b.dataset.m = key;
+  b.onclick = () => { P.metric = key; resetLloyd(); changed(true); };
+  $('metrics').appendChild(b);
+}
+$('N').oninput = e => { P.n = clamp(Math.round(+e.target.value), LIM.n); regen(); };
+$('dist').onchange = e => { P.dist = Object.hasOwn(DISTS, e.target.value) ? e.target.value : 'rand'; regen(); };
+$('J').oninput = e => { P.jit = clamp(+e.target.value, LIM.jit); regen(); };
+$('S').oninput = e => { P.seed = clamp(Math.round(+e.target.value), LIM.seed); regen(); };
+$('regen').onclick = regen;
+$('clear').onclick = () => { sites = []; sel = -1; lloyd.running = false; resetLloyd(); P.preset = ''; changed(true); };
+for (const k of ['vor', 'del', 'sites', 'nb', 'bis', 'cc']) $(k).onchange = e => { P[k] = e.target.checked; changed(k === 'nb'); };
+$('wt').onchange = e => { P.wt = e.target.checked; resetLloyd(); changed(true); };
+$('Wa').oninput = e => { P.wa = clamp(+e.target.value, LIM.wa); resetLloyd(); changed(true); };
+$('B').oninput = e => { P.bw = clamp(+e.target.value, LIM.bw); changed(false); };
+$('style').onchange = e => { P.style = Object.hasOwn(STYLES, e.target.value) ? e.target.value : 'math'; changed(false); };
+$('V').oninput = e => { P.speed = clamp(Math.round(+e.target.value), LIM.speed); syncUI(); };
+$('play').onclick = () => { lloyd.running = !lloyd.running; syncUI(); };
+$('step1').onclick = () => { if (dirtyGeo) recompute(); record(); lloydStep(); changed(true); };
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, DEFAULTS, { speed: P.speed }, p, { preset: key });
+  delete P.name; delete P.run; delete P.lloyd;
+  generate();
+  for (let k = 0; k < (p.lloyd || 0); k++) { recompute(); lloydStep(); }
+  lloyd.running = !!p.run;
+  changed(true);
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+
+// pointer: drag a site, click empty space to add one, Shift+click to delete
+let drag = -1;
+function hit(x, y) {
+  let best = -1, bd = 12 * 12;
+  sites.forEach((s, i) => { const d = (s.x - x) ** 2 + (s.y - y) ** 2; if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+const local = e => { const r = cv.getBoundingClientRect(); return [clamp(e.clientX - r.left, [0, W]), clamp(e.clientY - r.top, [0, H])]; };
+cv.addEventListener('pointerdown', e => {
+  const [x, y] = local(e), i = hit(x, y);
+  if (e.shiftKey) { if (i >= 0) { sites.splice(i, 1); sel = -1; } }
+  else if (i >= 0) { drag = sel = i; }
+  else if (sites.length < MAX_SITES) { sites.push(newSite(x, y, rng(nextId * 31 + 5))); drag = sel = sites.length - 1; }
+  cv.setPointerCapture(e.pointerId); P.preset = ''; changed(true);
+});
+cv.addEventListener('pointermove', e => {
+  if (drag < 0 || drag >= sites.length) return;
+  const [x, y] = local(e); sites[drag].x = x; sites[drag].y = y; changed(true);
+});
+const endDrag = () => { drag = -1; };
+cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+
+function resize() {
+  const r = cv.getBoundingClientRect(), w = Math.max(1, r.width), h = Math.max(1, r.height);
+  if (sites.length && W > 1 && H > 1) for (const s of sites) { s.x *= w / W; s.y *= h / H; }
+  W = w; H = h; dpr = devicePixelRatio || 1;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  dirtyGeo = dirtyDraw = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=giraffe  or  ?n=300&dist=rand&seed=7&lloyd=40&nb=1  or  ?metric=l1&del=1&ui=0
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const flag = k => { if (q.has(k)) P[k] = q.get(k) === '1'; };
+if (q.get('ui') === '0') document.body.classList.add('noui');
+resize();
+const pk = q.get('p');
+if (pk !== null && Object.hasOwn(PRESETS, pk)) loadPreset(pk); else generate();
+let again = false;
+num('n', x => { P.n = clamp(Math.round(x), LIM.n); again = true; });
+num('seed', x => { P.seed = clamp(Math.round(x), LIM.seed); again = true; });
+num('jit', x => { P.jit = clamp(x, LIM.jit); again = true; });
+const dq = q.get('dist'); if (dq !== null && Object.hasOwn(DISTS, dq)) { P.dist = dq; again = true; }
+if (again) { P.preset = ''; generate(); }
+const mq = q.get('metric'); if (mq !== null && Object.hasOwn(METRICS, mq)) P.metric = mq;
+const sq = q.get('style'); if (sq !== null && Object.hasOwn(STYLES, sq)) P.style = sq;
+for (const k of ['vor', 'del', 'sites', 'nb', 'bis', 'cc', 'wt']) flag(k);
+num('bw', x => P.bw = clamp(x, LIM.bw));
+num('wa', x => P.wa = clamp(x, LIM.wa));
+num('speed', x => P.speed = clamp(Math.round(x), LIM.speed));
+num('sel', x => sel = clamp(Math.round(x), [-1, MAX_SITES - 1]));
+num('lloyd', x => {
+  const k = clamp(Math.round(x), [0, PRE_LLOYD_MAX]);
+  lloyd.running = false; recompute(); record();
+  for (let i = 0; i < k; i++) { recompute(); record(); lloydStep(); }
+});
+if (q.has('run')) lloyd.running = q.get('run') === '1';
+syncUI();
+
+let last = performance.now();
+(function loop(now) {
+  if (lloyd.running) {
+    lloyd.acc += Math.min(0.25, ((now || last) - last) / 1000) * P.speed;
+    let steps = 0;
+    while (lloyd.acc >= 1 && steps < 4 && lloyd.running) {
+      lloyd.acc -= 1; steps++;
+      if (dirtyGeo) recompute();
+      record();
+      const moved = lloydStep();
+      if (moved < 0.005) { lloyd.running = false; syncUI(); }
+    }
+    if (steps) dirtyDraw = true;
+  }
+  last = now || last;
+  if (dirtyGeo) { dirtyGeo = false; recompute(); if (lloyd.iter && lloyd.hist.length) record(); dirtyDraw = true; }
+  if (dirtyDraw) {
+    dirtyDraw = false;
+    draw(); describe(); drawChart();
+    window.__ready = true;
+    window.__done = !lloyd.running;
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

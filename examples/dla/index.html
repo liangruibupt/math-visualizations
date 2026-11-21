@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DLA 扩散限制凝聚 · 闪电、珊瑚与雪花</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d14; color: #e3e6ee;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(22,25,38,.93); border: 1px solid #353a52; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #b3b8e6; border-top: 1px solid #353a52; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8e93a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #272b3f; color: #e3e6ee; border: 1px solid #3b4160;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #323853; }
+  button.on { background: #4b3f86; border-color: #7565c4; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #b6bbcc; margin-top: 4px; white-space: pre-wrap; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(11,13,20,.8); color: #cdd1df; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; top: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>DLA 扩散限制凝聚 · 闪电、珊瑚与雪花</h1>
+  <small>一个粒子从远处出发做随机游走，碰到团簇就粘上去；然后放下一个。每个粒子都更容易先碰到伸在外面的尖端，于是尖端越长越快，长成分叉的枝条，质量和半径满足 <span class="mono">M ∝ R^D，D ≈ 1.71</span>。</small>
+
+  <h2>种子</h2>
+  <div class="presets" id="geoms"></div>
+  <small id="geomNote"></small>
+
+  <h2>晶格</h2>
+  <div class="presets" id="lats"></div>
+  <div class="row">
+    <label>噪声抑制 m <b id="vM"></b></label>
+    <input id="M" type="range" min="1" max="40" step="1">
+    <small>一个空格点被游走者碰到 m 次才真正长出粒子（每次碰到都消耗这个游走者）。m = 1 是普通 DLA；m 大时随机涨落被平均掉，晶格的方向显出来：方格长 4 条臂，六角格长 6 条。</small>
+  </div>
+
+  <h2>生长</h2>
+  <div class="row">
+    <label><span>粘附概率 p<sub>s</sub></span> <b id="vPs"></b></label>
+    <input id="Ps" type="range" min="0.01" max="1" step="0.01">
+    <small>游走者走到团簇旁边时，以概率 p<sub>s</sub> 粘上，否则继续走。p<sub>s</sub> 越小，粒子越能钻进缝隙，团簇越密。</small>
+  </div>
+  <div class="row">
+    <label>粒子数 N <b id="vN"></b></label>
+    <input id="N" type="range" min="2.69897" max="5.30103" step="0.01">
+  </div>
+  <div class="row">
+    <label>速度（每帧游走者移动几次） <b id="vV"></b></label>
+    <input id="V" type="range" min="0" max="7" step="0.01">
+    <small>勾选下面的“发射圆与游走者”，再把速度调到 1–10，就能一跳一跳地看当前游走者的轨迹：离团簇远时是大跳，贴近团簇才一格一格地走</small>
+  </div>
+  <div class="row">
+    <label>随机种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新生长</button></div>
+
+  <h2>显示</h2>
+  <div class="presets" id="cols"></div>
+  <div class="checks">
+    <label><input id="plots" type="checkbox"> 分形维数（双对数拟合）</label>
+    <label><input id="guides" type="checkbox"> 发射圆与游走者</label>
+  </div>
+  <div class="info" id="info"></div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">游走者见 <a href="../random-walk/README.md" style="color:#9fb4d0">随机游走 · 布朗运动</a></small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+const G = 1408;              // lattice side (multiple of 64, so the coarse occupancy blocks tile it exactly)
+const C = G / 2;             // seed site of the point geometry
+const LW = 1024;             // period of the line geometry (multiple of 64)
+const R0 = 400;              // radius of the circle geometry
+const DCAP = 16;             // the distance map stores min(distance to the cluster, DCAP)
+const SEEDV = 0xFFFFFFFF;    // occ value of a seed site; grown sites store their arrival number 1, 2, 3, …
+const S3 = Math.sqrt(3) / 2;
+const ITER_FRAME = 6e6;      // hard cap on walker moves per frame (the 14 ms time budget usually ends a frame first)
+const WALK_CAP = 2e6;        // a single walker is abandoned after this many moves
+const LIM = { ps: [0.01, 1], m: [1, 40], n: [500, 200000], seed: [1, 999], v: [1, 1e7] };   // URL params are clamped to these
+const GEOMS = { point: '点：向外生长', line: '线：森林 / 电沉积', circle: '圆：向内生长' };
+const LATS = { sq: '方格（4 邻居）', hex: '六角格（6 邻居）' };
+const COLS = { time: '按到达时间着色', mono: '单色' };
+const PRESETS = {
+  classic: { name: '经典 DLA · 5 万粒子', g: 'point', lat: 'sq', ps: 1, m: 1, n: 50000 },
+  small: { name: '小团簇 · 3000 粒子', g: 'point', lat: 'sq', ps: 1, m: 1, n: 3000 },
+  dense: { name: '低粘附 p_s = 0.05', g: 'point', lat: 'sq', ps: 0.05, m: 1, n: 50000 },
+  forest: { name: '线种子 · 森林', g: 'line', lat: 'sq', ps: 1, m: 1, n: 50000 },
+  inward: { name: '圆边界 · 向内生长', g: 'circle', lat: 'sq', ps: 1, m: 1, n: 60000 },
+  cross: { name: '方格 m = 10 · 四条臂', g: 'point', lat: 'sq', ps: 1, m: 10, n: 20000 },
+  snow: { name: '六角格 m = 10 · 雪花', g: 'point', lat: 'hex', ps: 1, m: 10, n: 20000 },
+  hexdla: { name: '六角格 m = 1', g: 'point', lat: 'hex', ps: 1, m: 1, n: 50000 },
+};
+const P = { preset: 'classic', g: 'point', lat: 'sq', ps: 1, m: 1, n: 50000, seed: 7, v: 1e7, col: 'time', plots: true, guides: false };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+
+function mulberry(seed) {
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+// sfc32 (128-bit state): one cluster of 10⁵ particles draws ~10⁹ numbers, too many for a 32-bit state
+function sfc32(seed) {
+  const m = mulberry(seed); let a = m() * 4294967296 | 0, b = m() * 4294967296 | 0, c = m() * 4294967296 | 0, d = 1;
+  const next = () => { const t = (a + b | 0) + d | 0; d = d + 1 | 0; a = b ^ b >>> 9; b = c + (c << 3) | 0;
+    c = c << 21 | c >>> 11; c = c + t | 0; return (t >>> 0) / 4294967296; };
+  for (let i = 0; i < 15; i++) next();
+  return next;
+}
+
+// ---------- the lattice ----------
+// Site (i, j), index j·G + i. The hexagonal (triangular) lattice uses axial coordinates on the same array:
+// neighbours (±1,0), (0,±1), (1,−1), (−1,1), embedded in the plane at (i + j/2, j·√3/2).
+const occ = new Uint32Array(G * G);   // 0 = empty
+const dist = new Uint8Array(G * G);   // lower bound on the Euclidean distance to the nearest occupied site, capped at DCAP
+const hit = new Uint8Array(G * G);    // noise reduction: how many walkers have touched this empty site
+const NB16 = G >> 4, NB64 = G >> 6;
+const m16 = new Int32Array(NB16 * NB16), m64 = new Int32Array(NB64 * NB64);   // occupied sites per 16×16 / 64×64 block
+const L = { hex: false, sy: 1, nbr: null, sten: null, wrap: 0, cx: 0, cy: 0, rIn: 0 };
+let St = null, Wk = null, rand = null, running = true;
+
+const ex = (i, j) => L.hex ? i + j / 2 : i;
+const ey = (i, j) => L.hex ? j * S3 : j;
+
+// every lattice offset within distance < DCAP, with floor(distance): stamped around each new site
+function stencil() {
+  const R = Math.ceil(DCAP / (L.hex ? S3 : 1)) + 1, out = [];
+  for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+    const d = Math.hypot(ex(di, dj), ey(di, dj));
+    if (d < DCAP) out.push(di, dj, Math.floor(d));
+  }
+  return Int32Array.from(out);
+}
+
+function reset() {
+  occ.fill(0); dist.fill(DCAP); hit.fill(0); m16.fill(0); m64.fill(0);
+  L.hex = P.lat === 'hex'; L.sy = L.hex ? S3 : 1;
+  L.nbr = L.hex ? [1, 0, -1, 0, 0, 1, 0, -1, 1, -1, -1, 1] : [1, 0, -1, 0, 0, 1, 0, -1];
+  L.sten = stencil(); L.wrap = P.g === 'line' ? LW : 0;
+  L.cx = ex(C, C); L.cy = ey(C, C);
+  L.rIn = L.hex ? C * S3 : C;   // largest disc around the centre that fits in the array
+  rand = sfc32(P.seed * 7919 + (L.hex ? 1 : 0) + 2 * Object.keys(GEOMS).indexOf(P.g));
+  St = { n: 0, rmax: 0, rin: Infinity, jmax: 0, sr2: 0, hist: new Float64Array(G), hg: [], nextH: 50,
+    bb: [G, G, -1, -1], launched: 0, kills: 0, capped: 0, iters: 0, t0: performance.now(), tGrow: 0, done: false, why: '' };
+  Wk = { i: 0, j: 0, alive: false, steps: 0, trail: [] };
+  img.data.fill(0); dirty = [0, 0, G - 1, G - 1];
+  if (P.g === 'point') occupy(C, C, true);
+  else if (P.g === 'line') for (let i = 0; i < LW; i++) occupy(i, 0, true);
+  else for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {   // a ring 1.5 sites thick: no unit step can jump across it
+    const r = Math.hypot(ex(i, j) - L.cx, ey(i, j) - L.cy);
+    if (r >= R0 && r < R0 + 1.5) occupy(i, j, true);
+  }
+  St.rin = R0; St.t0 = performance.now();
+  window.__done = false;
+}
+
+function occupy(i, j, seed) {
+  const k = j * G + i, s = L.sten, w = L.wrap;
+  occ[k] = seed ? SEEDV : ++St.n;
+  for (let q = 0; q < s.length; q += 3) {
+    let ii = i + s[q]; const jj = j + s[q + 1];
+    if (jj < 0 || jj >= G) continue;
+    if (w) ii = (ii + w) % w; else if (ii < 0 || ii >= G) continue;
+    const kk = jj * G + ii;
+    if (s[q + 2] < dist[kk]) dist[kk] = s[q + 2];
+  }
+  m16[(j >> 4) * NB16 + (i >> 4)]++; m64[(j >> 6) * NB64 + (i >> 6)]++;
+  paint(i, j);
+  if (seed) return;
+  const b = St.bb; if (i < b[0]) b[0] = i; if (j < b[1]) b[1] = j; if (i > b[2]) b[2] = i; if (j > b[3]) b[3] = j;
+  if (j > St.jmax) St.jmax = j;
+  if (P.g !== 'line') {
+    const r = Math.hypot(ex(i, j) - L.cx, ey(i, j) - L.cy);
+    if (r > St.rmax) St.rmax = r;
+    if (r < St.rin) St.rin = r;
+    St.hist[Math.min(G - 1, Math.floor(r))]++; St.sr2 += r * r;
+    if (St.n >= St.nextH) { St.hg.push({ x: Math.sqrt(St.sr2 / St.n), y: St.n }); St.nextH = Math.ceil(St.nextH * 1.12); }
+  }
+  if (St.n >= P.n) finish('达到目标粒子数');
+  else if (P.g === 'point' && St.rmax > L.rIn - 24) finish('碰到网格边界');
+  else if (P.g === 'line' && St.jmax > G - 24) finish('碰到网格顶边');
+  else if (P.g === 'circle' && St.rin < 4) finish('长到圆心');
+}
+function finish(why) { St.done = true; St.why = why; St.tGrow = performance.now() - St.t0; window.__done = true; if (St.n < P.n) repaint(); }
+
+// ---------- the walker ----------
+function launch() {
+  St.launched++; Wk.alive = true; Wk.steps = 0; Wk.trail.length = 0;
+  if (P.g === 'line') { Wk.i = Math.floor(rand() * LW); Wk.j = St.jmax + Math.ceil(5 / L.sy); return; }
+  // point: just outside the cluster; circle: a walker released at the centre leaves the empty disc
+  // of radius rin uniformly, so it can start right on a circle inside it
+  const r = P.g === 'point' ? St.rmax + 5 : Math.max(0, St.rin - 2);
+  Wk.i = C; Wk.j = C; jump(r);
+}
+// move to a uniformly random point at distance r (Brownian motion leaves an empty disc uniformly) and round to a site;
+// rounding moves the point by at most 0.71, so callers pass r ≤ (free radius) − 1
+function jump(r) {
+  const a = 6.283185307179586 * rand(), dx = r * Math.cos(a), dy = r * Math.sin(a);
+  let di, dj;
+  if (L.hex) { dj = Math.round(dy / S3); di = Math.round(dx - dj / 2); } else { di = Math.round(dx); dj = Math.round(dy); }
+  Wk.i += di; Wk.j += dj;
+  if (L.wrap) Wk.i = ((Wk.i % L.wrap) + L.wrap) % L.wrap;
+  if (P.guides) mark();
+}
+function mark() { Wk.trail.push(ex(Wk.i, Wk.j), ey(Wk.i, Wk.j)); if (Wk.trail.length > 400) Wk.trail.splice(0, 2); }
+// largest radius r such that the 3×3 blocks around (i, j) are empty: then every site within r is empty
+function blockFree(i, j) {
+  for (const [arr, nb, sh] of [[m64, NB64, 6], [m16, NB16, 4]]) {
+    const bi = i >> sh, bj = j >> sh, nw = L.wrap ? L.wrap >> sh : nb;
+    let free = true;
+    for (let y = bj - 1; y <= bj + 1 && free; y++) {
+      if (y < 0 || y >= nb) continue;
+      for (let x = bi - 1; x <= bi + 1; x++) {
+        let xx = x;
+        if (L.wrap) xx = (x + nw) % nw; else if (x < 0 || x >= nb) continue;
+        if (arr[y * nb + xx]) { free = false; break; }
+      }
+    }
+    if (free) return (1 << sh) * L.sy;   // Chebyshev radius 2^sh in lattice units; the hexagonal embedding shrinks it by √3/2
+  }
+  return 0;
+}
+
+function grow(budgetMs, maxMoves) {
+  const t0 = performance.now(), nb = L.nbr, nn = nb.length / 2, w = L.wrap, cap = Math.min(ITER_FRAME, maxMoves);
+  for (let it = 0; it < cap; it++) {
+    if ((it & 4095) === 4095 && performance.now() - t0 > budgetMs) break;
+    if (St.done) break;
+    if (!Wk.alive) launch();
+    St.iters++;
+    if (++Wk.steps > WALK_CAP) { Wk.alive = false; St.capped++; continue; }
+    const i = Wk.i, j = Wk.j;
+    // far field: big jumps that never touch the array
+    if (P.g === 'point') {
+      const rr = Math.hypot(ex(i, j) - L.cx, ey(i, j) - L.cy);
+      if (rr > St.rmax + 5) {
+        if (rr > 4 * St.rmax + 40) { Wk.alive = false; St.kills++; continue; }
+        jump(rr - St.rmax - 2); continue;
+      }
+    } else if (P.g === 'line') {
+      const h = (j - St.jmax) * L.sy;
+      if (h > 5) {
+        if (h > 2 * LW) { Wk.alive = false; St.kills++; continue; }
+        jump(h - 2); continue;
+      }
+    }
+    // near field
+    const k = j * G + i, d = dist[k];
+    if (d <= 1) {
+      let touch = false;
+      for (let q = 0; q < nb.length; q += 2) {
+        let ii = i + nb[q]; if (w) ii = (ii + w) % w;
+        if (occ[(j + nb[q + 1]) * G + ii]) { touch = true; break; }
+      }
+      if (touch && (P.ps >= 1 || rand() < P.ps)) {
+        Wk.alive = false;
+        if (P.m <= 1 || ++hit[k] >= P.m) occupy(i, j, false);
+        continue;
+      }
+    }
+    if (d <= 2) {   // one lattice step; a step onto an occupied site is refused
+      const q = 2 * ((rand() * nn) | 0); let ii = i + nb[q]; const jj = j + nb[q + 1];
+      if (w) ii = (ii + w) % w;
+      if (!occ[jj * G + ii]) { Wk.i = ii; Wk.j = jj; if (P.guides) mark(); }
+      continue;
+    }
+    let r = d - 1;
+    if (d >= DCAP) { const f = blockFree(i, j); if (f - 1 > r) r = f - 1; }
+    jump(r);
+  }
+}
+
+// ---------- measurement ----------
+function linfit(pts) {
+  const n = pts.length; if (n < 3) return null;
+  const xs = pts.map(p => Math.log10(p.x)), ys = pts.map(p => Math.log10(p.y));
+  const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0; for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+  const D = sxy / sxx; return { D, b: my - D * mx };
+}
+// three estimates of D, each a slope on log–log axes
+function measure() {
+  const out = { mass: null, rg: null, box: null };
+  if (P.g === 'point' && St.n >= 100) {
+    // mass–radius: M(r) = grown particles closer than r to the seed, fitted on 5 ≤ r ≤ R_max/3 (the inside that has stopped growing)
+    const pts = []; let c = 0, idx = 0;
+    for (let r = 2; r <= St.rmax; r = Math.max(r + 1, Math.round(r * 1.15))) { while (idx < r) c += St.hist[idx++]; pts.push({ x: r, y: c }); }
+    const fp = pts.filter(p => p.x >= 5 && p.x <= St.rmax / 3 && p.y > 0);
+    out.mass = { pts, fp, fit: linfit(fp) };
+    // N against the radius of gyration over the growth history, fitted on the last decade of N
+    const hp = St.hg.filter(p => p.y >= Math.max(300, St.n / 10));
+    out.rg = { pts: St.hg, fp: hp, fit: linfit(hp) };
+  }
+  out.box = boxCount();
+  return out;
+}
+// box counting on the grown sites: N(ε) = occupied ε×ε boxes; plotted against size/ε so it rises like a mass
+function boxCount() {
+  const [i0, j0, i1, j1] = St.bb; if (St.n < 100 || i1 < i0) return null;
+  let w = i1 - i0 + 1, h = j1 - j0 + 1, m = new Uint8Array(w * h), eps = 1;
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const v = occ[j * G + i]; if (v && v !== SEEDV) m[(j - j0) * w + i - i0] = 1; }
+  const size = Math.max(w, h), pts = [];
+  for (let lev = 0; lev < 12; lev++) {
+    let n = 0; for (let i = 0; i < m.length; i++) n += m[i];
+    pts.push({ eps, x: size / eps, y: n });
+    if (w === 1 && h === 1) break;
+    const nw = Math.ceil(w / 2), nh = Math.ceil(h / 2), nm = new Uint8Array(nw * nh);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (m[y * w + x]) nm[(y >> 1) * nw + (x >> 1)] = 1;
+    m = nm; w = nw; h = nh; eps *= 2;
+  }
+  // below ε ≈ 8 a box sees single lattice sites and short branch segments (local slope 1.1–1.5); above size/8 too few boxes remain
+  const fp = pts.filter(p => p.eps >= 8 && p.eps <= size / 8);
+  return { pts, fp, fit: linfit(fp), size };
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d'), lc = document.createElement('canvas');
+lc.width = G; lc.height = G;
+const lctx = lc.getContext('2d'), img = lctx.createImageData(G, G);
+let W = 1, H = 1, dpr = 1, dirty = null, meas = null, measAt = 0;
+const BG = '#0b0d14', SEEDC = [120, 132, 158], MONO = [196, 226, 255];
+const STOPS = [[0, [255, 248, 220]], [0.15, [255, 212, 120]], [0.35, [255, 140, 70]], [0.55, [236, 72, 120]], [0.78, [150, 84, 232]], [1, [72, 152, 255]]];
+const LUT = Array.from({ length: 1024 }, (_, k) => {
+  const t = k / 1023; let s = 1; while (s < STOPS.length - 1 && STOPS[s][0] < t) s++;
+  const [ta, a] = STOPS[s - 1], [tb, b] = STOPS[s], u = (t - ta) / (tb - ta);
+  return a.map((v, i) => Math.round(v + (b[i] - v) * u));
+});
+const font = (px, mono) => `${px * dpr}px ${mono ? 'ui-monospace, Menlo, monospace' : '-apple-system, "PingFang SC", sans-serif'}`;
+
+function colourOf(v) {
+  if (v === SEEDV) return SEEDC;
+  if (P.col === 'mono') return MONO;
+  const span = St.done ? St.n : Math.max(P.n, St.n);   // a run that stopped early still spans the whole palette
+  return LUT[Math.min(1023, Math.floor((v - 1) / Math.max(1, span - 1) * 1023))];
+}
+function paint(i, j) {   // pixel (i, G−1−j): j grows upwards on screen
+  const v = occ[j * G + i], c = colourOf(v), y = G - 1 - j, o = (y * G + i) * 4, d = img.data;
+  d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  if (!dirty) dirty = [i, y, i, y];
+  else { if (i < dirty[0]) dirty[0] = i; if (y < dirty[1]) dirty[1] = y; if (i > dirty[2]) dirty[2] = i; if (y > dirty[3]) dirty[3] = y; }
+}
+function repaint() {
+  img.data.fill(0);
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) if (occ[j * G + i]) paint(i, j);
+  dirty = [0, 0, G - 1, G - 1];
+}
+
+function layout() {
+  const pw = P.plots ? clamp(W * 0.34, [260 * dpr, 440 * dpr]) : 0, pad = 14 * dpr;
+  return { x: pad, y: pad, w: Math.max(10, W - pw - (P.plots ? 3 : 2) * pad), h: Math.max(10, H - 2 * pad), px: W - pw - pad, pw };
+}
+// screen = (X0 + s·x, Y0 − s·y) for embedded plane coordinates (x, y)
+function viewOf(Lo) {
+  if (P.g === 'line') {
+    const top = Math.max(St.jmax + 24, LW * 0.35) * L.sy, hh = Lo.h - 24 * dpr, s = Math.min(Lo.w / LW, hh / top);
+    return { s, X0: Lo.x + (Lo.w - s * LW) / 2, Y0: Lo.y + hh };   // the line sits at the bottom
+  }
+  const R = P.g === 'circle' ? R0 + 6 : Math.max(St.rmax + 6, 24) * 1.03, s = Math.min(Lo.w, Lo.h) / (2 * R);
+  return { s, X0: Lo.x + Lo.w / 2 - s * L.cx, Y0: Lo.y + Lo.h / 2 + s * L.cy };
+}
+function drawCluster(Lo, V) {
+  if (dirty) { const [x0, y0, x1, y1] = dirty; lctx.putImageData(img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1); dirty = null; }
+  const s = V.s, h = L.hex ? 1 : 0;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(Lo.x, Lo.y, Lo.w, Lo.h); ctx.clip();
+  if (P.g === 'line') { ctx.beginPath(); ctx.rect(V.X0, Lo.y, s * LW, Lo.h); ctx.clip(); }
+  ctx.imageSmoothingEnabled = s < 1; ctx.imageSmoothingQuality = 'high';
+  // pixel (px, py) is site (px, G−1−py); this affine map sends it to its embedded position (a shear for the hexagonal lattice)
+  const copies = P.g === 'line' && h ? [0, 1, 2] : [0];   // the sheared periodic strip wraps around up to twice
+  for (const m of copies) {
+    ctx.setTransform(s, 0, -s * h / 2, s * L.sy, V.X0 + s * (h * (G - 1) / 2 - m * LW), V.Y0 - s * (G - 1) * L.sy);
+    ctx.drawImage(lc, -0.5, -0.5);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (P.guides) drawGuides(V);
+  ctx.restore();
+}
+function drawGuides(V) {
+  const s = V.s, X = x => V.X0 + s * x, Y = y => V.Y0 - s * y;
+  ctx.lineWidth = 1.2 * dpr; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.font = font(11); ctx.textBaseline = 'bottom';
+  const lab = (t, x, y, col) => { ctx.fillStyle = col; ctx.fillText(t, x, y); };
+  if (P.g === 'point') {
+    for (const [r, col, t] of [[St.rmax + 5, 'rgba(120,220,255,.8)', '发射圆 R_max + 5'], [4 * St.rmax + 40, 'rgba(255,110,110,.7)', '杀死圆 4R_max + 40']]) {
+      ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(X(L.cx), Y(L.cy), r * s, 0, 7); ctx.stroke();
+      lab(t, X(L.cx) + 4 * dpr, Y(L.cy + r) - 2 * dpr, col);
+    }
+  } else if (P.g === 'line') {
+    const y = (St.jmax + Math.ceil(5 / L.sy)) * L.sy;
+    ctx.strokeStyle = 'rgba(120,220,255,.8)'; ctx.beginPath(); ctx.moveTo(X(0), Y(y)); ctx.lineTo(X(LW), Y(y)); ctx.stroke();
+    lab('发射线：团簇最高点 + 5', X(0) + 4 * dpr, Y(y) - 2 * dpr, 'rgba(120,220,255,.9)');
+  } else {
+    ctx.strokeStyle = 'rgba(120,220,255,.8)'; ctx.beginPath(); ctx.arc(X(L.cx), Y(L.cy), Math.max(0, St.rin - 2) * s, 0, 7); ctx.stroke();
+    lab('空心圆盘：从圆心出发的游走者均匀地落在它的边上', X(L.cx) - 150 * dpr, Y(L.cy) - 4 * dpr, 'rgba(120,220,255,.9)');
+  }
+  ctx.setLineDash([]);
+  if (Wk.alive) {
+    const T = Wk.trail;
+    if (T.length >= 4) {
+      ctx.strokeStyle = 'rgba(125,255,176,.55)'; ctx.lineWidth = 1.2 * dpr; ctx.beginPath(); ctx.moveTo(X(T[0]), Y(T[1]));
+      for (let k = 2; k < T.length; k += 2) Math.abs(T[k] - T[k - 2]) > LW / 2 ? ctx.moveTo(X(T[k]), Y(T[k + 1])) : ctx.lineTo(X(T[k]), Y(T[k + 1]));
+      ctx.stroke();
+    }
+    const x = X(ex(Wk.i, Wk.j)), y = Y(ey(Wk.i, Wk.j));
+    ctx.fillStyle = '#7dffb0'; ctx.beginPath(); ctx.arc(x, y, Math.max(2.5 * dpr, s * 0.6), 0, 7); ctx.fill();
+  }
+}
+
+function drawPlot(Lo, M) {
+  const x0 = Lo.px, w = Lo.pw, y0 = 14 * dpr, h = Math.min(H - 28 * dpr, w * 1.05);
+  ctx.fillStyle = 'rgba(16,19,30,.92)'; ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = '#353a52'; ctx.lineWidth = dpr; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+  ctx.font = font(12); ctx.fillStyle = '#d8dbe8'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('质量 ∝ 尺度^D（双对数）', x0 + 8 * dpr, y0 + 6 * dpr);
+  const ml = 40 * dpr, mr = 10 * dpr, mt = 26 * dpr, mb = 92 * dpr, xa = 0, xb = 3, ya = 0, yb = 5.5;
+  const X = v => x0 + ml + (Math.log10(v) - xa) / (xb - xa) * (w - ml - mr);
+  const Y = v => y0 + h - mb - (Math.log10(v) - ya) / (yb - ya) * (h - mt - mb);
+  ctx.font = font(10, true); ctx.fillStyle = '#8e93a8'; ctx.strokeStyle = 'rgba(255,255,255,.07)';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const v of [1, 10, 100, 1000]) { ctx.beginPath(); ctx.moveTo(X(v), y0 + mt); ctx.lineTo(X(v), y0 + h - mb); ctx.stroke(); ctx.fillText(String(v), X(v), y0 + h - mb + 3 * dpr); }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let e = 0; e <= 5; e++) { const y = Y(10 ** e); ctx.beginPath(); ctx.moveTo(x0 + ml, y); ctx.lineTo(x0 + w - mr, y); ctx.stroke(); ctx.fillText(e ? `1e${e}` : '1', x0 + ml - 4 * dpr, y); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('尺度（r、R_g 或 尺寸/ε）', x0 + ml + (w - ml - mr) / 2, y0 + h - mb + 15 * dpr);
+  ctx.save(); ctx.beginPath(); ctx.rect(x0 + ml, y0 + mt, w - ml - mr, h - mt - mb); ctx.clip();
+  const series = [['mass', '#ffc457', 'M(r)：半径 r 内的粒子数'], ['rg', '#ff6fa5', 'N 对回转半径 R_g（生长过程）'], ['box', '#62d0ff', '盒计数 N(ε) 对 尺寸/ε']];
+  const legend = [];
+  for (const [key, col, name] of series) {
+    const S = M && M[key]; if (!S) continue;
+    ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 1.3 * dpr;
+    for (const p of S.pts) {
+      if (!(p.y > 0)) continue;
+      const used = S.fp.includes(p);
+      ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), 2.6 * dpr, 0, 7); used ? ctx.fill() : ctx.stroke();
+    }
+    if (S.fit && S.fp.length) {
+      const lo = Math.min(...S.fp.map(p => p.x)) / 1.6, hi = Math.max(...S.fp.map(p => p.x)) * 1.6, f = v => 10 ** (S.fit.b + S.fit.D * Math.log10(v));
+      ctx.setLineDash([4 * dpr, 3 * dpr]); ctx.beginPath(); ctx.moveTo(X(lo), Y(f(lo))); ctx.lineTo(X(hi), Y(f(hi))); ctx.stroke(); ctx.setLineDash([]);
+    }
+    legend.push([col, `${name}  D ≈ ${S.fit ? S.fit.D.toFixed(3) : '—'}`]);
+  }
+  ctx.restore();
+  ctx.font = font(10.5, true); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  legend.forEach(([col, t], k) => { ctx.fillStyle = col; ctx.fillText(t, x0 + 8 * dpr, y0 + h - mb + 32 * dpr + k * 15 * dpr); });
+  ctx.fillStyle = '#8e93a8';
+  ctx.fillText('实心点参与拟合，虚线是拟合直线；2D DLA：D ≈ 1.71', x0 + 8 * dpr, y0 + h - mb + 32 * dpr + legend.length * 15 * dpr);
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  const Lo = layout();
+  drawCluster(Lo, viewOf(Lo));
+  if (P.plots) drawPlot(Lo, meas);
+}
+
+// ---------- read-outs ----------
+const f3 = x => Number.isFinite(x) ? x.toFixed(3) : '—';
+function info() {
+  const t = (St.done ? St.tGrow : performance.now() - St.t0) / 1000, M = meas || {};
+  const lines = [`粒子 ${St.n.toLocaleString()} / ${P.n.toLocaleString()}` + (St.done ? ` · 完成（${St.why}）` : running ? ' · 生长中' : ' · 已暂停')];
+  lines.push(`用时 ${t.toFixed(2)} s` + (t > 0 ? ` · ${Math.round(St.n / t).toLocaleString()} 粒子/秒` : ''));
+  if (P.g === 'point') lines.push(`R_max = ${St.rmax.toFixed(1)}   R_g = ${St.n ? Math.sqrt(St.sr2 / St.n).toFixed(1) : '—'}`);
+  if (P.g === 'line') lines.push(`最高点 ${(St.jmax * L.sy).toFixed(1)}（周期宽度 ${LW}）`);
+  if (P.g === 'circle') lines.push(`离圆心最近的粒子 r = ${f3(St.rin)}（圆边界 R = ${R0}）`);
+  lines.push(`发射 ${St.launched.toLocaleString()} 个游走者 · 被杀 ${St.kills.toLocaleString()}` + (St.capped ? ` · 超步数 ${St.capped}` : ''));
+  lines.push(`平均每个游走者移动 ${St.launched ? (St.iters / St.launched).toFixed(1) : '—'} 次（含大跳）`);
+  if (M.mass) lines.push(`D（质量–半径 M(r)）= ${f3(M.mass.fit && M.mass.fit.D)}`);
+  if (M.rg) lines.push(`D（N ∝ R_g^D）     = ${f3(M.rg.fit && M.rg.fit.D)}`);
+  if (M.box) lines.push(`D（盒计数）         = ${f3(M.box.fit && M.box.fit.D)}`);
+  $('info').textContent = lines.join('\n');
+  $('stat').textContent = `${GEOMS[P.g]} · ${LATS[P.lat]} · p_s = ${P.ps.toFixed(2)} · m = ${P.m} · N = ${St.n.toLocaleString()}`;
+  window.__dla = { g: P.g, lat: P.lat, ps: P.ps, m: P.m, seed: P.seed, target: P.n, n: St.n, done: St.done, why: St.why, ms: St.done ? St.tGrow : null,
+    rmax: St.rmax, rg: St.n ? Math.sqrt(St.sr2 / St.n) : 0, rin: St.rin, height: St.jmax * L.sy, launched: St.launched, kills: St.kills, capped: St.capped, iters: St.iters,
+    Dmass: M.mass && M.mass.fit ? M.mass.fit.D : null, Drg: M.rg && M.rg.fit ? M.rg.fit.D : null, Dbox: M.box && M.box.fit ? M.box.fit.D : null,
+    box: M.box ? M.box.pts.map(p => [p.eps, p.y]) : null };
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('Ps').value = P.ps; $('M').value = P.m; $('N').value = Math.log10(P.n); $('V').value = Math.log10(P.v); $('Seed').value = P.seed;
+  $('vPs').textContent = P.ps.toFixed(2); $('vM').textContent = P.m; $('vN').textContent = P.n.toLocaleString();
+  $('vV').textContent = P.v >= LIM.v[1] ? '不限' : P.v.toLocaleString(); $('vSeed').textContent = P.seed;
+  $('plots').checked = P.plots; $('guides').checked = P.guides; $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  $('geomNote').textContent = { point: '种子是一个格点。游走者从团簇外接圆外 5 格的圆上出发，跑到 4R_max + 40 之外就丢掉重来。',
+    line: `种子是底边一整行（左右周期，宽 ${LW}）。游走者从团簇最高点上方 5 格的水平线出发，长出一片互相抢夺养分的“森林”，像电解时金属在电极上长出的枝晶。`,
+    circle: `种子是半径 ${R0} 的圆边界，游走者从圆心放出，团簇从边界向圆心长。` }[P.g];
+  for (const [id, key] of [['geoms', P.g], ['lats', P.lat], ['cols', P.col], ['pre', P.preset]])
+    $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.k === key));
+}
+function restart() { reset(); meas = null; syncUI(); }
+function applyPreset(key) { const p = PRESETS[key]; Object.assign(P, { preset: key, g: p.g, lat: p.lat, ps: p.ps, m: p.m, n: p.n }); }
+function buttons(id, table, onPick) {
+  for (const [key, v] of Object.entries(table)) {
+    const b = document.createElement('button'); b.textContent = typeof v === 'string' ? v : v.name; b.dataset.k = key;
+    b.onclick = () => onPick(key); $(id).appendChild(b);
+  }
+}
+buttons('geoms', GEOMS, k => { P.g = k; P.preset = ''; restart(); });
+buttons('lats', LATS, k => { P.lat = k; P.preset = ''; restart(); });
+buttons('cols', COLS, k => { P.col = k; repaint(); syncUI(); });
+buttons('pre', PRESETS, k => { applyPreset(k); restart(); });
+$('Ps').oninput = e => { P.ps = clamp(+e.target.value, LIM.ps); P.preset = ''; restart(); };
+$('M').oninput = e => { P.m = Math.round(clamp(+e.target.value, LIM.m)); P.preset = ''; restart(); };
+$('Seed').oninput = e => { P.seed = Math.round(clamp(+e.target.value, LIM.seed)); restart(); };
+$('N').oninput = e => {
+  P.n = Math.round(clamp(10 ** +e.target.value, LIM.n) / 100) * 100; P.preset = '';
+  if (St.n >= P.n) finish('达到目标粒子数'); else if (St.why === '达到目标粒子数') { St.done = false; St.why = ''; window.__done = false; }
+  repaint(); syncUI();
+};
+$('V').oninput = e => { P.v = Math.round(clamp(10 ** +e.target.value, LIM.v)); syncUI(); };
+$('plots').onchange = e => { P.plots = e.target.checked; };
+$('guides').onchange = e => { P.guides = e.target.checked; };
+$('play').onclick = () => { running = !running; syncUI(); };
+$('restart').onclick = restart;
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=snow  or  ?g=line&lat=hex&ps=0.5&m=1&n=30000&seed=3&col=mono&plots=0&guides=1&v=5&run=0&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { const v = q.get(k); if (v !== null && v.trim() !== '') { const x = Number(v); if (Number.isFinite(x)) f(x); } };
+const pick = (k, table, f) => { const v = q.get(k); if (v !== null && Object.hasOwn(table, v)) f(v); };
+pick('p', PRESETS, applyPreset);
+pick('g', GEOMS, v => { P.g = v; P.preset = ''; });
+pick('lat', LATS, v => { P.lat = v; P.preset = ''; });
+pick('col', COLS, v => { P.col = v; });
+num('ps', x => { P.ps = Math.round(clamp(x, LIM.ps) * 100) / 100; P.preset = ''; });
+num('m', x => { P.m = Math.round(clamp(x, LIM.m)); P.preset = ''; });
+num('n', x => { P.n = Math.round(clamp(x, LIM.n)); P.preset = ''; });
+num('seed', x => { P.seed = Math.round(clamp(x, LIM.seed)); });
+num('v', x => { P.v = Math.round(clamp(x, LIM.v)); });
+if (q.get('plots') === '0') P.plots = false;
+if (q.get('guides') === '1') P.guides = true;
+if (q.get('run') === '0') running = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); reset(); syncUI();
+
+(function loop() {
+  if (running && !St.done) grow(14, P.v);
+  const now = performance.now();
+  if (P.plots || !document.body.classList.contains('noui')) {
+    if (now - measAt > 300 || (St.done && meas && meas.n !== St.n)) { meas = measure(); meas.n = St.n; measAt = performance.now(); }
+  }
+  draw(); info();
+  window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
