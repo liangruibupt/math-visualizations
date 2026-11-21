@@ -192,8 +192,9 @@ num('cr', x => P.cr = x); num('ci', x => P.ci = x);
 num('d', x => P.d = Math.min(8, Math.max(2, Math.round(x))));
 num('it', x => P.it = Math.min(2000, Math.max(20, Math.round(x))));
 num('pal', x => P.pal = Math.min(3, Math.max(0, Math.round(x)))); num('cyc', x => P.cyc = x);
-num('mx', x => P.M.x = x); num('my', x => P.M.y = x); num('ms', x => P.M.span = x);
-num('jx', x => P.J.x = x); num('jy', x => P.J.y = x); num('js', x => P.J.span = x);
+num('mx', x => P.M.x = x); num('my', x => P.M.y = x); const span = x => Math.min(8, Math.max(1e-6, x));   // same range as wheel zoom
+num('ms', x => P.M.span = span(x));
+num('jx', x => P.J.x = x); num('jy', x => P.J.y = x); num('js', x => P.J.span = span(x));
 if (q.has('follow')) P.follow = q.get('follow') === '1';
 
 const VM = makeView('m', 'mo', false, P.M), VJ = makeView('j', 'jo', true, P.J);
