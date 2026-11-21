@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Buffon 投针 · 用随机估计 π</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0f1218; color: #e4e7ec;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(24,29,38,.93); border: 1px solid #353e4e; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a8bedb; border-top: 1px solid #353e4e; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8e97a6; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #262e3b; color: #e4e7ec; border: 1px solid #3b4558;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #313b4b; }
+  button.on { background: #3f5a80; border-color: #5f80ad; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #b6bfcc; margin-top: 4px; white-space: pre-line; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(15,18,24,.82); color: #d3d9e2; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Buffon 投针 · 用随机估计 π</h1>
+  <small>地板上画着间距 d 的平行线，随手扔一根长 ℓ 的针。ℓ ≤ d 时，针压到线的概率是 <span class="mono">2ℓ/(πd)</span>。扔 N 根、数出交点数 C，就得到 <span class="mono">π ≈ 2ℓN/(dC)</span>。</small>
+
+  <h2>针</h2>
+  <div class="row">
+    <label>针长 ℓ <b id="vL"></b></label>
+    <input id="L" type="range" min="0.1" max="6" step="0.01">
+  </div>
+  <div class="row">
+    <label>线距 d <b id="vD"></b></label>
+    <input id="D" type="range" min="1" max="3" step="0.01">
+  </div>
+  <div class="presets" id="shapes"></div>
+  <small>弯的、圆的、随机的“面条”，只要长度都是 ℓ，平均交点数都是 2ℓ/(πd)（Barbier 定理）。</small>
+
+  <h2>投针</h2>
+  <div class="row">
+    <label>每帧投针 <b id="vV"></b></label>
+    <input id="V" type="range" min="0" max="4.30103" step="0.01">
+  </div>
+  <div class="row">
+    <label>投针总数 <b id="vNb"></b></label>
+    <input id="Nb" type="range" min="1" max="7" step="0.01">
+  </div>
+  <div class="row">
+    <label>地板上显示最近 <b id="vShow"></b> 根</label>
+    <input id="Show" type="range" min="10" max="3000" step="10">
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button><button id="add">＋1 万根（跳过动画）</button></div>
+  <div class="checks">
+    <label><input id="ss" type="checkbox"> 样本空间 (θ, y)</label>
+    <label><input id="est" type="checkbox"> π̂ 随 N</label>
+    <label><input id="err" type="checkbox"> 误差（对数）</label>
+    <label><input id="dots" type="checkbox"> 标出交点</label>
+  </div>
+  <div class="checks">
+    <label><input id="lz" type="checkbox"> Lazzarini 停止规则：π̂ 恰好等于 355/113 就停</label>
+  </div>
+  <div class="info" id="info"></div>
+  <small>右上：样本空间，横轴是针的角度 θ，纵轴是针中点到线的距离 y，彩色区域是会相交的 (θ, y)。右中：π̂ 随 N 的变化，灰带是 π ± 1.96 s/√N。右下：|π̂ − π| 的对数坐标图，虚线是 1.96 s/√N。</small>
+
+  <h2>随机数</h2>
+  <div class="row">
+    <label>种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+    <small>同一个种子、同样的参数，扔下的针完全相同</small>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+const LIM = {   // every slider range; URL params are clamped to these
+  l: [0.1, 6], d: [1, 3], v: [1, 20000], nb: [10, 1e7], k: [0, 2e6], show: [10, 3000], seed: [1, 999],
+};
+const SEG_BUDGET = 3e6;   // segment tests per frame
+const SHOW_MAX = 3000;    // needles kept for drawing on the floor
+const SS_MAX = 4000;      // sample-space points kept
+const NSEG = 40;          // segments of a random noodle
+const CK_PER_DEC = 40;    // checkpoints per decade of N for the two plots
+const NU = 360, NV = 200; // quadrature grid on the sample space
+
+// Each shape is a polyline of total arc length 1 (scaled by ℓ), with the arc-length midpoint at the origin.
+function poly(head) {   // headings → points, then rescale to length 1 and centre on the arc midpoint
+  const p = [[0, 0]];
+  for (const h of head) { const [x, y] = p[p.length - 1]; p.push([x + Math.cos(h), y + Math.sin(h)]); }
+  const n = head.length, m = p[n / 2];
+  return p.map(([x, y]) => [(x - m[0]) / n, (y - m[1]) / n]);
+}
+function normalise(p) {   // rescale an arbitrary polyline to arc length 1
+  let s = 0; for (let i = 1; i < p.length; i++) s += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+  return p.map(([x, y]) => [x / s, y / s]);
+}
+const range = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+const SHAPES = {
+  line: { name: '直针', pts: [[-0.5, 0], [0.5, 0]], th: Math.PI },
+  bent: { name: '直角折针', pts: poly([Math.PI / 4, -Math.PI / 4]) },
+  zig: { name: '锯齿', pts: poly([1, -1, 1, -1].map(s => s * Math.PI / 3)) },
+  arc: { name: '半圆弧', pts: poly(range(48, i => Math.PI / 2 - (i + 0.5) * Math.PI / 48)) },
+  circle: { name: '圆圈', pts: poly(range(64, i => Math.PI / 2 + (i + 0.5) * 2 * Math.PI / 64)) },
+  wave: { name: '波浪', pts: normalise(range(97, i => { const x = i / 96 - 0.5; return [x, 0.12 * Math.sin(4 * Math.PI * x)]; })) },
+  noodle: { name: '随机面条（每根不同）', random: true },
+};
+
+const PRESETS = {
+  buffon: { name: 'Buffon ℓ = d', shape: 'line', l: 1, d: 1, v: 20, nb: 1e5 },
+  short: { name: '短针 ℓ = d/2', shape: 'line', l: 0.5, d: 1, v: 20, nb: 1e5 },
+  million: { name: '100 万根', shape: 'line', l: 1, d: 1, v: 20000, nb: 1e6 },
+  lazz: { name: 'Lazzarini 1901', shape: 'line', l: 2.5, d: 3, v: 4, nb: 3408 },
+  lazzStop: { name: 'Lazzarini 停止规则', shape: 'line', l: 2.5, d: 3, v: 4, nb: 1e5, lz: true },
+  long: { name: '长针 ℓ = 3d', shape: 'line', l: 3, d: 1, v: 20, nb: 1e5 },
+  bent: { name: '直角折针', shape: 'bent', l: 1.5, d: 1, v: 20, nb: 1e5 },
+  arc: { name: '半圆弧', shape: 'arc', l: 2, d: 1, v: 20, nb: 1e5 },
+  circle: { name: '圆圈 周长 πd', shape: 'circle', l: 3.14, d: 1, v: 20, nb: 1e5 },
+  noodle: { name: '随机面条', shape: 'noodle', l: 2.5, d: 1, v: 20, nb: 1e5 },
+};
+
+const P = { preset: 'buffon', shape: 'line', l: 1, d: 1, v: 20, nb: 1e5, show: 600, seed: 1,
+  ss: true, est: true, err: true, dots: true, lz: false };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+
+function rng(seed) {   // mulberry32: same seed, same needles
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+let rand = rng(1);
+
+// ---------- crossings ----------
+// Lines sit at y = k·d. A segment from height a to b crosses |⌊b/d⌋ − ⌊a/d⌋| of them, so a polyline's
+// crossings are the sum over its segments. oy holds the heights of the vertices relative to the reference point.
+function crossings(oy, n, Y, d) {
+  let c = 0, prev = Math.floor((Y + oy[0]) / d);
+  for (let i = 1; i < n; i++) { const f = Math.floor((Y + oy[i]) / d); c += f > prev ? f - prev : prev - f; prev = f; }
+  return c;
+}
+function heights(pts, n, th, l, out) {   // vertical offsets after rotating by θ and scaling by ℓ
+  const s = Math.sin(th), c = Math.cos(th);
+  for (let i = 0; i < n; i++) out[i] = l * (pts[2 * i] * s + pts[2 * i + 1] * c);
+}
+function genNoodle(out) {   // smooth random walk: the turning rate itself wanders
+  let x = 0, y = 0, h = 2 * Math.PI * rand(), w = 0;
+  out[0] = 0; out[1] = 0;
+  for (let i = 1; i <= NSEG; i++) {
+    w = 0.8 * w + 0.45 * (rand() - 0.5); h += w;
+    x += Math.cos(h) / NSEG; y += Math.sin(h) / NSEG; out[2 * i] = x; out[2 * i + 1] = y;
+  }
+  const mx = out[NSEG], my = out[NSEG + 1];   // vertex NSEG/2 is the arc midpoint
+  for (let i = 0; i <= NSEG; i++) { out[2 * i] -= mx; out[2 * i + 1] -= my; }
+}
+
+// ---------- state ----------
+const S = {
+  N: 0, C: 0, C2: 0, any: 0, maxc: 0,
+  th: new Float32Array(SHOW_MAX), fx: new Float32Array(SHOW_MAX), Y: new Float32Array(SHOW_MAX),
+  cnt: new Uint8Array(SHOW_MAX), np: new Float32Array(SHOW_MAX * 2 * (NSEG + 1)),
+  su: new Float32Array(SS_MAX), sv: new Float32Array(SS_MAX), sc: new Uint8Array(SS_MAX),
+  ckN: new Float64Array(400), ckC: new Float64Array(400), nck: 0, ci: 0, nextCk: 1,
+  lzHits: [], stopped: false,
+};
+let shape = null, flat = null, npts = 0, thMax = Math.PI, strips = 6, margin = 1, inner = 4;
+let quad = null, running = true;
+const oy = new Float64Array(128), tmp = new Float64Array(2 * (NSEG + 1));
+
+function setup() {
+  shape = SHAPES[P.shape]; thMax = shape.th || 2 * Math.PI;
+  if (!shape.random) { flat = new Float64Array(shape.pts.flat()); npts = shape.pts.length; } else npts = NSEG + 1;
+  // every vertex is within ℓ/2 of the arc midpoint, so this margin keeps whole needles on the floor
+  margin = Math.ceil(P.l / (2 * P.d) + 1e-9); inner = Math.max(2, 7 - 2 * margin); strips = inner + 2 * margin;
+  quad = shape.random ? null : quadrature();
+}
+function reset() {
+  setup();
+  Object.assign(S, { N: 0, C: 0, C2: 0, any: 0, maxc: 0, nck: 0, ci: 0, nextCk: 1, lzHits: [], stopped: false });
+  rand = rng(P.seed); window.__done = false;
+}
+const ckAt = i => Math.ceil(10 ** (i / CK_PER_DEC) - 1e-9);
+
+// Lazzarini's figure: π̂ = 2ℓN/(dC) equals 355/113 exactly. ℓ and d are multiples of 0.01, so test in integers.
+const isLz = () => 2 * Math.round(P.l * 100) * S.N * 113 === 355 * Math.round(P.d * 100) * S.C;
+
+function dropOne() {
+  const th = rand() * thMax, fx = rand(), Y = (margin + rand() * inner) * P.d;
+  let pts = flat;
+  if (shape.random) { genNoodle(tmp); pts = tmp; }
+  heights(pts, npts, th, P.l, oy);
+  const c = crossings(oy, npts, Y, P.d);
+  const j = S.N % SHOW_MAX, k = S.N % SS_MAX;
+  S.th[j] = th; S.fx[j] = fx; S.Y[j] = Y; S.cnt[j] = Math.min(255, c);
+  if (shape.random) S.np.set(tmp, j * 2 * (NSEG + 1));
+  // sample space: angle and the reference point's height within its strip (folded to the nearest line for a straight needle)
+  const yy = Y - Math.floor(Y / P.d) * P.d;
+  S.su[k] = th; S.sv[k] = shape.random || P.shape !== 'line' ? yy : Math.min(yy, P.d - yy); S.sc[k] = Math.min(255, c);
+  S.N++; S.C += c; S.C2 += c * c; if (c) S.any++; if (c > S.maxc) S.maxc = c;
+  if (S.N >= S.nextCk && S.nck < S.ckN.length) {   // about CK_PER_DEC checkpoints per decade, never two at one N
+    S.ckN[S.nck] = S.N; S.ckC[S.nck] = S.C; S.nck++;
+    for (let g = 0; g < 400 && ckAt(S.ci) <= S.N; g++) S.ci++;
+    S.nextCk = ckAt(S.ci);
+  }
+  if (isLz()) {
+    if (S.lzHits.length < 50) S.lzHits.push(S.N);
+    if (P.lz) { S.stopped = true; running = false; }
+  }
+}
+function drop(m) {
+  m = Math.min(m, P.nb - S.N, Math.max(1, Math.floor(SEG_BUDGET / npts)));
+  for (let i = 0; i < m && !S.stopped; i++) dropOne();
+  if (S.N >= P.nb || S.stopped) window.__done = true;
+}
+
+// Midpoint rule on the (θ, y) box: the mean and variance of the number of crossings of one needle.
+function quadrature() {
+  const vmax = P.shape === 'line' ? P.d / 2 : P.d, field = new Uint8Array(NU * NV);
+  let s = 0, s2 = 0, any = 0;
+  for (let i = 0; i < NU; i++) {
+    heights(flat, npts, (i + 0.5) / NU * thMax, P.l, oy);
+    for (let j = 0; j < NV; j++) {
+      const c = crossings(oy, npts, (j + 0.5) / NV * vmax, P.d);
+      field[j * NU + i] = Math.min(255, c); s += c; s2 += c * c; if (c) any++;
+    }
+  }
+  const m = s / (NU * NV), v = s2 / (NU * NV) - m * m;
+  return { field, mean: m, var: v, any: any / (NU * NV), vmax, img: null };
+}
+
+// ---------- statistics ----------
+const theory = () => 2 * P.l / (Math.PI * P.d);   // expected crossings, any shape of length ℓ
+const estimate = (n, c) => c > 0 ? 2 * P.l * n / (P.d * c) : NaN;
+// delta method: π̂ = (2ℓ/d)/X̄, so sd(π̂) ≈ π·σ_X/(μ√N) = s/√N with s = π·σ_X/μ
+function sOne() {
+  const mu = theory();
+  if (quad) return Math.PI * Math.sqrt(Math.max(0, quad.var)) / mu;
+  if (S.N < 2) return NaN;
+  const m = S.C / S.N, v = (S.C2 - S.N * m * m) / (S.N - 1);
+  return Math.PI * Math.sqrt(Math.max(0, v)) / m;
+}
+function pAnyLine(r) {   // straight needle, r = ℓ/d: P(at least one crossing)
+  if (r <= 1) return 2 * r / Math.PI;
+  return 2 / Math.PI * (r - Math.sqrt(r * r - 1) + Math.acos(1 / r));
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dpr = 1;
+const COL = { bg: '#0f1218', plankA: '#2a2219', plankB: '#30271c', line: '#d9c08f', text: '#9ea8b6',
+  grid: 'rgba(255,255,255,.07)', c0: 'rgba(130,150,180,.55)', est: '#ffd38a', band: 'rgba(160,180,210,.16)' };
+const CC = ['rgba(130,150,180,.55)', '#ffd38a', '#ff8a5c', '#ff5c8a', '#d77bff'];
+const cCol = c => CC[Math.min(c, CC.length - 1)];
+const font = (px, mono) => `${px * dpr}px ${mono ? 'ui-monospace, Menlo, monospace' : '-apple-system, "PingFang SC", sans-serif'}`;
+
+function layout() {
+  const on = [P.ss && 'ss', P.est && 'est', P.err && 'err'].filter(Boolean);
+  const gap = 12 * dpr, iw = on.length ? Math.min(360 * dpr, Math.max(240 * dpr, W * 0.36)) : 0;
+  const ih = on.length ? Math.min(240 * dpr, (H - gap * (on.length + 1)) / on.length) : 0;
+  const boxes = {};
+  on.forEach((k, i) => boxes[k] = { x: W - iw - gap, y: gap + i * (ih + gap), w: iw, h: ih });
+  return { boxes, floor: { x0: gap, x1: W - (iw ? iw + 2 * gap : gap), y0: gap, y1: H - 40 * dpr } };
+}
+
+function panelBox(b, title, right) {
+  ctx.fillStyle = 'rgba(15,18,24,.9)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.strokeStyle = '#353e4e'; ctx.lineWidth = 1 * dpr; ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+  ctx.font = font(11); ctx.fillStyle = '#d3d9e2'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(title, b.x + 8 * dpr, b.y + 6 * dpr);
+  if (right) { ctx.textAlign = 'right'; ctx.fillStyle = '#ffd38a'; ctx.fillText(right, b.x + b.w - 8 * dpr, b.y + 6 * dpr); }
+}
+
+function drawFloor(F) {
+  const ppd = (F.y1 - F.y0) / (strips * P.d), Yp = y => F.y1 - y * ppd;
+  for (let k = 0; k < strips; k++) { ctx.fillStyle = k % 2 ? COL.plankA : COL.plankB; ctx.fillRect(F.x0, Yp((k + 1) * P.d), F.x1 - F.x0, ppd * P.d); }
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
+  for (let k = 0; k <= strips; k++) { const y = Math.round(Yp(k * P.d)) + 0.5; ctx.moveTo(F.x0, y); ctx.lineTo(F.x1, y); }
+  ctx.stroke();
+  const half = P.l / 2 * ppd, xa = F.x0 + half, xb = Math.max(xa, F.x1 - half);
+  const n = Math.min(S.N, P.show, SHOW_MAX), pts = new Float64Array(2 * npts);
+  ctx.save(); ctx.beginPath(); ctx.rect(F.x0, F.y0 - 2 * dpr, F.x1 - F.x0, F.y1 - F.y0 + 4 * dpr); ctx.clip();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const dots = [];
+  const lw = Math.max(1, Math.min(2.4, 900 / (n + 300))) * dpr;
+  for (let pass = 0; pass < CC.length; pass++) {   // one path per crossing count
+    ctx.strokeStyle = CC[pass]; ctx.lineWidth = lw; ctx.beginPath();
+    for (let q = 0; q < n; q++) {
+      const j = (S.N - n + q) % SHOW_MAX, c = Math.min(S.cnt[j], CC.length - 1);
+      if (c !== pass) continue;
+      place(j, xa, xb, ppd, Yp, pts);
+      ctx.moveTo(pts[0], pts[1]);
+      for (let i = 1; i < npts; i++) ctx.lineTo(pts[2 * i], pts[2 * i + 1]);
+      if (P.dots && S.cnt[j] && q >= n - 300) crossPts(j, pts, Yp, ppd, dots);
+    }
+    ctx.stroke();
+  }
+  if (n) {   // the latest needle on top
+    const j = (S.N - 1) % SHOW_MAX; place(j, xa, xb, ppd, Yp, pts);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.6 * dpr; ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+    for (let i = 1; i < npts; i++) ctx.lineTo(pts[2 * i], pts[2 * i + 1]);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < dots.length; i += 2) { ctx.beginPath(); ctx.arc(dots[i], dots[i + 1], 2.2 * dpr, 0, 7); ctx.fill(); }
+  ctx.restore();
+  const cap = `${SHAPES[P.shape].name}   ℓ = ${P.l.toFixed(2)}   d = ${P.d.toFixed(2)}   ℓ/d = ${(P.l / P.d).toFixed(3)}`;
+  ctx.font = font(12, true); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(15,18,24,.85)'; ctx.fillRect(F.x0, F.y0, ctx.measureText(cap).width + 16 * dpr, 22 * dpr);
+  ctx.fillStyle = '#d3d9e2'; ctx.fillText(cap, F.x0 + 8 * dpr, F.y0 + 5 * dpr);
+}
+function place(j, xa, xb, ppd, Yp, out) {   // screen coordinates of needle j
+  const th = S.th[j], s = Math.sin(th), c = Math.cos(th), X = xa + S.fx[j] * (xb - xa), Y = S.Y[j];
+  const src = shape.random ? S.np.subarray(j * 2 * (NSEG + 1)) : flat;
+  for (let i = 0; i < npts; i++) {
+    const px = src[2 * i] * P.l, py = src[2 * i + 1] * P.l;
+    out[2 * i] = X + (px * c - py * s) * ppd; out[2 * i + 1] = Yp(Y + px * s + py * c);
+  }
+}
+function crossPts(j, pts, Yp, ppd, dots) {   // where each segment meets a line
+  const base = Yp(0);
+  for (let i = 1; i < npts && dots.length < 4000; i++) {
+    const ya = (base - pts[2 * i - 1]) / ppd / P.d, yb = (base - pts[2 * i + 1]) / ppd / P.d;
+    const lo = Math.min(ya, yb), hi = Math.max(ya, yb);
+    for (let k = Math.ceil(lo); k <= hi && k - lo < 50; k++) {
+      const t = (k - ya) / (yb - ya);
+      dots.push(pts[2 * i - 2] + t * (pts[2 * i] - pts[2 * i - 2]), pts[2 * i - 1] + t * (pts[2 * i + 1] - pts[2 * i - 1]));
+    }
+  }
+}
+
+const QCOL = [[0, 0, 0, 0], [255, 211, 138, 70], [255, 138, 92, 80], [255, 92, 138, 90], [215, 123, 255, 100]];
+function fieldImage() {
+  if (quad.img) return quad.img;
+  const oc = document.createElement('canvas'); oc.width = NU; oc.height = NV;
+  const o = oc.getContext('2d'), im = o.createImageData(NU, NV);
+  for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) {
+    const c = QCOL[Math.min(quad.field[j * NU + i], QCOL.length - 1)], p = ((NV - 1 - j) * NU + i) * 4;
+    im.data[p] = c[0]; im.data[p + 1] = c[1]; im.data[p + 2] = c[2]; im.data[p + 3] = c[3];
+  }
+  o.putImageData(im, 0, 0); quad.img = oc;
+  return oc;
+}
+
+function drawSample(b) {
+  const vmax = P.shape === 'line' && !shape.random ? P.d / 2 : P.d;
+  const ml = 40 * dpr, mr = 10 * dpr, mt = 24 * dpr, mb = 20 * dpr;
+  const x0 = b.x + ml, x1 = b.x + b.w - mr, y0 = b.y + mt, y1 = b.y + b.h - mb;
+  const X = t => x0 + t / thMax * (x1 - x0), Y = v => y1 - v / vmax * (y1 - y0);
+  const area = P.shape === 'line' ? `面积比 ${(quad.mean).toFixed(4)}` : '';
+  panelBox(b, P.shape === 'line' ? '样本空间：y ≤ (ℓ/2) sin θ ⇔ 相交' : '样本空间 (θ, y)：颜色 = 交点数', area);
+  ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1 * dpr; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  if (quad) { ctx.imageSmoothingEnabled = false; ctx.drawImage(fieldImage(), x0, y0, x1 - x0, y1 - y0); ctx.imageSmoothingEnabled = true; }
+  ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
+  const n = Math.min(S.N, SS_MAX), r = Math.max(0.7, Math.min(2.2, 60 / Math.sqrt(n + 1))) * dpr;
+  for (let q = 0; q < n; q++) { ctx.fillStyle = cCol(S.sc[q]); ctx.fillRect(X(S.su[q]) - r, Y(S.sv[q]) - r, 2 * r, 2 * r); }
+  if (P.shape === 'line') {   // boundaries |k·d − y| = (ℓ/2) sin θ: the needle reaches line k
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6 * dpr;
+    const K = Math.ceil(P.l / (2 * P.d)) + 1;
+    for (let k = -K; k <= K; k++) for (const sg of [-1, 1]) {
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) { const t = i / 200 * thMax, v = k * P.d + sg * P.l / 2 * Math.sin(t); i ? ctx.lineTo(X(t), Y(v)) : ctx.moveTo(X(t), Y(v)); }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+  ctx.font = font(10, true); ctx.fillStyle = COL.text; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const ticks = thMax > 4 ? [[0, '0'], [Math.PI / 2, 'π/2'], [Math.PI, 'π'], [1.5 * Math.PI, '3π/2'], [2 * Math.PI, '2π']] : [[0, '0'], [Math.PI / 4, 'π/4'], [Math.PI / 2, 'π/2'], [0.75 * Math.PI, '3π/4'], [Math.PI, 'π']];
+  for (const [t, s] of ticks) ctx.fillText(s, X(t), y1 + 4 * dpr);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.fillText('0', x0 - 4 * dpr, y1); ctx.fillText(vmax === P.d ? 'd' : 'd/2', x0 - 4 * dpr, y0);
+  ctx.fillText('y', x0 - 4 * dpr, (y0 + y1) / 2);
+}
+
+function plotFrame(b, title, right) {
+  panelBox(b, title, right);
+  const ml = 46 * dpr, mr = 10 * dpr, mt = 24 * dpr, mb = 20 * dpr;
+  const nmax = Math.max(100, P.nb), L = Math.log10(nmax);
+  return { x0: b.x + ml, x1: b.x + b.w - mr, y0: b.y + mt, y1: b.y + b.h - mb, L,
+    X(n) { return this.x0 + Math.log10(n) / L * (this.x1 - this.x0); } };
+}
+function nTicks(f) {
+  ctx.font = font(10, true); ctx.fillStyle = COL.text; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1 * dpr;
+  for (let e = 0; e <= Math.floor(f.L); e++) {
+    ctx.beginPath(); ctx.moveTo(f.X(10 ** e), f.y0); ctx.lineTo(f.X(10 ** e), f.y1); ctx.stroke();
+    ctx.fillText(e ? (e < 4 ? String(10 ** e) : `1e${e}`) : '1', f.X(10 ** e), f.y1 + 4 * dpr);
+  }
+}
+function series(f, Yof) {   // checkpoints and the current N
+  const out = [];
+  for (let i = 0; i < S.nck; i++) out.push([S.ckN[i], S.ckC[i]]);
+  if (S.N && (!S.nck || S.ckN[S.nck - 1] !== S.N)) out.push([S.N, S.C]);
+  return out.map(([n, c]) => [f.X(n), Yof(estimate(n, c)), n, c]);
+}
+
+function drawEst(b) {
+  const s = sOne(), est = estimate(S.N, S.C);
+  const f = plotFrame(b, '估计值 2ℓN/(dC) 随 N', Number.isFinite(est) ? `估计值 ${est.toFixed(5)}` : '');
+  const R = Math.max(0.02, Math.min(1.5, Number.isFinite(s) ? 1.96 * s / Math.sqrt(10) : 1));
+  const Y = v => f.y1 - (v - (Math.PI - R)) / (2 * R) * (f.y1 - f.y0);
+  nTicks(f);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const v of [Math.PI - R, Math.PI, Math.PI + R]) ctx.fillText(v.toFixed(R < 0.1 ? 3 : 2), f.x0 - 4 * dpr, Y(v));
+  ctx.save(); ctx.beginPath(); ctx.rect(f.x0, f.y0, f.x1 - f.x0, f.y1 - f.y0); ctx.clip();
+  if (Number.isFinite(s)) {   // 95% band π ± 1.96 s/√N
+    ctx.fillStyle = COL.band; ctx.beginPath();
+    for (let i = 0; i <= 120; i++) { const n = 10 ** (i / 120 * f.L); ctx.lineTo(f.X(n), Y(Math.PI + 1.96 * s / Math.sqrt(n))); }
+    for (let i = 120; i >= 0; i--) { const n = 10 ** (i / 120 * f.L); ctx.lineTo(f.X(n), Y(Math.PI - 1.96 * s / Math.sqrt(n))); }
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.setLineDash([4 * dpr, 3 * dpr]); ctx.lineWidth = 1 * dpr;
+  ctx.beginPath(); ctx.moveTo(f.x0, Y(Math.PI)); ctx.lineTo(f.x1, Y(Math.PI)); ctx.stroke(); ctx.setLineDash([]);
+  const pts = series(f, Y).filter(p => Number.isFinite(p[1]));
+  ctx.strokeStyle = COL.est; ctx.lineWidth = 1.6 * dpr; ctx.beginPath();
+  pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  if (pts.length) { const [x, y] = pts[pts.length - 1]; ctx.fillStyle = COL.est; ctx.beginPath(); ctx.arc(x, y, 3.5 * dpr, 0, 7); ctx.fill(); }
+  for (const n of S.lzHits) { ctx.fillStyle = '#7fe0c8'; ctx.beginPath(); ctx.arc(f.X(n), Y(355 / 113), 3 * dpr, 0, 7); ctx.fill(); }
+  ctx.restore();
+  ctx.font = font(10, true); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.fillText('灰带：π ± 1.96 s/√N', f.x1 - 3 * dpr, f.y1 - 3 * dpr);
+}
+
+function drawErr(b) {
+  const s = sOne(), est = estimate(S.N, S.C);
+  const f = plotFrame(b, '|估计值 − π| 随 N（对数坐标）', Number.isFinite(est) ? `|误差| = ${Math.abs(est - Math.PI).toExponential(2)}` : '');
+  const lo = -6, hi = 1, Y = v => f.y0 + (hi - Math.log10(Math.max(v, 10 ** lo))) / (hi - lo) * (f.y1 - f.y0);
+  nTicks(f);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let e = lo; e <= hi; e++) {
+    ctx.strokeStyle = COL.grid; ctx.beginPath(); ctx.moveTo(f.x0, Y(10 ** e)); ctx.lineTo(f.x1, Y(10 ** e)); ctx.stroke();
+    if ((e - lo) % 2 === 0 || e === hi) ctx.fillText(e ? `1e${e}` : '1', f.x0 - 4 * dpr, Y(10 ** e));
+  }
+  ctx.save(); ctx.beginPath(); ctx.rect(f.x0, f.y0, f.x1 - f.x0, f.y1 - f.y0); ctx.clip();
+  if (Number.isFinite(s) && s > 0) {
+    ctx.fillStyle = COL.band; ctx.beginPath(); ctx.moveTo(f.x0, f.y1);
+    for (let i = 0; i <= 60; i++) { const n = 10 ** (i / 60 * f.L); ctx.lineTo(f.X(n), Y(1.96 * s / Math.sqrt(n))); }
+    ctx.lineTo(f.x1, f.y1); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.lineWidth = 1 * dpr; ctx.beginPath();
+    ctx.moveTo(f.X(1), Y(1.96 * s)); ctx.lineTo(f.X(10 ** f.L), Y(1.96 * s / 10 ** (f.L / 2))); ctx.stroke(); ctx.setLineDash([]);
+  }
+  const pts = series(f, v => Y(Math.abs(v - Math.PI))).filter(p => Number.isFinite(p[1]));
+  for (let i = 0; i < pts.length; i++) {
+    const last = i === pts.length - 1; ctx.fillStyle = last ? COL.est : '#7fb6e0';
+    ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], (last ? 3.5 : 2) * dpr, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+  ctx.font = font(10, true); ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  if (Number.isFinite(s) && s > 0) ctx.fillText(`1.96 s/√N ∝ 1/√N，s = ${s.toFixed(3)}`, f.x1 - 3 * dpr, f.y0 + 3 * dpr);
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = COL.bg; ctx.fillRect(0, 0, W, H);
+  const Lo = layout();
+  drawFloor(Lo.floor);
+  if (Lo.boxes.ss) drawSample(Lo.boxes.ss);
+  if (Lo.boxes.est) drawEst(Lo.boxes.est);
+  if (Lo.boxes.err) drawErr(Lo.boxes.err);
+}
+
+// ---------- read-outs ----------
+const fmtI = x => Math.round(x).toLocaleString();
+function info() {
+  const mu = theory(), est = estimate(S.N, S.C), s = sOne(), m = S.N ? S.C / S.N : NaN;
+  const half = Number.isFinite(s) && S.N ? 1.96 * s / Math.sqrt(S.N) : NaN;
+  const z = Number.isFinite(est) && half > 0 ? (est - Math.PI) / (half / 1.96) : NaN;
+  const f = (x, d) => Number.isFinite(x) ? x.toFixed(d) : '—';
+  const lines = [
+    `N = ${fmtI(S.N)} 根   交点总数 C = ${fmtI(S.C)}`,
+    `平均交点 C/N = ${f(m, 5)}   理论 2ℓ/(πd) = ${mu.toFixed(5)}`,
+    `π̂ = 2ℓN/(dC) = ${f(est, 5)}   误差 ${Number.isFinite(est) ? (est - Math.PI >= 0 ? '+' : '−') + Math.abs(est - Math.PI).toFixed(5) : '—'}`,
+    `每根针的 s = π·σ/μ = ${f(s, 3)}${quad ? '' : '（样本估计）'}`,
+    `95% 区间 ±1.96 s/√N = ±${f(half, 5)}   z = ${f(z, 2)}`,
+  ];
+  if (quad) lines.push(`数值积分：E[交点] = ${quad.mean.toFixed(4)}，Var = ${quad.var.toFixed(4)}`);
+  if (P.shape === 'line') lines.push(`至少相交一次：${S.N ? (S.any / S.N).toFixed(4) : '—'}   理论 ${pAnyLine(P.l / P.d).toFixed(4)}`);
+  else lines.push(`至少相交一次：${S.N ? (S.any / S.N).toFixed(4) : '—'}（依形状而变）   单根最多 ${S.maxc} 个交点`);
+  lines.push(S.lzHits.length ? `π̂ 恰好 = 355/113 的 N：${S.lzHits.slice(0, 6).join(', ')}${S.lzHits.length > 6 ? ' …' : ''}` : 'π̂ 还没有恰好等于 355/113');
+  $('info').textContent = lines.join('\n');
+  $('stat').textContent = `已投 ${fmtI(S.N)} / ${fmtI(P.nb)} 根 · 估计值 ${f(est, 5)}` +
+    (S.stopped ? ` · 在第 ${fmtI(S.N)} 根停下：估计值 = 355/113` : running ? '' : ' · 已暂停');
+  window.__buffon = { shape: P.shape, l: P.l, d: P.d, N: S.N, C: S.C, est, err: est - Math.PI, mean: m, theory: mu, s, half, z,
+    anyFrac: S.N ? S.any / S.N : NaN, anyTheory: P.shape === 'line' ? pAnyLine(P.l / P.d) : null, maxc: S.maxc,
+    quadMean: quad ? quad.mean : null, quadVar: quad ? quad.var : null, quadAny: quad ? quad.any : null,
+    lzHits: S.lzHits.slice(), stopped: S.stopped,
+    checkpoints: Array.from({ length: S.nck }, (_, i) => [S.ckN[i], S.ckC[i]]) };
+}
+
+// ---------- UI ----------
+const fmtK = x => x >= 1e6 ? +(x / 1e6).toFixed(2) + 'M' : x >= 1000 ? +(x / 1000).toFixed(1) + 'k' : String(x);
+function syncUI() {
+  $('L').value = P.l; $('D').value = P.d; $('V').value = Math.log10(P.v); $('Nb').value = Math.log10(P.nb);
+  $('Show').value = P.show; $('Seed').value = P.seed;
+  $('vL').textContent = P.l.toFixed(2); $('vD').textContent = P.d.toFixed(2); $('vV').textContent = fmtK(P.v);
+  $('vNb').textContent = fmtK(P.nb); $('vShow').textContent = P.show; $('vSeed').textContent = P.seed;
+  for (const k of ['ss', 'est', 'err', 'dots', 'lz']) $(k).checked = P[k];
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === P.shape));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+const changed = (resetIt = true) => { P.preset = ''; syncUI(); if (resetIt) { running = true; reset(); syncUI(); } };
+
+function applyPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, shape: p.shape, l: p.l, d: p.d, v: p.v, nb: p.nb, lz: !!p.lz });
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => { applyPreset(key); running = true; reset(); syncUI(); };
+  $('pre').appendChild(b);
+}
+for (const [key, s] of Object.entries(SHAPES)) {
+  const b = document.createElement('button');
+  b.textContent = s.name; b.dataset.s = key; b.onclick = () => { P.shape = key; changed(); };
+  $('shapes').appendChild(b);
+}
+$('L').oninput = e => { P.l = +e.target.value; changed(); };
+$('D').oninput = e => { P.d = +e.target.value; changed(); };
+$('V').oninput = e => { P.v = Math.round(10 ** +e.target.value); changed(false); };
+$('Nb').oninput = e => { P.nb = Math.round(10 ** +e.target.value); changed(false); window.__done = S.N >= P.nb; };
+$('Show').oninput = e => { P.show = +e.target.value; changed(false); };
+$('Seed').oninput = e => { P.seed = +e.target.value; changed(); };
+for (const k of ['ss', 'est', 'err', 'dots']) $(k).onchange = e => { P[k] = e.target.checked; };
+$('lz').onchange = e => { P.lz = e.target.checked; P.preset = ''; syncUI(); };
+$('play').onclick = () => { if (S.stopped) S.stopped = false; running = !running; syncUI(); };
+$('restart').onclick = () => { running = true; reset(); syncUI(); };
+$('add').onclick = () => { S.stopped = false; drop(Math.min(10000, P.nb - S.N)); };
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=long  or  ?shape=noodle&l=2&d=1&nb=100000&seed=7&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+{ const v = q.get('p'); if (v !== null && Object.hasOwn(PRESETS, v)) applyPreset(v); }
+{ const v = q.get('shape'); if (v !== null && Object.hasOwn(SHAPES, v)) { P.shape = v; P.preset = ''; } }
+for (const key of ['l', 'd', 'v', 'nb', 'show', 'seed']) num(key, x => { P[key] = clamp(x, LIM[key]); if (key !== 'seed' && key !== 'show') P.preset = ''; });
+for (const key of ['v', 'nb', 'show', 'seed']) P[key] = Math.round(P[key]);
+P.l = Math.round(P.l * 100) / 100; P.d = Math.round(P.d * 100) / 100;
+let instant = 0; num('k', x => instant = Math.round(clamp(x, LIM.k)));
+for (const k of ['ss', 'est', 'err', 'dots']) if (q.get(k) === '0') P[k] = false;
+if (q.get('lz') === '1') P.lz = true; else if (q.get('lz') === '0') P.lz = false;
+if (q.get('run') === '0') running = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); reset(); syncUI();
+for (let g = 0; g < 1000 && instant > 0 && S.N < P.nb && !S.stopped; g++) { const n0 = S.N; drop(instant); instant -= S.N - n0; }
+
+(function loop() {
+  if (running && !S.stopped) drop(P.v);
+  draw(); info(); syncPlay();
+  window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+function syncPlay() { const t = running && !S.stopped ? '⏸ 暂停' : '▶ 继续'; if ($('play').textContent !== t) $('play').textContent = t; }
+</script>
+</body>
+</html>

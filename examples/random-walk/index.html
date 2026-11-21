@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>随机游走 · 布朗运动</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #12100c; color: #e8e4dc;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(33,29,23,.93); border: 1px solid #4a4032; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #d6c29a; border-top: 1px solid #4a4032; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #9d9484; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #3a3226; color: #e8e4dc; border: 1px solid #54483a;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #473d2f; }
+  button.on { background: #7a5a2a; border-color: #a8803f; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #bdb3a2; margin-top: 4px; white-space: pre-line; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(18,16,12,.8); color: #d8d0c2; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>随机游走 · 布朗运动</h1>
+  <small>每个游走者每一步等概率走向 2d 个相邻格点之一。单个游走者往哪走猜不到，成千上万个合起来却服从精确的定律：均方位移 <span class="mono">⟨r²⟩ = t</span>，散开的宽度按 √t 增长，位置的分布是热方程的 Gauss 核。</small>
+
+  <h2>视图</h2>
+  <div class="presets" id="modes"></div>
+
+  <div id="secW">
+    <div class="row" id="rowD">
+      <label>维数 d <b id="vD"></b></label>
+      <input id="D" type="range" min="2" max="3" step="1">
+    </div>
+    <div class="row">
+      <label><span id="lN">游走者个数 N</span> <b id="vN"></b></label>
+      <input id="N" type="range" min="1" max="4.30103" step="0.01">
+    </div>
+    <div class="row">
+      <label>总步数 T <b id="vT"></b></label>
+      <input id="T" type="range" min="1" max="5" step="0.01">
+    </div>
+    <div class="row">
+      <label>每帧步数 <b id="vV"></b></label>
+      <input id="V" type="range" min="0" max="3" step="0.01">
+    </div>
+    <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button></div>
+    <div class="checks">
+      <label id="cEnv"><input id="env" type="checkbox"> ±√t、±2√t 包络</label>
+      <label id="cHist"><input id="hist" type="checkbox"> 直方图与 Gauss 核</label>
+      <label id="cTrail"><input id="trail" type="checkbox"> Perrin 式轨迹（3 个粒子）</label>
+    </div>
+  </div>
+
+  <div id="secS">
+    <div class="row">
+      <label>游走总步数 n <b id="vNs"></b></label>
+      <input id="Ns" type="range" min="3" max="6.32163" step="0.01">
+    </div>
+    <div class="row">
+      <label>大图显示前 m 步 <b id="vM"></b></label>
+      <input id="M" type="range" min="2" max="6.32163" step="0.01">
+      <small>大图按 1/√m 缩放：m 增大 4 倍，画面缩小 2 倍。三张小图是前 n/16、n/4、n 步，各自按同样的规则缩放。</small>
+    </div>
+    <div class="presets"><button id="zoom">▶ 从 100 步一路缩到 n 步</button></div>
+  </div>
+
+  <h2>随机数</h2>
+  <div class="row">
+    <label>种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+    <small>同一个种子、同样的参数，画面完全相同</small>
+  </div>
+
+  <h2>测量</h2>
+  <div class="info" id="info"></div>
+  <small id="note"></small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+const LIM = {   // every slider range; URL params are clamped to these
+  N: [10, 20000], T: [10, 100000], v: [1, 1000], d: [2, 3], n: [1000, 2097152], m: [100, 2097152], seed: [1, 999],
+};
+const BUDGET = 3e6;       // work units per frame (walker-steps, plus pixels deposited in the 1D fan)
+const NPATH = 6;          // highlighted paths in the 1D fan
+const NTRAIL = 3;         // Perrin trails in the cloud view
+const TRAIL_PTS = 50;     // recorded positions per Perrin trail
+const EXACT_T = 10000;    // exact Pólya return curves are computed up to this time
+const P3 = 0.340537;      // Pólya's return probability in d = 3: 1 − 1/u, u = 1.516386…
+
+const MODES = { fan: '一维：路径扇形', cloud: '二维 / 三维：均方位移', polya: 'Pólya：回不回得来', scale: '标度极限' };
+const PRESETS = {
+  fan: { name: '一维 2000 个 · 1000 步', mode: 'fan', N: 2000, T: 1000, v: 5 },
+  fanBig: { name: '一维 2 万个 · 1 万步', mode: 'fan', N: 20000, T: 10000, v: 40 },
+  galton: { name: '一维 40 步 = Galton 板', mode: 'fan', N: 5000, T: 40, v: 1 },
+  cloud2: { name: '二维云', mode: 'cloud', d: 2, N: 5000, T: 2000, v: 5, trail: false },
+  cloud3: { name: '三维云', mode: 'cloud', d: 3, N: 5000, T: 2000, v: 5, trail: false },
+  perrin: { name: 'Perrin 的显微记录', mode: 'cloud', d: 2, N: 300, T: 5000, v: 10, trail: true },
+  polya: { name: 'Pólya d = 1, 2, 3', mode: 'polya', N: 5000, T: 10000, v: 20 },
+  polyaBig: { name: 'Pólya 2 万个 · 10 万步', mode: 'polya', N: 20000, T: 100000, v: 300 },
+  scale: { name: '一条 100 万步的游走', mode: 'scale', n: 1000000, m: 1000000 },
+  scale2M: { name: '200 万步', mode: 'scale', n: 2097152, m: 2097152 },
+};
+
+const P = { preset: 'fan', mode: 'fan', d: 2, N: 2000, T: 1000, v: 5, seed: 1, env: true, hist: true, trail: false,
+  n: 1000000, m: 1000000 };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+const nice = x => { const e = 10 ** Math.floor(Math.log10(x) - 1); return Math.round(x / e) * e; };   // 2 significant digits
+
+function rng(seed) {   // mulberry32: same seed, same walks
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+let rand = rng(1);
+
+// ---------- exact laws ----------
+function erfc(x) {   // fractional error < 1.2e-7 (Numerical Recipes)
+  const z = Math.abs(x), t = 1 / (1 + 0.5 * z);
+  const r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 +
+    t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+  return x >= 0 ? r : 2 - r;
+}
+const Phi = z => 0.5 * erfc(-z / Math.SQRT2);
+const logFact = (() => { const a = new Float64Array(LIM.T[1] + 1); for (let i = 1; i < a.length; i++) a[i] = a[i - 1] + Math.log(i); return a; })();
+const logC = (n, k) => logFact[n] - logFact[k] - logFact[n - k];
+// 1D walk: P(X_t = x) = C(t, (t + x)/2) / 2^t when x ≡ t (mod 2)
+const walkPmf = (t, x) => (t + x) % 2 || Math.abs(x) > t ? 0 : Math.exp(logC(t, (t + x) / 2) - t * Math.LN2);
+
+// Pólya: u_d(2k) = P(at the origin at time 2k), then first returns f by the renewal equation u = δ + f * u.
+// d = 3 splits the steps into a on the x axis and 2k − a in the yz plane, whose walk is two independent 1D walks.
+let exactF = null;
+// d = 1 has a closed form: P(no return by 2k) = C(2k, k) / 4^k
+const F1 = t => t < 2 ? 0 : 1 - Math.exp(logC(2 * Math.floor(t / 2), Math.floor(t / 2)) - 2 * Math.floor(t / 2) * Math.LN2);
+function computeExact() {
+  const K = EXACT_T / 2, lp1 = new Float64Array(EXACT_T + 1);   // lp1[a] = log P(1D walk of a steps is at 0)
+  for (let a = 0; a <= EXACT_T; a += 2) lp1[a] = logC(a, a / 2) - a * Math.LN2;
+  const u = [1, 2, 3].map(() => new Float64Array(K + 1)), l3 = Math.log(1 / 3), l23 = Math.log(2 / 3);
+  for (let k = 0; k <= K; k++) {
+    const t = 2 * k; u[0][k] = Math.exp(lp1[t]); u[1][k] = Math.exp(2 * lp1[t]);
+    let s = 0;
+    for (let a = 0; a <= t; a += 2) s += Math.exp(logC(t, a) + a * l3 + (t - a) * l23 + lp1[a] + 2 * lp1[t - a]);
+    u[2][k] = s;
+  }
+  exactF = u.map(uu => {
+    const f = new Float64Array(K + 1), F = new Float64Array(EXACT_T + 1);
+    for (let k = 1; k <= K; k++) { let s = uu[k]; for (let j = 1; j < k; j++) s -= f[j] * uu[k - j]; f[k] = s; }
+    let c = 0;
+    for (let t = 1; t <= EXACT_T; t++) { if (t % 2 === 0) c += f[t / 2]; F[t] = c; }
+    let su = 0; for (let k = 0; k <= K; k++) su += uu[k];
+    return { F, sumU: su };
+  });
+}
+
+// ---------- state ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dpr = 1, running = true;
+const FAN = {}, CLOUD = {}, POL = {}, SC = {};
+let view = { yaw: 0.6, pitch: 0.45 };
+
+function fanLayout() {
+  const ml = 52 * dpr, mt = 92 * dpr, mb = 44 * dpr, hw = Math.min(300 * dpr, W * 0.26), gap = 14 * dpr;
+  const fx = ml, fy = mt, fw = Math.max(10, Math.floor(W - ml - hw - gap - 12 * dpr)), fh = Math.max(10, Math.floor(H - mt - mb));
+  return { fx, fy, fw, fh, hx: fx + fw + gap, hw, ymax: Math.max(4, 3.5 * Math.sqrt(P.T)) };
+}
+function fanReset() {
+  const L = fanLayout();
+  Object.assign(FAN, { t: 0, L, X: new Int32Array(P.N), paths: new Int32Array(NPATH * (P.T + 1)), msd: new Float64Array(P.T + 1),
+    hits: new Uint32Array(L.fw * L.fh), hmax: 1, img: ctx.createImageData(L.fw, L.fh), dirty: true });
+}
+function fanStep() {
+  const F = FAN, { fw, fh, ymax } = F.L, X = F.X, N = P.N, T = P.T, hits = F.hits;
+  const cw = fw / T, yk = fh / (2 * ymax);
+  const cost = N * (Math.max(1, cw) + 2 * yk + 2);
+  const k = Math.min(P.v, T - F.t, Math.max(1, Math.floor(BUDGET / cost)));
+  for (let s = 0; s < k; s++) {
+    const t = ++F.t, xa = (t - 1) * cw, xb = t * cw, c0 = Math.floor(xa), c1 = Math.min(fw - 1, Math.max(c0, Math.ceil(xb) - 1));
+    let s2 = 0;
+    for (let i = 0; i < N; i++) {
+      const a = X[i], b = X[i] = a + (rand() < 0.5 ? -1 : 1);
+      s2 += b * b;
+      // rasterise the segment (t−1, a) → (t, b) into the pixel hit buffer, one column at a time
+      for (let c = c0; c <= c1; c++) {
+        const u0 = Math.max(0, (c - xa) / cw), u1 = Math.min(1, (c + 1 - xa) / cw);
+        let p0 = Math.floor((ymax - a - (b - a) * u0) * yk), p1 = Math.floor((ymax - a - (b - a) * u1) * yk);
+        if (p0 > p1) { const q = p0; p0 = p1; p1 = q; }
+        if (p1 < 0 || p0 >= fh) continue;
+        p0 = Math.max(0, p0); p1 = Math.min(fh - 1, p1);
+        for (let p = p0; p <= p1; p++) { const h = ++hits[p * fw + c]; if (h > F.hmax) F.hmax = h; }
+      }
+    }
+    for (let j = 0; j < NPATH; j++) F.paths[j * (T + 1) + t] = X[j];
+    F.msd[t] = s2 / N;
+  }
+  if (k > 0) F.dirty = true;
+}
+
+function cloudReset() {
+  Object.assign(CLOUD, { t: 0, X: new Int32Array(P.N * 3), msd: new Float64Array(P.T + 1),
+    ax: [0, 1, 2].map(() => new Float64Array(P.T + 1)), trails: Array.from({ length: NTRAIL }, () => [[0, 0, 0]]),
+    stride: Math.max(1, Math.round(P.T / TRAIL_PTS)) });
+}
+function cloudStep() {
+  const C = CLOUD, X = C.X, N = P.N, d = P.d, d2 = 2 * d;
+  const k = Math.min(P.v, P.T - C.t, Math.max(1, Math.floor(BUDGET / N)));
+  for (let s = 0; s < k; s++) {
+    const t = ++C.t; let sx = 0, sy = 0, sz = 0;
+    for (let i = 0; i < N; i++) {
+      const r = (rand() * d2) | 0, j = 3 * i + (r >> 1);
+      X[j] += r & 1 ? 1 : -1;
+      sx += X[3 * i] * X[3 * i]; sy += X[3 * i + 1] * X[3 * i + 1]; sz += X[3 * i + 2] * X[3 * i + 2];
+    }
+    C.ax[0][t] = sx / N; C.ax[1][t] = sy / N; C.ax[2][t] = sz / N; C.msd[t] = (sx + sy + sz) / N;
+    if (t % C.stride === 0) for (let j = 0; j < Math.min(NTRAIL, N); j++) C.trails[j].push([X[3 * j], X[3 * j + 1], X[3 * j + 2]]);
+  }
+}
+// ⟨r²⟩ ≈ a·t through the origin (least squares) and ⟨r²⟩ ∝ t^α on a log–log fit over t ≥ 10
+function msdFit(msd, t) {
+  let stm = 0, stt = 0, n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (let s = 1; s <= t; s++) {
+    stm += s * msd[s]; stt += s * s;
+    if (s >= 10 && msd[s] > 0) { const x = Math.log(s), y = Math.log(msd[s]); n++; sx += x; sy += y; sxx += x * x; sxy += x * y; }
+  }
+  return { a: stt ? stm / stt : NaN, alpha: n > 2 ? (n * sxy - sx * sy) / (n * sxx - sx * sx) : NaN };
+}
+
+function polReset() {
+  if (!exactF) computeExact();
+  Object.assign(POL, { t: 0, X: [1, 2, 3].map(d => new Int32Array(P.N * d)),
+    alive: [0, 1, 2].map(() => Int32Array.from({ length: P.N }, (_, i) => i)), nal: [P.N, P.N, P.N],
+    F: [0, 1, 2].map(() => new Float32Array(P.T + 1)) });
+}
+function polStep() {
+  const S = POL, N = P.N;
+  const k = Math.min(P.v, P.T - S.t, Math.max(1, Math.floor(BUDGET / Math.max(1, S.nal[0] + S.nal[1] + S.nal[2]))));
+  for (let s = 0; s < k; s++) {
+    const t = ++S.t;
+    for (let di = 0; di < 3; di++) {
+      const d = di + 1, X = S.X[di], al = S.alive[di], d2 = 2 * d; let n = S.nal[di];
+      for (let j = 0; j < n; j++) {
+        const i = al[j], r = (rand() * d2) | 0, b = d * i;
+        X[b + (r >> 1)] += r & 1 ? 1 : -1;
+        let home = X[b] === 0; if (home && d > 1) home = X[b + 1] === 0; if (home && d > 2) home = X[b + 2] === 0;
+        if (home) { al[j] = al[--n]; j--; }   // back at the origin: retire it, its return time is t
+      }
+      S.nal[di] = n; S.F[di][t] = 1 - n / N;
+    }
+  }
+}
+
+// one long 2D walk, its radius-of-gyration curve and its box counts
+function scaleReset() {
+  const n = P.n, xs = new Int32Array(n + 1), ys = new Int32Array(n + 1), r = rng(P.seed);
+  let x = 0, y = 0, x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+  for (let i = 1; i <= n; i++) {
+    const q = (r() * 4) | 0;
+    if (q === 0) x++; else if (q === 1) x--; else if (q === 2) y++; else y--;
+    xs[i] = x; ys[i] = y; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const boxes = [];
+  for (let k = 0; k < 24; k++) {   // box side 2^k; stop when the walk fits in a few boxes
+    const gw = ((x1 - x0) >> k) + 1, gh = ((y1 - y0) >> k) + 1;
+    if (gw * gh > 2 ** 28) continue;
+    const bits = new Uint32Array(Math.ceil(gw * gh / 32)); let c = 0;
+    for (let i = 0; i <= n; i++) {
+      const id = ((ys[i] - y0) >> k) * gw + ((xs[i] - x0) >> k), w = id >>> 5, m = 1 << (id & 31);
+      if (!(bits[w] & m)) { bits[w] |= m; c++; }
+    }
+    boxes.push({ s: 2 ** k, N: c });
+    if (gw <= 2 && gh <= 2) break;
+  }
+  const rg = [];   // radius of gyration of the first m steps, m = 2^j
+  let sx = 0, sy = 0, sq = 0;
+  for (let i = 0, nxt = 64; i <= n; i++) {
+    sx += xs[i]; sy += ys[i]; sq += xs[i] * xs[i] + ys[i] * ys[i];
+    if (i + 1 === nxt) { const c = i + 1; rg.push({ m: c, R: Math.sqrt(sq / c - (sx / c) ** 2 - (sy / c) ** 2) }); nxt *= 2; }
+  }
+  Object.assign(SC, { n, xs, ys, boxes, rg, D: Math.max(x1 - x0, y1 - y0), dirty: true, cache: null, anim: 0 });
+  window.__done = true;
+}
+const linfit = pts => { const n = pts.length; let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const [x, y] of pts) { sx += x; sy += y; sxx += x * x; sxy += x * y; } return n > 1 ? (n * sxy - sx * sy) / (n * sxx - sx * sx) : NaN; };
+function boxFit() {   // slope of log N(s) against log(1/s) for 4 ≤ s ≤ D/8
+  const pts = SC.boxes.filter(b => b.s >= 4 && b.s <= SC.D / 8).map(b => [-Math.log(b.s), Math.log(b.N)]);
+  return { slope: linfit(pts), k: pts.length };
+}
+const rgFit = () => linfit(SC.rg.filter(r => r.m >= 1024).map(r => [Math.log(r.R), Math.log(r.m)]));
+
+// ---------- drawing ----------
+const COL = { bg: '#12100c', gold: '#ffd38a', teal: '#4fb3a4', orange: '#ff8a5c', white: '#ffffff', grid: 'rgba(255,255,255,.07)', text: '#a99f8e' };
+const DCOL = ['#ffd38a', '#4fb3a4', '#ff8a5c'];
+const PATHCOL = ['#ff8a5c', '#7fd8c8', '#ffd38a', '#c9a0ff', '#8fc1ff', '#ff9fb4'];
+const font = (px, mono) => `${px * dpr}px ${mono ? 'ui-monospace, Menlo, monospace' : '-apple-system, "PingFang SC", sans-serif'}`;
+const LUT = (() => {   // hit density colour map: background → deep teal → gold → white
+  const st = [[0, 18, 16, 12], [0.35, 22, 78, 76], [0.7, 214, 170, 98], [1, 255, 248, 230]], lut = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const v = i / 255; let j = 0; while (j < st.length - 2 && v > st[j + 1][0]) j++;
+    const [a, b] = [st[j], st[j + 1]], f = (v - a[0]) / (b[0] - a[0]), m = q => Math.round(a[q] + (b[q] - a[q]) * f);
+    lut[i] = (255 << 24) | (m(3) << 16) | (m(2) << 8) | m(1);
+  }
+  return lut;
+})();
+const tcol = f => { const c = LUT[Math.round(60 + 195 * f)]; return `rgb(${c & 255},${c >> 8 & 255},${c >> 16 & 255})`; };
+
+function drawLegend(items, x, y) {
+  ctx.font = font(12); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  items.forEach(([c, t], i) => {
+    const yy = y + i * 18 * dpr; ctx.fillStyle = c; ctx.fillRect(x, yy - 2 * dpr, 16 * dpr, 4 * dpr);
+    ctx.fillStyle = '#d8d0c2'; ctx.fillText(t, x + 22 * dpr, yy);
+  });
+}
+function box(x0, y0, w, h) {
+  ctx.fillStyle = 'rgba(18,16,12,.88)'; ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = '#4a4032'; ctx.lineWidth = 1 * dpr; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+}
+const fmtN = x => Number.isFinite(x) ? (Math.abs(x) >= 1e5 || (x !== 0 && Math.abs(x) < 1e-3) ? x.toExponential(2) : Math.abs(x - Math.round(x)) < 1e-9 ? String(Math.round(x)) : x.toFixed(3)) : '—';
+const fmtK = x => x >= 1e6 ? +(x / 1e6).toFixed(2) + 'M' : x >= 1000 ? +(x / 1000).toFixed(1) + 'k' : String(x);
+
+function niceStep(range, n) { const raw = range / n, e = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 5, 10].map(m => m * e).find(v => v >= raw); }
+
+// the 1D fan: pixel hit density of all paths, NPATH coloured paths, the √t envelopes, and the histogram at time t
+function fanHist() {
+  const F = FAN, t = F.t, ymax = F.L.ymax;
+  const k = Math.max(1, Math.ceil(2 * ymax / 90 / 2)), bw = 2 * k;   // each bin holds k lattice sites of the right parity
+  const nb = Math.ceil(2 * ymax / bw) + 2, lo = -bw * Math.floor(nb / 2) - (t % 2 ? 1 : 0) - 1;   // bin j covers [lo + j·bw, lo + (j+1)·bw)
+  const cnt = new Float64Array(nb), ex = new Float64Array(nb);
+  for (let i = 0; i < P.N; i++) { const b = Math.floor((F.X[i] - lo) / bw); if (b >= 0 && b < nb) cnt[b]++; }
+  if (t > 0) for (let b = 0; b < nb; b++) for (let x = lo + b * bw + 1; x < lo + (b + 1) * bw + 1; x += 2) ex[b] += walkPmf(t, x);
+  return { lo, bw, nb, cnt, ex };
+}
+function drawFan() {
+  const F = FAN, { fx, fy, fw, fh, hx, hw, ymax } = F.L, T = P.T, t = F.t;
+  const X = s => fx + s / T * fw, Y = x => fy + (ymax - x) / (2 * ymax) * fh;
+  if (F.dirty) {   // log colour: densities differ by a factor of N between t = 0 and t = T
+    const d = new Uint32Array(F.img.data.buffer), lm = 255 / Math.log(1 + F.hmax), h = F.hits;
+    for (let i = 0; i < h.length; i++) d[i] = h[i] ? LUT[Math.min(255, (Math.log(1 + h[i]) * lm) | 0)] : LUT[0];
+    F.dirty = false;
+  }
+  ctx.putImageData(F.img, fx, fy);
+  // axes
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1 * dpr; ctx.fillStyle = COL.text; ctx.font = font(11, true);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const ys = niceStep(2 * ymax, 8);
+  for (let x = -Math.floor(ymax / ys) * ys; x <= ymax; x += ys) { ctx.beginPath(); ctx.moveTo(fx, Y(x)); ctx.lineTo(fx + fw, Y(x)); ctx.stroke(); ctx.fillText(String(x).replace('-', '−'), fx - 6 * dpr, Y(x)); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const ts = niceStep(T, 8);
+  for (let s = 0; s <= T; s += ts) ctx.fillText(s, X(s), fy + fh + 6 * dpr);
+  ctx.textAlign = 'right'; ctx.fillText('时间 t（步）', fx + fw, fy + fh + 22 * dpr);
+  ctx.save(); ctx.beginPath(); ctx.rect(fx, fy, fw, fh); ctx.clip();
+  // highlighted paths, decimated to about two points per pixel column
+  const st = Math.max(1, Math.floor(T / (2 * fw)));
+  ctx.lineWidth = 1.3 * dpr;
+  for (let j = 0; j < Math.min(NPATH, P.N); j++) {
+    ctx.strokeStyle = PATHCOL[j]; ctx.beginPath(); ctx.moveTo(X(0), Y(0));
+    for (let s = st; s <= t; s += st) ctx.lineTo(X(s), Y(F.paths[j * (T + 1) + s]));
+    if (t % st) ctx.lineTo(X(t), Y(F.paths[j * (T + 1) + t]));
+    ctx.stroke();
+  }
+  if (P.env) {   // ±√t and ±2√t: about 68% and 95% of the walkers lie inside
+    for (const [c, dash] of [[1, [6 * dpr, 4 * dpr]], [2, [2 * dpr, 3 * dpr]]]) for (const sg of [1, -1]) {
+      ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.setLineDash(dash); ctx.lineWidth = 1.4 * dpr; ctx.beginPath();
+      for (let i = 0; i <= 300; i++) { const s = T * i / 300; i ? ctx.lineTo(X(s), Y(sg * c * Math.sqrt(s))) : ctx.moveTo(X(s), Y(0)); }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  ctx.strokeStyle = 'rgba(255,211,138,.6)'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.moveTo(X(t), fy); ctx.lineTo(X(t), fy + fh); ctx.stroke();
+  ctx.restore();
+  if (P.env) {
+    ctx.font = font(11, true); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText('+√t', fx + fw - 4 * dpr, Y(Math.sqrt(T)) - 2 * dpr); ctx.fillText('+2√t', fx + fw - 4 * dpr, Y(2 * Math.sqrt(T)) - 2 * dpr);
+  }
+  // histogram of X_t, the exact binomial law and the heat kernel, on the same vertical axis
+  if (P.hist && t > 0) {
+    const Hh = fanHist(), dens = Hh.cnt.map(c => c / (P.N * Hh.bw)), ex = Hh.ex.map(e => e / Hh.bw);
+    const g = x => Math.exp(-x * x / (2 * t)) / Math.sqrt(2 * Math.PI * t);
+    const top = Math.max(g(0), ...dens) * 1.1, L = v => hx + v / top * hw;
+    ctx.save(); ctx.beginPath(); ctx.rect(hx, fy, hw, fh); ctx.clip();
+    ctx.fillStyle = COL.teal;
+    for (let b = 0; b < Hh.nb; b++) if (dens[b]) {
+      const ya = Y(Hh.lo + (b + 1) * Hh.bw), yb = Y(Hh.lo + b * Hh.bw), gp = yb - ya > 5 * dpr ? 1 * dpr : 0;
+      ctx.fillRect(hx, ya + gp / 2, L(dens[b]) - hx, yb - ya - gp);
+    }
+    ctx.strokeStyle = COL.white; ctx.lineWidth = 1.4 * dpr; ctx.beginPath();
+    for (let b = 0; b < Hh.nb; b++) { const ya = Y(Hh.lo + (b + 1) * Hh.bw), yb = Y(Hh.lo + b * Hh.bw); b ? ctx.lineTo(L(ex[b]), yb) : ctx.moveTo(L(ex[b]), yb); ctx.lineTo(L(ex[b]), ya); }
+    ctx.stroke();
+    ctx.strokeStyle = COL.orange; ctx.lineWidth = 2 * dpr; ctx.beginPath();
+    for (let i = 0; i <= 400; i++) { const x = -ymax + 2 * ymax * i / 400; i ? ctx.lineTo(L(g(x)), Y(x)) : ctx.moveTo(L(g(x)), Y(x)); }
+    ctx.stroke(); ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.moveTo(hx, fy); ctx.lineTo(hx, fy + fh); ctx.stroke();
+    ctx.font = font(11); ctx.fillStyle = COL.text; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(`t = ${t} 时的位置分布`, hx + 4 * dpr, fy + fh + 6 * dpr);
+  }
+  drawLegend([[COL.teal, `X_t 的直方图（${P.N.toLocaleString()} 个）`], [COL.white, '精确分布 C(t, (t+x)/2) / 2ᵗ'], [COL.orange, '热核 e^(−x²/2t) / √(2πt)']], fx, 22 * dpr);
+  ctx.font = font(12); ctx.fillStyle = '#d8d0c2'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(`彩色：${Math.min(NPATH, P.N)} 条单独的路径    底色：全部路径经过每个像素的次数（对数）`, fx, 22 * dpr + 54 * dpr + 6 * dpr);
+}
+
+function project(x, y, z) {   // 3D: yaw about the z axis, then pitch; returns screen u, v and depth
+  const ca = Math.cos(view.yaw), sa = Math.sin(view.yaw), cb = Math.cos(view.pitch), sb = Math.sin(view.pitch);
+  const u = x * ca - y * sa, w = x * sa + y * ca;
+  return [u, -(z * cb - w * sb), z * sb + w * cb];
+}
+function drawCloud() {
+  const C = CLOUD, t = C.t, d = P.d, N = P.N;
+  const R = 3 * Math.sqrt(P.T), cx = W * 0.42, cy = H * 0.52, sc = Math.min(W * 0.4, H * 0.46) / R;
+  // grid and the r = √t, 2√t circles
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1 * dpr;
+  ctx.beginPath(); ctx.moveTo(cx - R * sc, cy); ctx.lineTo(cx + R * sc, cy); ctx.moveTo(cx, cy - R * sc); ctx.lineTo(cx, cy + R * sc); ctx.stroke();
+  if (d === 3) {   // axes of the cube
+    for (const [a, b, c, lab] of [[1, 0, 0, 'x'], [0, 1, 0, 'y'], [0, 0, 1, 'z']]) {
+      const [u, v] = project(a * R * 0.8, b * R * 0.8, c * R * 0.8);
+      ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + u * sc, cy + v * sc); ctx.stroke();
+      ctx.fillStyle = COL.text; ctx.font = font(11, true); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(lab, cx + u * sc * 1.07, cy + v * sc * 1.07);
+    }
+  }
+  const pr = Math.max(1.2 * dpr, 2.6 * dpr * Math.min(1, Math.sqrt(5000 / N)));
+  if (d === 2) {
+    ctx.fillStyle = 'rgba(255,211,138,.8)';
+    for (let i = 0; i < N; i++) ctx.fillRect(cx + C.X[3 * i] * sc - pr / 2, cy - C.X[3 * i + 1] * sc - pr / 2, pr, pr);
+  } else {   // depth buckets, far = dim teal, near = bright gold
+    const B = 8, buckets = Array.from({ length: B }, () => []), dr = 2 * Math.sqrt(t + 1);
+    for (let i = 0; i < N; i++) {
+      const [u, v, z] = project(C.X[3 * i], C.X[3 * i + 1], C.X[3 * i + 2]);
+      buckets[clamp(Math.floor((z / dr + 1) / 2 * B), [0, B - 1])].push(u, v);
+    }
+    buckets.forEach((a, b) => { ctx.fillStyle = tcol(b / (B - 1));
+      for (let i = 0; i < a.length; i += 2) ctx.fillRect(cx + a[i] * sc - pr / 2, cy + a[i + 1] * sc - pr / 2, pr, pr); });
+  }
+  if (P.env && t > 0) {
+    ctx.lineWidth = 1.4 * dpr;
+    for (const [c, dash] of [[1, [6 * dpr, 4 * dpr]], [2, [2 * dpr, 3 * dpr]]]) {
+      ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.setLineDash(dash); ctx.beginPath(); ctx.arc(cx, cy, c * Math.sqrt(t) * sc, 0, 7); ctx.stroke();
+    }
+    ctx.setLineDash([]); ctx.font = font(11, true); ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('r = √t', cx + Math.sqrt(t) * sc * 0.72, cy - Math.sqrt(t) * sc * 0.72);
+    ctx.fillText('2√t', cx + 2 * Math.sqrt(t) * sc * 0.72, cy - 2 * Math.sqrt(t) * sc * 0.72);
+  }
+  if (P.trail) {   // Perrin: positions recorded at equal intervals and joined by straight lines
+    C.trails.forEach((tr, j) => {
+      const pts = tr.map(([x, y, z]) => d === 2 ? [x, -y] : project(x, y, z));
+      ctx.strokeStyle = PATHCOL[j]; ctx.fillStyle = PATHCOL[j]; ctx.lineWidth = 1.6 * dpr; ctx.beginPath();
+      pts.forEach(([u, v], i) => i ? ctx.lineTo(cx + u * sc, cy + v * sc) : ctx.moveTo(cx + u * sc, cy + v * sc)); ctx.stroke();
+      for (const [u, v] of pts) { ctx.beginPath(); ctx.arc(cx + u * sc, cy + v * sc, 2.4 * dpr, 0, 7); ctx.fill(); }
+    });
+  }
+  ctx.fillStyle = '#fff'; ctx.fillRect(cx - 3 * dpr, cy - 0.75 * dpr, 6 * dpr, 1.5 * dpr); ctx.fillRect(cx - 0.75 * dpr, cy - 3 * dpr, 1.5 * dpr, 6 * dpr);
+  drawMsd();
+  ctx.font = font(12); ctx.fillStyle = '#d8d0c2'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(d === 2 ? `${N.toLocaleString()} 个二维游走者，第 ${t} 步` : `${N.toLocaleString()} 个三维游走者，第 ${t} 步（拖动旋转；颜色越亮离你越近）`, 14 * dpr, 14 * dpr);
+}
+function drawMsd() {   // inset: ⟨r²⟩ and each ⟨x_i²⟩ against t, with the lines t and t/d
+  const C = CLOUD, t = C.t, d = P.d, T = P.T;
+  const w = 320 * dpr, h = 210 * dpr, x0 = W - w - 12 * dpr, y0 = 12 * dpr;
+  box(x0, y0, w, h);
+  const ml = 46 * dpr, mr = 12 * dpr, mt = 26 * dpr, mb = 24 * dpr;
+  let top = T; for (let s = 1; s <= t; s++) top = Math.max(top, C.msd[s]); top *= 1.08;
+  const X = s => x0 + ml + s / T * (w - ml - mr), Y = v => y0 + h - mb - v / top * (h - mt - mb);
+  ctx.font = font(10, true); ctx.fillStyle = COL.text; ctx.strokeStyle = COL.grid; ctx.lineWidth = 1 * dpr;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const ys = niceStep(top, 4);
+  for (let v = 0; v <= top; v += ys) { ctx.beginPath(); ctx.moveTo(x0 + ml, Y(v)); ctx.lineTo(x0 + w - mr, Y(v)); ctx.stroke(); ctx.fillText(fmtK(v), x0 + ml - 4 * dpr, Y(v)); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const ts = niceStep(T, 4);
+  for (let s = 0; s <= T; s += ts) ctx.fillText(fmtK(s), X(s), y0 + h - mb + 4 * dpr);
+  ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.strokeStyle = 'rgba(255,255,255,.55)';
+  ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(T), Y(T)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(T), Y(T / d)); ctx.stroke(); ctx.setLineDash([]);
+  const st = Math.max(1, Math.floor(T / 300));
+  const curve = (a, c, lw) => { ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(X(0), Y(0));
+    for (let s = st; s <= t; s += st) ctx.lineTo(X(s), Y(a[s])); ctx.stroke(); };
+  for (let i = 0; i < d; i++) curve(C.ax[i], ['#7fd8c8', '#c9a0ff', '#8fc1ff'][i], 1 * dpr);
+  curve(C.msd, COL.gold, 2 * dpr);
+  ctx.font = font(11); ctx.fillStyle = '#d8d0c2'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('均方位移 ⟨r²⟩ 对 t', x0 + 8 * dpr, y0 + 6 * dpr);
+  const f = msdFit(C.msd, t);
+  ctx.textAlign = 'right'; ctx.fillStyle = COL.gold;
+  ctx.fillText(t > 1 ? `斜率 ${f.a.toFixed(4)}` : '', x0 + w - 8 * dpr, y0 + 6 * dpr);
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = font(10, true);
+  ctx.fillText('t', X(T) - 2 * dpr, Y(T) + 2 * dpr); ctx.fillText(`t/${d}`, X(T) - 2 * dpr, Y(T / d) + 2 * dpr);
+}
+
+function drawPolya() {
+  const S = POL, t = S.t, T = P.T, ex = Math.min(T, EXACT_T);
+  const ml = 64 * dpr, mr = 150 * dpr, mt = 70 * dpr, mb = 56 * dpr;
+  const lT = Math.log10(T), X = s => ml + Math.log10(Math.max(1, s)) / lT * (W - ml - mr), Y = v => mt + (1 - v) * (H - mt - mb);
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1 * dpr; ctx.font = font(11, true); ctx.fillStyle = COL.text;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let v = 0; v <= 1.0001; v += 0.1) { ctx.beginPath(); ctx.moveTo(X(1), Y(v)); ctx.lineTo(X(T), Y(v)); ctx.stroke(); ctx.fillText(v.toFixed(1), X(1) - 6 * dpr, Y(v)); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let e = 0; e <= Math.floor(lT); e++) for (const m of [1, 2, 5]) { const s = m * 10 ** e; if (s > T) continue;
+    ctx.beginPath(); ctx.moveTo(X(s), Y(0)); ctx.lineTo(X(s), Y(1)); ctx.stroke(); if (m === 1) ctx.fillText(s >= 1000 ? `10${'⁰¹²³⁴⁵'[e]}` : s, X(s), Y(0) + 6 * dpr); }
+  ctx.textAlign = 'right'; ctx.fillText('时间 t（对数坐标）', X(T), Y(0) + 24 * dpr);
+  // Pólya's limit in 3D
+  ctx.strokeStyle = DCOL[2]; ctx.setLineDash([3 * dpr, 4 * dpr]); ctx.lineWidth = 1.2 * dpr;
+  ctx.beginPath(); ctx.moveTo(X(1), Y(P3)); ctx.lineTo(X(T), Y(P3)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.font = font(11, true); ctx.fillStyle = DCOL[2]; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`d = 3 的极限 ${P3.toFixed(4)}`, X(1) + 6 * dpr, Y(P3) - 3 * dpr);
+  const pts = 600;
+  for (let di = 0; di < 3; di++) {
+    // exact curve (white dashed) up to EXACT_T, then the measured fraction
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.lineWidth = 1.2 * dpr; ctx.beginPath();
+    for (let i = 0; i <= pts; i++) { const s = Math.max(2, Math.round(10 ** (Math.log10(ex) * i / pts))); const v = exactF[di].F[s]; i ? ctx.lineTo(X(s), Y(v)) : ctx.moveTo(X(s), Y(v)); }
+    ctx.stroke(); ctx.setLineDash([]);
+    if (t >= 2) {
+      ctx.strokeStyle = DCOL[di]; ctx.lineWidth = 2.2 * dpr; ctx.beginPath();
+      for (let i = 0, last = -1; i <= pts; i++) { const s = Math.min(t, Math.max(2, Math.round(10 ** (Math.log10(t) * i / pts)))); if (s === last) continue; last = s;
+        const v = S.F[di][s]; last === 2 ? ctx.moveTo(X(s), Y(v)) : ctx.lineTo(X(s), Y(v)); }
+      ctx.stroke();
+      const v = S.F[di][t]; ctx.fillStyle = DCOL[di]; ctx.beginPath(); ctx.arc(X(t), Y(v), 4 * dpr, 0, 7); ctx.fill();
+      ctx.font = font(12, true); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(`d = ${di + 1}: ${v.toFixed(4)}`, X(T) + 10 * dpr, Y(v));
+    }
+  }
+  ctx.font = font(13); ctx.fillStyle = '#d8d0c2'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`到时间 t 为止回到过原点的比例 F_d(t)，每个维数 ${P.N.toLocaleString()} 个游走者`, ml, 18 * dpr);
+  drawLegend([[DCOL[0], 'd = 1'], [DCOL[1], 'd = 2'], [DCOL[2], 'd = 3'], ['rgba(255,255,255,.7)', `精确值（更新方程，算到 t = ${fmtK(ex)}）`]], ml + 12 * dpr, 46 * dpr);
+}
+
+// draw the first m steps, centred on the origin and scaled by 1/√m, coloured by time
+function drawWalk(g, x0, y0, S, m) {
+  const sc = S / (3.2 * Math.sqrt(m)), cx = x0 + S / 2, cy = y0 + S / 2, xs = SC.xs, ys = SC.ys, CH = 48;
+  g.save(); g.beginPath(); g.rect(x0, y0, S, S); g.clip();
+  g.fillStyle = '#0d0b08'; g.fillRect(x0, y0, S, S);
+  g.lineWidth = Math.max(1, Math.min(2.2 * dpr, sc * 0.35)); g.lineJoin = 'round';
+  for (let c = 0; c < CH; c++) {
+    const a = Math.floor(m * c / CH), b = Math.floor(m * (c + 1) / CH);
+    g.strokeStyle = tcol(c / (CH - 1)); g.beginPath(); g.moveTo(cx + xs[a] * sc, cy - ys[a] * sc);
+    let lx = Math.round(xs[a] * sc * 2), ly = Math.round(ys[a] * sc * 2);
+    for (let i = a + 1; i <= b; i++) {   // skip points that land on the same half pixel
+      const qx = Math.round(xs[i] * sc * 2), qy = Math.round(ys[i] * sc * 2);
+      if (qx !== lx || qy !== ly || i === b) { g.lineTo(cx + xs[i] * sc, cy - ys[i] * sc); lx = qx; ly = qy; }
+    }
+    g.stroke();
+  }
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 3 * dpr, 0, 7); g.fill();
+  g.restore();
+  g.strokeStyle = '#4a4032'; g.lineWidth = 1 * dpr; g.strokeRect(x0 + 0.5, y0 + 0.5, S - 1, S - 1);
+  // scale bar of √m lattice units
+  const bl = Math.sqrt(m) * sc;
+  g.strokeStyle = '#fff'; g.lineWidth = 2 * dpr; g.beginPath(); g.moveTo(x0 + 10 * dpr, y0 + S - 12 * dpr); g.lineTo(x0 + 10 * dpr + bl, y0 + S - 12 * dpr); g.stroke();
+  g.font = font(10, true); g.fillStyle = '#d8d0c2'; g.textAlign = 'left'; g.textBaseline = 'bottom';
+  g.fillText(`√m = ${fmtN(Math.round(Math.sqrt(m)))} 格`, x0 + 10 * dpr, y0 + S - 16 * dpr);
+}
+function scaleLayout() {
+  const pad = 14 * dpr, top = 34 * dpr, big = Math.max(50, Math.min(H - top - pad, (W - 3 * pad) * 0.6));
+  const sw = Math.max(40, Math.min((W - big - 3 * pad), (H - top - pad - 2 * pad) / 3 * 0.62));
+  return { pad, top, big, sw, sx: pad + big + pad };
+}
+function drawScale() {
+  const L = scaleLayout(), n = SC.n;
+  if (SC.anim) {   // geometric zoom-out from 100 steps to n steps over about 6 seconds
+    P.m = Math.min(n, Math.round(P.m * Math.pow(n / 100, 1 / 360)));
+    if (P.m >= n) SC.anim = 0;
+    syncUI();
+  }
+  drawWalk(ctx, L.pad, L.top, L.big, Math.min(P.m, n));
+  ctx.font = font(12); ctx.fillStyle = '#d8d0c2'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`前 m = ${Math.min(P.m, n).toLocaleString()} 步，按 1/√m 缩放（颜色：早 → 晚）`, L.pad, L.top - 6 * dpr);
+  // three small panels: n/16, n/4, n
+  const key = [n, W, H, P.seed].join();
+  if (!SC.cache || SC.cache.key !== key) {
+    const oc = document.createElement('canvas'); oc.width = W; oc.height = H; const g = oc.getContext('2d');
+    [16, 4, 1].forEach((f, i) => {
+      const y = L.top + i * (L.sw + 26 * dpr);
+      drawWalk(g, L.sx, y, L.sw, Math.floor(n / f));
+      g.font = font(11); g.fillStyle = '#d8d0c2'; g.textAlign = 'left'; g.textBaseline = 'top';
+      g.fillText(`前 n/${f} = ${Math.floor(n / f).toLocaleString()} 步`, L.sx + L.sw + 8 * dpr, y + 2 * dpr);
+      g.fillStyle = COL.text; g.fillText(f > 1 ? `相对 n 放大 ${Math.sqrt(f)}×` : '整条游走', L.sx + L.sw + 8 * dpr, y + 18 * dpr);
+    });
+    SC.cache = { key, oc };
+  }
+  ctx.drawImage(SC.cache.oc, 0, 0);
+  drawBoxes(L);
+}
+function drawBoxes(L) {   // inset: log N(s) against log(1/s)
+  const w = Math.max(200 * dpr, W - L.sx - 12 * dpr - L.sw - 130 * dpr), h = 190 * dpr;
+  const x0 = W - Math.min(w, 330 * dpr) - 12 * dpr, y0 = H - h - 12 * dpr, ww = Math.min(w, 330 * dpr);
+  if (x0 < L.sx + L.sw + 4 * dpr) return;
+  box(x0, y0, ww, h);
+  const ml = 40 * dpr, mr = 10 * dpr, mt = 26 * dpr, mb = 26 * dpr, B = SC.boxes;
+  const lx = B.map(b => Math.log2(b.s)), ly = B.map(b => Math.log2(b.N));
+  const xa = 0, xb = Math.max(...lx), ya = 0, yb = Math.ceil(Math.max(...ly));
+  const X = v => x0 + ml + (xb - v) / (xb - xa) * (ww - ml - mr), Y = v => y0 + h - mb - (v - ya) / (yb - ya) * (h - mt - mb);
+  ctx.font = font(10, true); ctx.fillStyle = COL.text; ctx.strokeStyle = COL.grid; ctx.lineWidth = 1 * dpr;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let v = 0; v <= yb; v += 4) { ctx.beginPath(); ctx.moveTo(x0 + ml, Y(v)); ctx.lineTo(x0 + ww - mr, Y(v)); ctx.stroke(); ctx.fillText(`2${sup(v)}`, x0 + ml - 4 * dpr, Y(v)); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let v = 0; v <= xb; v += 2) ctx.fillText(`${2 ** v}`, X(v), y0 + h - mb + 4 * dpr);
+  // slope-2 reference through the s = 1 point
+  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.beginPath(); ctx.moveTo(X(0), Y(ly[0])); ctx.lineTo(X(xb), Y(ly[0] - 2 * xb)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = COL.gold;
+  B.forEach((b, i) => { ctx.beginPath(); ctx.arc(X(lx[i]), Y(ly[i]), (b.s >= 4 && b.s <= SC.D / 8 ? 3.5 : 2) * dpr, 0, 7); ctx.fill(); });
+  ctx.font = font(11); ctx.fillStyle = '#d8d0c2'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('盒计数 N(s) 对边长 s', x0 + 8 * dpr, y0 + 6 * dpr);
+  ctx.textAlign = 'right'; ctx.fillStyle = COL.gold; ctx.fillText(`斜率 ${boxFit().slope.toFixed(3)}`, x0 + ww - 8 * dpr, y0 + 6 * dpr);
+  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = font(10, true); ctx.textBaseline = 'bottom'; ctx.fillText('虚线：斜率 2', x0 + ww - 8 * dpr, y0 + h - mb - 4 * dpr);
+}
+const sup = v => String(v).split('').map(c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[+c]).join('');
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = COL.bg; ctx.fillRect(0, 0, W, H);
+  ({ fan: drawFan, cloud: drawCloud, polya: drawPolya, scale: drawScale })[P.mode]();
+}
+
+// ---------- read-outs ----------
+const NOTES = {
+  fan: '每条路径 X_t 是 t 次 ±1 之和：均值 0，方差 t，宽度 √t。t 时刻的分布是二项分布（和 40 排的 Galton 板一样），t 大时贴近热方程 ∂p/∂t = ½ ∂²p/∂x² 的解，也就是 Gauss 核。格点上 X_t 只取与 t 同奇偶的值，直方图每格都含同样多个可取值。',
+  cloud: '每一步只改变一个坐标，所以 ⟨r²⟩ 每步恰好增加 1：⟨r²⟩ = t，与维数无关；每个坐标只分到 1/d，⟨xᵢ²⟩ = t/d。勾选 Perrin 轨迹：每隔 T/50 步记一次位置再用直线连起来，就是 Perrin 1909 年在显微镜下记录乳香微粒的画法。',
+  polya: 'Pólya 1921：一维、二维的简单随机游走以概率 1 回到原点（常返），三维只有 34.05%（暂态）。二维虽然常返，但没回来的比例只按 π/ln t 下降，非常慢。白色虚线由 u = δ + f * u 精确算出。',
+  scale: '随机游走按 x → x/√m、t → t/m 缩放后收敛到布朗运动（Donsker 定理），所以前 n/16、n/4、n 步各自放大到同样大小后看起来一样。平面布朗路径的 Hausdorff 维数是 2；有限步的盒计数斜率比 2 小一点，差距只按 1/ln 缩小。',
+};
+function info() {
+  let lines = [], stat = '', out = { mode: P.mode };
+  if (P.mode === 'fan') {
+    const F = FAN, t = F.t; let s = 0, s2 = 0;
+    for (let i = 0; i < P.N; i++) { s += F.X[i]; s2 += F.X[i] * F.X[i]; }
+    const m = s / P.N, v = s2 / P.N, fit = msdFit(F.msd, t);
+    // KS distances at the lattice sites: sample vs heat kernel, exact law vs heat kernel (continuity-corrected)
+    let ksS = NaN, ksE = NaN;
+    if (t > 0) {
+      const cnt = new Float64Array(2 * t + 2); for (let i = 0; i < P.N; i++) cnt[F.X[i] + t]++;
+      let cs = 0, ce = 0; ksS = 0; ksE = 0;
+      for (let x = -t; x <= t; x += 2) { cs += cnt[x + t] / P.N; ce += walkPmf(t, x); const ph = Phi((x + 1) / Math.sqrt(t)); ksS = Math.max(ksS, Math.abs(cs - ph)); ksE = Math.max(ksE, Math.abs(ce - ph)); }
+    }
+    let inside = 0; for (let i = 0; i < P.N; i++) if (Math.abs(F.X[i]) <= Math.sqrt(t)) inside++;
+    lines = [`t = ${t}    样本均值 ⟨x⟩ = ${fmtN(m)}`, `⟨x²⟩ = ${fmtN(v)}    ⟨x²⟩ / t = ${t ? (v / t).toFixed(4) : '—'}`,
+      `⟨x²⟩ 对 t 的斜率 = ${fmtN(fit.a)}   log–log 指数 α = ${fmtN(fit.alpha)}`,
+      `落在 ±√t 以内 = ${t ? (100 * inside / P.N).toFixed(1) : '—'}%`,
+      `KS(样本, 热核) = ${fmtN(ksS)}`, `KS(精确, 热核) = ${fmtN(ksE)}   噪声约 0.83/√N = ${(0.83 / Math.sqrt(P.N)).toFixed(4)}`];
+    stat = `一维 · ${P.N.toLocaleString()} 个游走者 · 第 ${t} / ${P.T} 步`;
+    Object.assign(out, { t, mean: m, msd: v, slope: fit.a, alpha: fit.alpha, inside: inside / P.N, ksSample: ksS, ksExact: ksE });
+    window.__done = t >= P.T;
+  } else if (P.mode === 'cloud') {
+    const C = CLOUD, t = C.t, fit = msdFit(C.msd, t);
+    lines = [`t = ${t}    ⟨r²⟩ = ${fmtN(C.msd[t])}    ⟨r²⟩ / t = ${t ? (C.msd[t] / t).toFixed(4) : '—'}`,
+      `⟨r²⟩ 对 t 的斜率 = ${fmtN(fit.a)}   （理论 1）`, `log–log 指数 α = ${fmtN(fit.alpha)}   （理论 1，即 r ∝ √t）`,
+      ...Array.from({ length: P.d }, (_, i) => `⟨${'xyz'[i]}²⟩ / t = ${t ? (C.ax[i][t] / t).toFixed(4) : '—'}   （理论 1/${P.d} = ${(1 / P.d).toFixed(4)}）`)];
+    stat = `${P.d} 维 · ${P.N.toLocaleString()} 个游走者 · 第 ${t} / ${P.T} 步`;
+    Object.assign(out, { d: P.d, t, msd: C.msd[t], slope: fit.a, alpha: fit.alpha, axes: C.ax.slice(0, P.d).map(a => a[t] / Math.max(1, t)) });
+    window.__done = t >= P.T;
+  } else if (P.mode === 'polya') {
+    const S = POL, t = S.t, te = Math.min(t, EXACT_T);
+    lines = [`t = ${t}`];
+    const Fm = [0, 1, 2].map(di => S.F[di][t]);
+    for (let di = 0; di < 3; di++) {
+      const f = Fm[di], se = Math.sqrt(f * (1 - f) / P.N);
+      lines.push(`d = ${di + 1}: 实测 ${f.toFixed(4)} ± ${se.toFixed(4)}   精确 ${(di === 0 ? F1(t) : exactF[di].F[te]).toFixed(4)}` +
+        (t > EXACT_T && di ? `（t = ${fmtK(EXACT_T)}；实测 ${S.F[di][EXACT_T].toFixed(4)}）` : ''));
+    }
+    lines.push(`d = 3 的极限 1 − 1/u = ${P3}`, `（u = Σ P(在原点)，算到 ${fmtK(EXACT_T)} 步：${exactF[2].sumU.toFixed(4)}）`);
+    stat = `每个维数 ${P.N.toLocaleString()} 个游走者 · 第 ${t.toLocaleString()} / ${P.T.toLocaleString()} 步 · 还没回来：${S.nal.join(' / ')}`;
+    Object.assign(out, { t, F: Fm, exact: [F1(t), exactF[1].F[te], exactF[2].F[te]], F10k: [0, 1, 2].map(di => S.F[di][Math.min(t, EXACT_T)]), alive: S.nal.slice(), sumU3: exactF[2].sumU });
+    window.__done = t >= P.T;
+  } else {
+    const bf = boxFit(), r = rgFit(), S1 = SC.boxes[0].N;
+    const loc = SC.boxes.slice(1).map((b, i) => Math.log(SC.boxes[i].N / b.N) / Math.LN2);
+    lines = [`n = ${SC.n.toLocaleString()}    访问过的不同格点 = ${S1.toLocaleString()}`, `πn / ln n = ${Math.round(Math.PI * SC.n / Math.log(SC.n)).toLocaleString()}   πn / ln 8n = ${Math.round(Math.PI * SC.n / Math.log(8 * SC.n)).toLocaleString()}`,
+      `盒计数斜率（4 ≤ s ≤ D/8，${bf.k} 个点）= ${bf.slope.toFixed(3)}`, `局部斜率 s=1→2→4…: ${loc.slice(0, 8).map(v => v.toFixed(2)).join(' ')}`,
+      `回转半径：m ∝ R^D，D = ${r.toFixed(3)}`];
+    stat = `一条 ${SC.n.toLocaleString()} 步的二维游走 · 大图显示前 ${Math.min(P.m, SC.n).toLocaleString()} 步`;
+    Object.assign(out, { n: SC.n, m: P.m, distinct: S1, boxSlope: bf.slope, localSlopes: loc, rgDim: r, boxes: SC.boxes });
+  }
+  $('info').textContent = lines.join('\n');
+  $('stat').textContent = stat + (running || P.mode === 'scale' ? '' : ' · 已暂停');
+  window.__walk = out;
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('D').value = P.d; $('N').value = Math.log10(P.N); $('T').value = Math.log10(P.T); $('V').value = Math.log10(P.v); $('Seed').value = P.seed;
+  $('Ns').value = Math.log10(P.n); $('M').max = Math.log10(P.n); $('M').value = Math.log10(Math.min(P.m, P.n));
+  $('vD').textContent = P.d; $('vN').textContent = P.N.toLocaleString(); $('vT').textContent = P.T.toLocaleString(); $('vV').textContent = P.v; $('vSeed').textContent = P.seed;
+  $('vNs').textContent = P.n.toLocaleString(); $('vM').textContent = Math.min(P.m, P.n).toLocaleString();
+  $('lN').textContent = P.mode === 'polya' ? '每个维数的游走者 N' : '游走者个数 N';
+  $('env').checked = P.env; $('hist').checked = P.hist; $('trail').checked = P.trail;
+  $('secW').style.display = P.mode === 'scale' ? 'none' : ''; $('secS').style.display = P.mode === 'scale' ? '' : 'none';
+  $('rowD').style.display = P.mode === 'cloud' ? '' : 'none';
+  $('cEnv').style.display = P.mode === 'polya' ? 'none' : ''; $('cHist').style.display = P.mode === 'fan' ? '' : 'none'; $('cTrail').style.display = P.mode === 'cloud' ? '' : 'none';
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  $('note').textContent = NOTES[P.mode];
+  document.querySelectorAll('[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === P.mode));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+const restart = () => { window.__done = false; rand = rng(P.seed); ({ fan: fanReset, cloud: cloudReset, polya: polReset, scale: scaleReset })[P.mode](); };
+const changed = (resetIt = true) => { P.preset = ''; syncUI(); if (resetIt) restart(); };
+
+function applyPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, mode: p.mode });
+  for (const k of ['d', 'N', 'T', 'v', 'n', 'm']) if (p[k] !== undefined) P[k] = p[k];
+  if (p.trail !== undefined) P.trail = p.trail;
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => { applyPreset(key); running = true; syncUI(); restart(); };
+  $('pre').appendChild(b);
+}
+for (const [key, name] of Object.entries(MODES)) {
+  const b = document.createElement('button');
+  b.textContent = name; b.dataset.m = key; b.onclick = () => { P.mode = key; running = true; changed(); };
+  $('modes').appendChild(b);
+}
+$('D').oninput = e => { P.d = +e.target.value; changed(); };
+$('N').oninput = e => { P.N = clamp(nice(10 ** +e.target.value), LIM.N); changed(); };
+$('T').oninput = e => { P.T = clamp(nice(10 ** +e.target.value), LIM.T); changed(); };
+$('V').oninput = e => { P.v = clamp(Math.round(10 ** +e.target.value), LIM.v); changed(false); };
+$('Seed').oninput = e => { P.seed = +e.target.value; changed(); };
+$('Ns').oninput = e => { P.n = clamp(Math.round(10 ** +e.target.value), LIM.n); P.m = P.n; changed(); };
+$('M').oninput = e => { P.m = clamp(Math.round(10 ** +e.target.value), LIM.m); SC.anim = 0; changed(false); };
+$('zoom').onclick = () => { P.m = 100; SC.anim = 1; syncUI(); };
+$('env').onchange = e => { P.env = e.target.checked; };
+$('hist').onchange = e => { P.hist = e.target.checked; };
+$('trail').onchange = e => { P.trail = e.target.checked; };
+$('play').onclick = () => { running = !running; syncUI(); };
+$('restart').onclick = () => { running = true; syncUI(); restart(); };
+
+let drag = null;   // drag rotates the 3D cloud
+cv.addEventListener('pointerdown', e => { if (P.mode === 'cloud' && P.d === 3) { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); } });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  view.yaw += (e.clientX - drag[0]) * 0.01; view.pitch = clamp(view.pitch + (e.clientY - drag[1]) * 0.01, [-1.5, 1.5]); drag = [e.clientX, e.clientY];
+});
+cv.addEventListener('pointerup', () => drag = null);
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+}
+addEventListener('resize', () => { resize(); if (P.mode === 'fan') restart(); });
+
+// URL params, e.g. ?p=polya  or  ?m=cloud&d=3&N=8000&T=5000&seed=7&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+{ const v = q.get('p'); if (v !== null && Object.hasOwn(PRESETS, v)) applyPreset(v); }
+{ const v = q.get('m'); if (v !== null && Object.hasOwn(MODES, v)) { if (v !== P.mode) P.preset = ''; P.mode = v; } }
+const urlKeys = { d: 'd', N: 'N', T: 'T', v: 'v', n: 'n', sm: 'm', seed: 'seed' };
+for (const [k, key] of Object.entries(urlKeys)) num(k, x => { P[key] = Math.round(clamp(x, LIM[key])); if (k !== 'seed') P.preset = ''; });
+if (q.has('n') && !q.has('sm')) P.m = P.n;
+for (const [k, key] of [['env', 'env'], ['hist', 'hist'], ['trail', 'trail']]) { const v = q.get(k); if (v === '0' || v === '1') P[key] = v === '1'; }
+num('yaw', x => view.yaw = clamp(x, [-10, 10])); num('pitch', x => view.pitch = clamp(x, [-1.5, 1.5]));
+if (q.get('run') === '0') running = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI(); restart();
+
+(function loop() {
+  if (running) ({ fan: fanStep, cloud: cloudStep, polya: polStep, scale: () => {} })[P.mode]();
+  draw(); info();
+  window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

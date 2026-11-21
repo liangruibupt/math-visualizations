@@ -79,7 +79,7 @@
       <a href="#motion">运动与波<b>4</b></a>
       <a href="#geom">几何与拓扑<b>1</b></a>
       <a href="#number">数论<b>4</b></a>
-      <a href="#prob">概率<b>1</b></a>
+      <a href="#prob">概率<b>4</b></a>
     </nav>
   </div>
 </header>
@@ -319,6 +319,42 @@
           <div class="actions">
             <a class="btn primary" href="examples/galton-board/index.html">打开页面 →</a>
             <a class="btn ghost" href="examples/galton-board/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/buffon-needle/index.html"><img src="examples/buffon-needle/images/card.png" alt="间距相等的平行线上散落着几百根针，压线的针是金色，右侧是样本空间和 π 的估计值随针数收敛"></a>
+        <div class="body">
+          <h3>Buffon 投针 · 用随机估计 π</h3>
+          <p>随手往画着平行线的地板上扔针，压线的概率是 2ℓ/(πd)，数一数交点就能估计 π，误差按 1/√N 缩小。长针、折针、圆圈和随机面条的平均交点数都一样（Barbier 定理）；还能看到 Lazzarini 1901 年那个好得可疑的 355/113 是怎样“扔”出来的。</p>
+          <div class="tags"><i>几何概率</i><i>蒙特卡罗方法</i><i>Barbier 定理</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/buffon-needle/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/buffon-needle/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/random-walk/index.html"><img src="examples/random-walk/images/card.png" alt="2000 条一维随机游走散成一把扇子，右侧第 1000 步的位置直方图贴着 Gauss 曲线"></a>
+        <div class="body">
+          <h3>随机游走 · 布朗运动</h3>
+          <p>每一步随机向左或向右，成千上万条路径散成一把扇子：均方位移恰好等于步数，宽度按 √t 增长，位置分布贴上热方程的 Gauss 核。一维、二维的醉汉总会回家，三维只有 34% 能回来；一条百万步的游走按 √ 缩放后，看起来始终像布朗运动。</p>
+          <div class="tags"><i>√t 定律</i><i>Pólya 常返定理</i><i>布朗运动</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/random-walk/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/random-walk/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/percolation/index.html"><img src="examples/percolation/images/card.png" alt="256×256 格点渗流停在临界点 p_c ≈ 0.5927，金色跨越团簇从上连到下"></a>
+        <div class="body">
+          <h3>渗流 · 概率的临界点</h3>
+          <p>每个格点以概率 p 打开，p 一过 0.5927，就突然出现一个从上连到下的团簇。用并查集给团簇上色，测出交于 p_c 的跨越概率曲线、在 p_c 发散的平均团簇大小，以及维数 91/48 的分形；键渗流靠自对偶恰好在 p = 1/2。</p>
+          <div class="tags"><i>相变</i><i>并查集</i><i>分形维数</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/percolation/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/percolation/README.md">原理说明</a>
           </div>
         </div>
       </article>
