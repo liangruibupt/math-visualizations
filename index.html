@@ -80,6 +80,7 @@
       <a href="#geom">几何与拓扑<b>5</b></a>
       <a href="#number">数论<b>4</b></a>
       <a href="#prob">概率<b>4</b></a>
+      <a href="#compute">计算<b>3</b></a>
     </nav>
   </div>
 </header>
@@ -475,6 +476,49 @@
           <div class="actions">
             <a class="btn primary" href="examples/percolation/index.html">打开页面 →</a>
             <a class="btn ghost" href="examples/percolation/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="compute">
+    <div class="sec-head"><h2>计算</h2><span>简单规则，复杂行为</span></div>
+    <p class="sec-intro">每个格子只看邻居、只按一条规则更新，整体却能长出滑翔机、混沌和自组织临界。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/elementary-ca/index.html"><img src="examples/elementary-ca/images/card.png" alt="规则 30 从单个黑格长出的三角：左边是整齐的斜纹，右边像抛硬币一样杂乱"></a>
+        <div class="body">
+          <h3>一维元胞自动机 · 规则 30 与规则 110</h3>
+          <p>每格只看自己和左右邻居，8 位二进制就是一条规则，256 条按镜像和黑白互换只剩 88 类。规则 30 的中心列能当随机数，规则 90 画出杨辉三角 mod 2，规则 184 是交通流，规则 110 的滑翔机在以太上碰撞，足以做任何计算。</p>
+          <div class="tags"><i>元胞自动机</i><i>Burnside 引理</i><i>图灵完备</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/elementary-ca/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/elementary-ca/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/game-of-life/index.html"><img src="examples/game-of-life/images/card.png" alt="512×512 环面上的随机汤：翻滚的团块拖着暗红余晖，四周散落着方块、闪烁子和蜂巢"></a>
+        <div class="body">
+          <h3>生命游戏 · 四条规则的宇宙</h3>
+          <p>每个格子只看身边 8 个邻居：3 个就出生，2 或 3 个就存活，其余死去。从一锅随机汤里长出静物、振荡子、飞船和每 30 代发射一只滑翔机的 Gosper 枪；页面实测 R-pentomino 在第 1103 代稳定，以及小环面上四分之三的状态都是没有前身的伊甸园。</p>
+          <div class="tags"><i>元胞自动机</i><i>图灵完备</i><i>伊甸园定理</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/game-of-life/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/game-of-life/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/sandpile/index.html"><img src="examples/sandpile/images/card.png" alt="中心放 2¹⁹ 粒沙倒塌稳定后的分形沙堆"></a>
+        <div class="body">
+          <h3>沙堆模型 · 自组织临界</h3>
+          <p>一格堆到 4 粒就塌给四个邻居。中心放一百万粒，长成直径 ∝ √N 的分形沙堆；常返构形构成一个群，单位元 (6 − (6)°)° 是一幅意外的图；一粒粒随机撒沙，系统自己走到临界态，雪崩大小服从幂律，平均高度趋于 17/8。</p>
+          <div class="tags"><i>自组织临界</i><i>阿贝尔群</i><i>幂律</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/sandpile/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/sandpile/README.md">原理说明</a>
           </div>
         </div>
       </article>

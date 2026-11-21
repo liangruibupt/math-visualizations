@@ -2,7 +2,7 @@
 
 用可交互的图形直观展现数学的奥妙。每个样例是一个独立的网页，用浏览器直接打开即可，拖动滑块就能看到公式如何变成形状。
 
-从总目录页 [index.html](index.html) 进入，按“贝壳”“分形”“图案”“运动与波”“几何与拓扑”“数论”“概率”七类导航到各个样例；每个样例页面左上角有“← 全部样例”返回目录。
+从总目录页 [index.html](index.html) 进入，按“贝壳”“分形”“图案”“运动与波”“几何与拓扑”“数论”“概率”“计算”八类导航到各个样例；每个样例页面左上角有“← 全部样例”返回目录。
 
 ## 样例
 
@@ -37,6 +37,9 @@
 | [李萨如图形与谐波图 · 两个振动的合成](examples/lissajous/README.md)（[打开页面](examples/lissajous/index.html)） | 两个正弦的合成、有理比闭合与 2ab − a − b 个自交点、退化相位与 Chebyshev 多项式 x = T_n(y)、无理比的 Kronecker/Weyl 稠密性与覆盖率、圆柱投影的旋转错觉、示波器切点读频率比；李萨如表格，带阻尼与旋转摆的谐波图，可听两个频率 | <img src="examples/lissajous/images/ui-54.png" width="240"> |
 | [三体问题 · 8 字形轨道](examples/three-body/README.md)（[打开页面](examples/three-body/index.html)） | Newton 三体方程与守恒量（E、L、P）、Bruns 与 Poincaré 的不可积性、4 阶 Yoshida 辛积分（角动量精确守恒、能量误差 ∝ h⁴）、回到初态测周期、Chenciner–Montgomery 8 字形舞蹈解、Lagrange 等边三角形解与 Routh 判据 27Σmᵢmⱼ < (Σm)²、Euler 共线解、限制性三体问题与 L4/L5 特洛伊小行星、Šuvakov–Dmitrašinović 蝴蝶 / 飞蛾 / 阴阳轨道；扰动滑条、三个质量滑条、旋转参考系，可拖动物体和速度箭头自由摆放 | <img src="examples/three-body/images/fig8.png" width="240"> |
 | [双摆 · 最简单的混沌](examples/double-pendulum/README.md)（[打开页面](examples/double-pendulum/index.html)） | Lagrange 量推出运动方程、RK4 与能量漂移、小角度线性化与两个简正模态 ω = √(2 ∓ √2)、频谱实测与振幅平方的非线性修正、指数分离与可预测时间、两个自由度为何够产生混沌（Poincaré–Bendixson、可积性）、Poincaré 截面与 KAM 岛链、下臂翻转时间图与能量禁区；可拖动摆锤，最多 500 个起点差 ε 的双摆同时积分，可调质量比与长度比 | <img src="examples/double-pendulum/images/fan.png" width="240"> |
+| [一维元胞自动机 · 规则 30 与规则 110](examples/elementary-ca/README.md)（[打开页面](examples/elementary-ca/index.html)） | Wolfram 编号与 256 条规则、镜像与黑白互换下的 88 个等价类（Burnside 引理）、启发式 Wolfram 四类（周期检测 + LZ76 压缩率 + 扰动扩散）、规则 30 中心列当随机数（频数、游程、4 位块 χ² 检验）、规则 90 与杨辉三角 mod 2、Lucas 定理与 2^popcount(t)、规则 110 的以太与滑翔机及 Cook 的图灵完备证明、规则 184 交通流基本图 J = min(ρ, 1−ρ)；可点 8 个邻域改规则，16×16 总览按分类着色 | <img src="examples/elementary-ca/images/elementary-ca.png" width="240"> |
+| [生命游戏 · 四条规则的宇宙](examples/game-of-life/README.md)（[打开页面](examples/game-of-life/index.html)） | Conway 的 B3/S23 四条规则与同时更新、32 格一组的位并行加法器、静物 / 振荡子 / 飞船的分类与 c/2、c/4 速度上限、Gosper 枪的周期 30、R-pentomino / 橡子 / 顽固子的稳定代数、汤 → 灰统计、图灵完备与不可判定性、伊甸园定理与小环面上的计数；含 RLE 图样库、规则编辑器（HighLife 复制子、Seeds、Day & Night）、画笔与盖章、种群曲线 | <img src="examples/game-of-life/images/life.png" width="240"> |
+| [沙堆模型 · 自组织临界](examples/sandpile/README.md)（[打开页面](examples/sandpile/index.html)） | Bak–Tang–Wiesenfeld 阿贝尔沙堆、倒塌与稳定化、交换律（顺序无关，连每格倒塌次数都相同）、中心放 N 粒的分形沙堆与直径 ∝ √N、倒塌次数 ∝ N²、翻倍算法与八分之一对称、沙堆群与生成树计数、单位元 (6 − (6)°)°、常返构形与烧图测试、自组织临界、雪崩大小幂律 τ 的拟合与注意事项、平均高度 17/8 与 1/L 修正；N 最大 2²¹，L 最大 320 | <img src="examples/sandpile/images/sandpile.png" width="240"> |
 
 ## 目录约定
 

@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>生命游戏 · 四条规则的宇宙</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0d12; color: #e4e8ee;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(20,25,33,.93); border: 1px solid #313c4a; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a7c4e6; border-top: 1px solid #313c4a; padding-top: 8px; }
+  #panel h3 { font-size: 11px; margin: 6px 0 0; color: #8c98a5; font-weight: 400; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8c98a5; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #252f3c; color: #e4e8ee; border: 1px solid #3a4858;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #30404f; }
+  button.on { background: #6a4b22; border-color: #c08a3e; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .rule { display: flex; gap: 4px; margin-top: 4px; }
+  input[type=text], textarea { flex: 1; min-width: 0; box-sizing: border-box; background: #141a22; color: #ffd38a;
+    border: 1px solid #3a4858; border-radius: 4px; padding: 3px 6px; font: 12px ui-monospace, Menlo, Consolas, monospace; }
+  textarea { width: 100%; height: 46px; resize: vertical; color: #e4e8ee; }
+  input.bad { border-color: #d0545f; }
+  .err { color: #ff8f8f; }
+  .info { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #b3bfcb; margin-top: 4px; white-space: pre-wrap; }
+  #plot { display: block; width: 348px; height: 120px; margin-top: 4px; border-radius: 4px; background: #0f141b; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(10,13,18,.82); color: #cdd6df; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #stat b { color: #fff; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>生命游戏 · 四条规则的宇宙</h1>
+  <small>每个格子活或死，每一代同时看身边 8 个邻居：活格子邻居少于 2 个就孤独而死，多于 3 个就拥挤而死，2 或 3 个就活下来；死格子恰好有 3 个活邻居就诞生。规则写作 <span class="mono">B3/S23</span>：B = 出生，S = 存活。</small>
+
+  <h2>运行</h2>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="stepB">单步 +1</button><button id="step30">+30 代</button><button id="reset">↺ 重置</button><button id="clear">清空</button></div>
+  <div class="row">
+    <label>速度 <b id="vSpd"></b></label>
+    <input id="Spd" type="range" min="-3" max="6" step="1">
+  </div>
+
+  <h2>种群曲线</h2>
+  <canvas id="plot" width="348" height="120"></canvas>
+  <div class="info" id="live"></div>
+
+  <h2>规则（life-like：B 出生 / S 存活的邻居数）</h2>
+  <div class="rule"><input id="rule" type="text" spellcheck="false" maxlength="24"><button id="ruleGo">应用</button></div>
+  <small id="ruleMsg"></small>
+  <div class="presets" id="rules"></div>
+
+  <h2>图样库（RLE）</h2>
+  <div id="lib"></div>
+  <h3>粘贴 RLE（最大 1024×1024、20 万个活格子）</h3>
+  <textarea id="rle" spellcheck="false" placeholder="x = 3, y = 3, rule = B3/S23&#10;bo$2bo$3o!"></textarea>
+  <div class="presets"><button id="rleGo">载入 RLE</button><button id="rleOut">导出当前（≤ 2 万格）</button></div>
+  <small id="rleMsg"></small>
+
+  <h2>随机汤</h2>
+  <div class="row">
+    <label>密度 <b id="vD"></b></label>
+    <input id="D" type="range" min="0" max="1" step="0.005">
+  </div>
+  <div class="row">
+    <label>边长（格） <b id="vS"></b></label>
+    <input id="S" type="range" min="3" max="11" step="0.01">
+  </div>
+  <div class="row">
+    <label>种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+    <small>中心方块里每个格子以给定概率活着。随机数来自带种子的 mulberry32，种子相同，汤就相同。</small>
+  </div>
+  <div class="presets"><button id="soupGo">撒一锅汤</button></div>
+
+  <h2>网格与画笔</h2>
+  <div class="row">
+    <label>网格（环面） <b id="vN"></b></label>
+    <input id="Nsl" type="range" min="8" max="11" step="1">
+  </div>
+  <div class="presets" id="tools"></div>
+  <div class="checks"><label><input id="trail" type="checkbox"> 余晖（刚死的格子渐暗）</label></div>
+  <small>左键按工具画或擦，按住 Shift 擦；右键或中键拖动平移；滚轮缩放。盖章模式下点图样库按钮只选图样不重置。键盘：空格 播放/暂停，N 单步，F 适配视野，H 隐藏面板。</small>
+  <div class="presets"><button id="fit">⤢ 适配视野</button></div>
+
+  <h2>测量 1 · 长寿图样</h2>
+  <small>在 512×512 的环面上单独跑，外圈 24 格是“吸收带”：飞进去的滑翔机会被识别、记数、删掉，相当于飞向无穷远。种群加上删掉的格子数，连续 300 代按某个周期重复，就算稳定，再往回找它开始重复的那一代。</small>
+  <div class="presets"><button id="methGo">测量 R-pentomino、橡子、顽固子</button></div>
+  <div class="info" id="methOut"></div>
+
+  <h2>测量 2 · 汤 → 灰</h2>
+  <small>和 apgsearch 一样：16×16 的方块、密度 50%，在 512×512 的吸收带环面上跑到稳定，再把剩下的“灰烬”按连通块分类。</small>
+  <div class="row">
+    <label>汤的锅数 <b id="vT"></b></label>
+    <input id="T" type="range" min="1" max="3.30103" step="0.01">
+  </div>
+  <div class="presets"><button id="soupsGo">开始 / 停止</button></div>
+  <div class="info" id="ashOut"></div>
+
+  <h2>测量 3 · 伊甸园（没有前身的状态）</h2>
+  <small>在 n×n 的小环面上把 2^(n²) 个状态各走一步，数一数有多少状态谁都走不到。</small>
+  <div class="presets"><button data-goe="3">3×3</button><button data-goe="4">4×4</button><button data-goe="5">5×5</button></div>
+  <div class="info" id="goeOut"></div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+'use strict';
+// ---------- pattern library (RLE, B3/S23 unless noted) ----------
+const GROUPS = { still: '静物', osc: '振荡子', ship: '飞船', gun: '枪', meth: '长寿图样', hl: 'HighLife' };
+const LIB = {
+  block:   { g: 'still', name: '方块', rle: '2o$2o!' },
+  beehive: { g: 'still', name: '蜂巢', rle: 'b2o$o2bo$b2o!' },
+  loaf:    { g: 'still', name: '面包', rle: 'b2o$o2bo$bobo$2bo!' },
+  boat:    { g: 'still', name: '小船', rle: '2o$obo$bo!' },
+  ship:    { g: 'still', name: '大船', rle: '2o$obo$b2o!' },
+  tub:     { g: 'still', name: '浴缸', rle: 'bo$obo$bo!' },
+  pond:    { g: 'still', name: '池塘', rle: 'b2o$o2bo$o2bo$b2o!' },
+  eater:   { g: 'still', name: '食者', rle: '2o$obo$2bo$2b2o!' },
+  blinker: { g: 'osc', name: '闪烁子 p2', rle: '3o!' },
+  toad:    { g: 'osc', name: '蟾蜍 p2', rle: 'b3o$3o!' },
+  beacon:  { g: 'osc', name: '信标 p2', rle: '2o$2o$2b2o$2b2o!' },
+  pulsar:  { g: 'osc', name: '脉冲星 p3', rle: '2b3o3b3o2$o4bobo4bo$o4bobo4bo$o4bobo4bo$2b3o3b3o2$2b3o3b3o$o4bobo4bo$o4bobo4bo$o4bobo4bo2$2b3o3b3o!' },
+  penta:   { g: 'osc', name: '十五项全能 p15', rle: '2bo4bo$2ob4ob2o$2bo4bo!' },
+  glider:  { g: 'ship', name: '滑翔机', rle: 'bo$2bo$3o!' },
+  lwss:    { g: 'ship', name: '轻型飞船', rle: 'bo2bo$o$o3bo$4o!' },
+  mwss:    { g: 'ship', name: '中型飞船', rle: '3bo$bo3bo$o$o4bo$5o!' },
+  hwss:    { g: 'ship', name: '重型飞船', rle: '3b2o$bo4bo$o$o5bo$6o!' },
+  gosper:  { g: 'gun', name: 'Gosper 滑翔机枪', rle: '24bo$22bobo$12b2o6b2o12b2o$11bo3bo4b2o12b2o$2o8bo5bo3b2o$2o8bo3bob2o4bobo$10bo5bo7bo$11bo3bo$12b2o!' },
+  rpent:   { g: 'meth', name: 'R-pentomino', rle: 'b2o$2o$bo!' },
+  acorn:   { g: 'meth', name: '橡子 acorn', rle: 'bo$3bo$2o2b3o!' },
+  diehard: { g: 'meth', name: '顽固子 diehard', rle: '6bo$2o$bo3b3o!' },
+  replicator: { g: 'hl', name: '复制子（B36/S23）', rle: '2b3o$bo2bo$o3bo$o2bo$3o!', rule: 'B36/S23' },
+};
+// objects that show up in ash but are not worth a library button
+const EXTRA = { longboat: ['长船', '2o$obo$bobo$2bo!'], barge: ['驳船', 'bo$obo$bobo$2bo!'], mango: ['芒果', 'b2o$o2bo$bo2bo$2b2o!'] };
+const RULES = { life: ['生命游戏', 'B3/S23'], high: ['HighLife', 'B36/S23'], seeds: ['Seeds', 'B2/S'], dn: ['Day & Night', 'B3678/S34678'] };
+const PRESETS = {
+  soup:   { name: '随机汤 37.5%', rule: 'B3/S23', soup: { d: 0.375, s: 1024 } },
+  gun:    { name: 'Gosper 枪', rule: 'B3/S23', lib: 'gosper' },
+  rp:     { name: 'R-pentomino', rule: 'B3/S23', lib: 'rpent' },
+  acorn0: { name: '橡子', rule: 'B3/S23', lib: 'acorn' },
+  rep:    { name: 'HighLife 复制子', rule: 'B36/S23', lib: 'replicator' },
+  seeds:  { name: 'Seeds 小汤爆炸', rule: 'B2/S', soup: { d: 0.5, s: 8 } },
+  dn:     { name: 'Day & Night 汤', rule: 'B3678/S34678', soup: { d: 0.5, s: 1024 } },
+};
+const TOOLS = { draw: '画笔', erase: '橡皮', pan: '平移', stamp: '盖章' };
+const LIM = { n: [8, 11], spd: [-3, 6], d: [0, 1], s: [8, 2048], seed: [1, 999], g: [0, 10000], z: [0.05, 40], T: [10, 2000] };
+const MAX_RLE_CHARS = 20000, MAX_RLE_DIM = 1024, MAX_RLE_CELLS = 200000;
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+
+// ---------- rules: B/S digit sets, compiled to bit masks for the bit-sliced counter ----------
+const RULE_RE = /^B([0-8]{0,9})\/S([0-8]{0,9})$/;
+function parseRule(text) {
+  if (typeof text !== 'string' || text.length > 24) return null;
+  const m = RULE_RE.exec(text.trim().toUpperCase());
+  if (!m) return null;
+  const B = [...new Set(m[1])].map(Number).sort(), S = [...new Set(m[2])].map(Number).sort();
+  const ks = [...new Set([...B, ...S])].sort(), n = ks.length;
+  const R = { text: `B${B.join('')}/S${S.join('')}`, B, S, n, x0: new Int32Array(n), x1: new Int32Array(n), x2: new Int32Array(n),
+    x3: new Int32Array(n), bm: new Int32Array(n), sm: new Int32Array(n) };
+  // a count k matches where each counter bit s_i equals bit i of k: s_i ^ (bit set ? 0 : ~0) is all ones there
+  ks.forEach((k, j) => { R.x0[j] = k & 1 ? 0 : -1; R.x1[j] = k & 2 ? 0 : -1; R.x2[j] = k & 4 ? 0 : -1; R.x3[j] = k & 8 ? 0 : -1;
+    R.bm[j] = B.includes(k) ? -1 : 0; R.sm[j] = S.includes(k) ? -1 : 0; });
+  return R;
+}
+const LIFE = parseRule('B3/S23');
+
+// ---------- the grid: N×N torus, 32 cells per Uint32 word, bit i of word w is cell x = 32w + i ----------
+function makeLife(N) {
+  const W = N >>> 5;
+  return { N, W, a: new Uint32Array(W * N), b: new Uint32Array(W * N), pop: 0, rowAny: new Uint8Array(N) };
+}
+// one generation: the 8 neighbour bits of 32 cells are summed at once with bitwise adders into a 4-bit count s3 s2 s1 s0
+function step(L, R) {
+  const { N, W, rowAny } = L, a = L.a, b = L.b, nk = R.n, X0 = R.x0, X1 = R.x1, X2 = R.x2, X3 = R.x3, BM = R.bm, SM = R.sm;
+  let pop = 0;
+  for (let y = 0; y < N; y++) {
+    const up = (y === 0 ? N - 1 : y - 1) * W, md = y * W, dn = (y === N - 1 ? 0 : y + 1) * W;
+    let any = 0;
+    for (let x = 0; x < W; x++) {
+      const xl = x === 0 ? W - 1 : x - 1, xr = x === W - 1 ? 0 : x + 1;
+      const u = a[up + x], m = a[md + x], d = a[dn + x];
+      const uL = (u << 1) | (a[up + xl] >>> 31), uR = (u >>> 1) | (a[up + xr] << 31);
+      const mL = (m << 1) | (a[md + xl] >>> 31), mR = (m >>> 1) | (a[md + xr] << 31);
+      const dL = (d << 1) | (a[dn + xl] >>> 31), dR = (d >>> 1) | (a[dn + xr] << 31);
+      const ut = uL ^ u, us = ut ^ uR, uc = (uL & u) | (ut & uR);        // row above: 0…3 as (uc, us)
+      const dt = dL ^ d, ds = dt ^ dR, dc = (dL & d) | (dt & dR);        // row below
+      const ms = mL ^ mR, mc = mL & mR;                                   // left + right
+      const t0 = us ^ ds, s0 = t0 ^ ms, c0 = (us & ds) | (t0 & ms);       // weight 1
+      const t1 = uc ^ dc, a1 = t1 ^ mc, k1 = (uc & dc) | (t1 & mc);       // weight 2: uc + dc + mc + c0
+      const s1 = a1 ^ c0, k2 = a1 & c0, s2 = k1 ^ k2, s3 = k1 & k2;
+      let born = 0, surv = 0;
+      for (let j = 0; j < nk; j++) {
+        const e = (s0 ^ X0[j]) & (s1 ^ X1[j]) & (s2 ^ X2[j]) & (s3 ^ X3[j]);
+        born |= e & BM[j]; surv |= e & SM[j];
+      }
+      let v = (m & surv) | (~m & born);
+      b[md + x] = v;
+      if (v) {
+        any = 1;
+        v = v - ((v >>> 1) & 0x55555555); v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+        pop += Math.imul((v + (v >>> 4)) & 0x0F0F0F0F, 0x01010101) >>> 24;
+      }
+    }
+    rowAny[y] = any;
+  }
+  L.a = b; L.b = a; L.pop = pop;
+  return pop;
+}
+function countPop(L) {
+  let pop = 0;
+  for (let y = 0; y < L.N; y++) {
+    let any = 0;
+    for (let x = 0; x < L.W; x++) {
+      let v = L.a[y * L.W + x]; if (!v) continue; any = 1;
+      v = v - ((v >>> 1) & 0x55555555); v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+      pop += Math.imul((v + (v >>> 4)) & 0x0F0F0F0F, 0x01010101) >>> 24;
+    }
+    L.rowAny[y] = any;
+  }
+  return L.pop = pop;
+}
+const getCell = (L, x, y) => (L.a[y * L.W + (x >>> 5)] >>> (x & 31)) & 1;
+function setCell(L, x, y, v) {
+  x = ((x % L.N) + L.N) % L.N; y = ((y % L.N) + L.N) % L.N;
+  const i = y * L.W + (x >>> 5), m = 1 << (x & 31);
+  if (v) L.a[i] |= m; else L.a[i] &= ~m;
+}
+
+// ---------- RLE parser: bounded input length, run lengths, size and cell count ----------
+function parseRLE(text) {
+  if (typeof text !== 'string') return { err: '不是文本' };
+  if (text.length > MAX_RLE_CHARS) return { err: `太长（> ${MAX_RLE_CHARS} 个字符）` };
+  let rule = null, body = '';
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (!t || t[0] === '#') continue;
+    const h = /^x\s*=\s*\d+\s*,\s*y\s*=\s*\d+\s*(?:,\s*rule\s*=\s*(\S+))?\s*$/i.exec(t);
+    if (h) { if (h[1] !== undefined) { rule = parseRule(h[1]); if (!rule) return { err: '头部的 rule 不是 B…/S… 形式' }; } continue; }
+    body += t;
+  }
+  const cells = []; let x = 0, y = 0, run = 0, w = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c >= '0' && c <= '9') { run = run * 10 + (c.charCodeAt(0) - 48); if (run > MAX_RLE_DIM) return { err: `游程超过 ${MAX_RLE_DIM}` }; continue; }
+    const n = run || 1; run = 0;
+    if (c === 'b' || c === '.') x += n;
+    else if (c === 'o' || c === 'A') {
+      if (x + n > MAX_RLE_DIM) return { err: `宽度超过 ${MAX_RLE_DIM}` };
+      if (cells.length / 2 + n > MAX_RLE_CELLS) return { err: `活格子超过 ${MAX_RLE_CELLS}` };
+      for (let k = 0; k < n; k++) cells.push(x + k, y);
+      x += n; if (x > w) w = x;
+    } else if (c === '$') { y += n; x = 0; if (y >= MAX_RLE_DIM) return { err: `高度超过 ${MAX_RLE_DIM}` }; }
+    else if (c === '!') break;
+    else if (c !== ' ' && c !== '\t' && c !== '\r') return { err: `无法识别的字符（第 ${i + 1} 个）` };
+  }
+  if (!cells.length) return { err: '没有活格子' };
+  let h = 0; for (let k = 1; k < cells.length; k += 2) if (cells[k] + 1 > h) h = cells[k] + 1;
+  return { cells, w, h, rule };
+}
+for (const [k, o] of Object.entries(LIB)) o.pat = parseRLE(o.rle);
+
+function rng(seed) {   // mulberry32: same seed, same soup
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+function placePattern(L, pat, cx, cy) {   // pattern centred on (cx, cy), OR-ed into the grid
+  const x0 = Math.round(cx - pat.w / 2), y0 = Math.round(cy - pat.h / 2), c = pat.cells;
+  for (let k = 0; k < c.length; k += 2) setCell(L, x0 + c[k], y0 + c[k + 1], 1);
+  return [x0, y0];
+}
+function placeSoup(L, side, d, seed) {
+  const r = rng(seed), s = Math.min(side, L.N), x0 = (L.N - s) >> 1;
+  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) if (r() < d) setCell(L, x0 + x, x0 + y, 1);
+  return [x0, x0, s];
+}
+
+// ---------- object classification: canonical form under the 8 symmetries of the square ----------
+function canon(cells) {   // cells: flat [x, y, …]
+  let best = null;
+  for (let t = 0; t < 8; t++) {
+    const pts = [];
+    for (let k = 0; k < cells.length; k += 2) {
+      let x = cells[k], y = cells[k + 1];
+      if (t & 1) x = -x; if (t & 2) y = -y; if (t & 4) { const z = x; x = y; y = z; }
+      pts.push([x, y]);
+    }
+    let mx = Infinity, my = Infinity; for (const [x, y] of pts) { if (x < mx) mx = x; if (y < my) my = y; }
+    const key = pts.map(([x, y]) => (y - my) * 4096 + (x - mx)).sort((a, b) => a - b).join(',');
+    if (best === null || key < best) best = key;
+  }
+  return best;
+}
+const KNOWN = new Map();   // canonical key → name, every phase of every library object (B3/S23)
+function registerPhases(name, pat, period) {
+  const L = makeLife(64); placePattern(L, pat, 32, 32);
+  for (let g = 0; g < period; g++) {   // a phase may fall apart into pieces (toad, pulsar), so key on all its cells
+    const cells = [], u = unpack(L);
+    for (let i = 0; i < u.length; i++) if (u[i]) cells.push(i % 64, (i / 64) | 0);
+    KNOWN.set(canon(cells), name);
+    step(L, LIFE);
+  }
+}
+function unpack(L) {
+  const g = new Uint8Array(L.N * L.N);
+  for (let y = 0; y < L.N; y++) {
+    if (!L.rowAny[y] && L.pop) continue;
+    for (let w = 0; w < L.W; w++) { const v = L.a[y * L.W + w]; if (!v) continue;
+      for (let i = 0; i < 32; i++) if ((v >>> i) & 1) g[y * L.N + (w << 5) + i] = 1; }
+  }
+  return g;
+}
+// 8-connected components on an N×N torus. start(x, y) chooses seed cells; components bigger than cap are reported cut short
+function components(g, N, start, cap) {
+  const seen = new Uint8Array(N * N), out = [], stack = new Int32Array(N * N);
+  for (let i = 0; i < N * N; i++) {
+    if (!g[i] || seen[i] || (start && !start(i % N, (i / N) | 0))) continue;
+    let sp = 0, big = false; const cells = [], idx = [];
+    stack[sp++] = i; seen[i] = 1;
+    while (sp) {
+      const j = stack[--sp], x = j % N, y = (j / N) | 0;
+      if (cells.length < cap * 2) { cells.push(x, y); idx.push(j); } else big = true;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const k = ((y + dy + N) % N) * N + (x + dx + N) % N;
+        if (g[k] && !seen[k]) { seen[k] = 1; stack[sp++] = k; }
+      }
+    }
+    out.push({ cells: unwrap(cells, N), idx, big });
+  }
+  return out;
+}
+function unwrap(cells, N) {   // a component that straddles the torus seam: shift its far side back next to the rest
+  const ref = [cells[0], cells[1]], o = cells.slice();
+  for (let k = 0; k < o.length; k += 2) for (let a = 0; a < 2; a++) {
+    if (o[k + a] - ref[a] > N / 2) o[k + a] -= N; else if (ref[a] - o[k + a] > N / 2) o[k + a] += N;
+  }
+  return o;
+}
+function classify(comp, rule) {
+  const n = comp.cells.length / 2;
+  if (comp.big) return '其他（≥ 400 格）';
+  if (rule.text === LIFE.text) { const k = KNOWN.get(canon(comp.cells)); if (k) return k; }
+  return `其他 ${n} 格`;
+}
+// components → objects. One phase of an oscillator can be several pieces (a toad is 2, a pulsar up to 16, some of
+// them blinker-shaped), so pieces within 2 cells of each other are first tried together as one known object;
+// failing that, each known piece keeps its name and the unknown pieces of the group are run alone (isolate).
+function objects(comps, rule, N) {
+  const out = [], life = rule.text === LIFE.text, k = comps.length;
+  const box = comps.map(c => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, a = c.cells;
+    for (let i = 0; i < a.length; i += 2) { x0 = Math.min(x0, a[i]); x1 = Math.max(x1, a[i]); y0 = Math.min(y0, a[i + 1]); y1 = Math.max(y1, a[i + 1]); }
+    return [x0, y0, x1, y1]; });
+  const gap = (a0, a1, b0, b1) => { let g = Infinity; for (const s of [-N, 0, N]) g = Math.min(g, Math.max(0, b0 + s - a1, a0 - b1 - s)); return g; };
+  const near = (i, j) => {
+    const A = box[i], B = box[j];
+    if (gap(A[0], A[2], B[0], B[2]) > 2 || gap(A[1], A[3], B[1], B[3]) > 2) return false;
+    const a = comps[i].cells, b = comps[j].cells;
+    for (let p = 0; p < a.length; p += 2) for (let q = 0; q < b.length; q += 2) {
+      const dx = Math.abs(a[p] - b[q]) % N, dy = Math.abs(a[p + 1] - b[q + 1]) % N;
+      if (Math.min(dx, N - dx) <= 2 && Math.min(dy, N - dy) <= 2) return true;
+    }
+    return false;
+  };
+  const par = comps.map((_, i) => i), f = i => { while (par[i] !== i) i = par[i] = par[par[i]]; return i; };
+  if (life && k <= 1000) for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) if (f(i) !== f(j) && near(i, j)) par[f(i)] = f(j);
+  const groups = new Map();
+  comps.forEach((c, i) => { const r = f(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(c); });
+  for (const g of groups.values()) {
+    const whole = g.length > 1 && !g.some(c => c.big) ? KNOWN.get(canon(unwrap(g.flatMap(c => c.cells), N))) : null;
+    if (whole) { out.push({ name: whole, comps: g }); continue; }
+    const unk = [];
+    for (const c of g) { const nm = classify(c, rule); if (nm.startsWith('其他') && !c.big) unk.push(c); else out.push({ name: nm, comps: [c] }); }
+    if (unk.length) { const cells = unwrap(unk.flatMap(c => c.cells), N);
+      out.push({ name: (unk.length > 1 && life && KNOWN.get(canon(cells))) || isolate(cells, rule), comps: unk }); }
+  }
+  return out;
+}
+// an object nobody named: run it alone on a 64×64 torus and report what it is
+function isolate(cells, rule) {
+  const n = cells.length / 2;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let k = 0; k < cells.length; k += 2) { x0 = Math.min(x0, cells[k]); x1 = Math.max(x1, cells[k]); y0 = Math.min(y0, cells[k + 1]); y1 = Math.max(y1, cells[k + 1]); }
+  if (x1 - x0 > 40 || y1 - y0 > 40) return `其他 ${n} 格`;
+  const L = makeLife(64);
+  for (let k = 0; k < cells.length; k += 2) setCell(L, cells[k] - x0 + 12, cells[k + 1] - y0 + 12, 1);
+  const a0 = L.a.slice();
+  for (let p = 1; p <= 30; p++) {
+    step(L, rule);
+    let same = true; for (let i = 0; i < a0.length; i++) if (L.a[i] !== a0[i]) { same = false; break; }
+    if (same) return p === 1 ? `其他静物 ${n} 格` : `其他振荡子 p${p}`;
+  }
+  return `其他 ${n} 格`;
+}
+const NAME = {};
+for (const [k, o] of Object.entries(LIB)) if (o.g !== 'gun' && o.g !== 'meth' && o.g !== 'hl') NAME[k] = o.name.replace(/ p\d+$/, '');
+for (const [k, [nm, rle]] of Object.entries(EXTRA)) NAME[k] = nm;
+const SHIPS = new Set(['glider', 'lwss', 'mwss', 'hwss'].map(k => NAME[k]));
+for (const [k, o] of Object.entries(LIB)) if (NAME[k]) registerPhases(NAME[k], o.pat, 30);
+for (const [k, [nm, rle]] of Object.entries(EXTRA)) registerPhases(nm, parseRLE(rle), 2);
+
+// ---------- headless runs with an absorbing border (methuselahs, soups) ----------
+// Every 16 generations the cells within B of the edge are scanned; a component lying wholly in that band is
+// classified (a spaceship flying away), counted and deleted. P[t] = population + deleted cells is then what
+// the population would be on the infinite plane, as long as the escapees never come back.
+function makeRun(N, B, rule, seedFn) {
+  const L = makeLife(N); seedFn(L); countPop(L);
+  return { L, N, B, rule, gen: 0, P: [L.pop], removed: 0, esc: {}, lost: 0, done: false, T: -1, per: 0, maxP: L.pop, maxG: 0, cap: 30000 };
+}
+function absorb(run) {
+  const { L, N, B } = run, g = unpack(L);
+  const d = (x, y) => Math.min(x, y, N - 1 - x, N - 1 - y);
+  const band = components(g, N, (x, y) => d(x, y) < B, 400).filter(c => {
+    for (const j of c.idx) if (d(j % N, (j / N) | 0) >= B - 2) return false;   // still attached to the middle; look again later
+    return true;
+  });
+  for (const o of objects(band, run.rule, N)) {
+    const n = o.comps.reduce((s, c) => s + c.idx.length, 0);
+    if (SHIPS.has(o.name)) run.esc[o.name] = (run.esc[o.name] || 0) + 1; else run.lost += n;
+    for (const c of o.comps) for (const j of c.idx) setCell(L, j % N, (j / N) | 0, 0);
+    run.removed += n;
+  }
+  countPop(L);
+}
+// periodic for the last 300 generations with some period p ≤ 60 → walk back to where the repetition starts
+function settle(P, win) {
+  const n = P.length;
+  if (n < win + 61) return null;
+  for (let p = 1; p <= 60; p++) {
+    let ok = true;
+    for (let i = 0; i < win; i++) if (P[n - 1 - i] !== P[n - 1 - i - p]) { ok = false; break; }
+    if (!ok) continue;
+    let t = n - 1 - p;
+    while (t >= 0 && P[t] === P[t + p]) t--;
+    return { T: t + 1, p };
+  }
+  return null;
+}
+function advanceRun(run, gens) {
+  for (let i = 0; i < gens && !run.done; i++) {
+    step(run.L, run.rule); run.gen++;
+    if (run.gen % 16 === 0) absorb(run);
+    const p = run.L.pop + run.removed; run.P.push(p);
+    if (p > run.maxP) { run.maxP = p; run.maxG = run.gen; }
+    if (run.gen % 64 === 0 || run.L.pop === 0) {
+      const s = run.L.pop === 0 ? (run.P.length > 1 ? { T: firstZeroTail(run.P), p: 1 } : null) : settle(run.P, 300);
+      if (s) finishRun(run, s);
+      else if (run.gen >= run.cap) finishRun(run, null);
+    }
+  }
+  return run.done;
+}
+function firstZeroTail(P) { let t = P.length - 1; while (t > 0 && P[t - 1] === P[t]) t--; return t; }
+function finishRun(run, s) {
+  run.done = true;
+  if (!s) { run.T = -1; return; }
+  run.T = s.T; run.per = s.p; run.final = run.P[s.T];
+  const ash = {};
+  for (const o of objects(components(unpack(run.L), run.N, null, 400), run.rule, run.N)) ash[o.name] = (ash[o.name] || 0) + 1;
+  for (const [k, v] of Object.entries(run.esc)) ash[k] = (ash[k] || 0) + v;
+  run.ash = ash;
+}
+
+// ---------- view, state ----------
+const P = { rule: LIFE, start: { kind: 'soup' }, d: 0.375, s: 1024, seed: 7, n: 1024, spd: 1, tool: 'draw', trail: true,
+  running: true, preset: 'soup', libKey: null, stampKey: 'glider', T: 200 };
+let life = makeLife(P.n), gen = 0, deathGen = -1, startBox = null;
+const V = { cx: 512, cy: 512, s: 1 };   // view centre in cells, CSS pixels per cell
+const cv = $('c'), ctx = cv.getContext('2d'), gc = document.createElement('canvas'), gctx = gc.getContext('2d');
+let W = 1, H = 1, dpr = 1, img = null, px32 = null, heat = null, hot = null, dirty = true, pending = 0;
+
+// population history: one sample every `stride` generations, halved when full
+const HCAP = 1 << 15, hist = new Uint32Array(HCAP);
+let hLen = 0, stride = 1;
+function histReset() { hLen = 0; stride = 1; hist[hLen++] = life.pop; }
+function histPush() {
+  if (gen % stride) return;
+  if (hLen === HCAP) { for (let i = 0; i < HCAP / 2; i++) hist[i] = hist[2 * i]; hLen = HCAP / 2; stride *= 2; if (gen % stride) return; }
+  hist[hLen++] = life.pop;
+}
+const histAt = g => g % stride === 0 && g / stride < hLen ? hist[g / stride] : NaN;
+
+// translation-invariant signature of small patterns, for exact period and displacement
+const RING = 128, rHash = new Int32Array(RING), rPop = new Int32Array(RING), rX = new Int32Array(RING), rY = new Int32Array(RING), rOk = new Uint8Array(RING);
+function ringReset() { rOk.fill(0); }
+function signature() {
+  const k = gen % RING;
+  rOk[k] = 0;
+  if (life.pop > 4000 || life.pop === 0) return;
+  const { N, W, a, rowAny } = life;
+  let mx = N, my = -1;
+  for (let y = 0; y < N; y++) { if (!rowAny[y]) continue; if (my < 0) my = y;
+    for (let w = 0; w < W; w++) { const v = a[y * W + w]; if (v) { const x = (w << 5) + 31 - Math.clz32(v & -v); if (x < mx) mx = x; } } }
+  let h = 0;
+  for (let y = my; y < N; y++) { if (!rowAny[y]) continue;
+    for (let w = 0; w < W; w++) { const v = a[y * W + w]; if (!v) continue;
+      for (let i = 0; i < 32; i++) if ((v >>> i) & 1) {
+        let z = Math.imul(((w << 5) + i - mx) + 0x9E37, 0x85EBCA6B) ^ Math.imul(y - my + 0x79B9, 0xC2B2AE35);
+        z ^= z >>> 15; z = Math.imul(z, 0x27D4EB2F); z ^= z >>> 13; h = (h + z) | 0; } } }
+  rHash[k] = h; rPop[k] = life.pop; rX[k] = mx; rY[k] = my; rOk[k] = 1;
+}
+function period() {
+  const k = gen % RING;
+  if (!rOk[k]) return null;
+  for (let p = 1; p < RING - 1 && p <= gen; p++) {
+    const j = (gen - p) % RING;
+    if (rOk[j] && rHash[j] === rHash[k] && rPop[j] === rPop[k]) {
+      const wrap = v => { v %= life.N; if (v > life.N / 2) v -= life.N; if (v < -life.N / 2) v += life.N; return v; };
+      return { p, dx: wrap(rX[k] - rX[j]), dy: wrap(rY[k] - rY[j]) };
+    }
+  }
+  return null;
+}
+
+function advance(n) {
+  for (let i = 0; i < n; i++) {
+    step(life, P.rule); gen++;
+    if (life.pop === 0 && deathGen < 0) deathGen = gen;
+    histPush(); signature();
+  }
+  pending += n; dirty = true;
+}
+function edited() { countPop(life); ringReset(); signature(); settleGen = -1; settled = null; deathGen = life.pop ? -1 : gen; dirty = true; hist[hLen - 1] = life.pop; }
+
+// ---------- start states ----------
+function rebuild() {   // fresh grid of size P.n with the current start state, generation 0
+  if (life.N !== P.n) { life = makeLife(P.n); allocImage(); } else { life.a.fill(0); }
+  if (heat) { heat.fill(0); hot.fill(1); }
+  gen = 0; deathGen = -1; startBox = null;
+  const st = P.start, N = P.n;
+  if (st.kind === 'soup') { const [x0, y0, s] = placeSoup(life, Math.round(P.s), P.d, P.seed); startBox = [x0, y0, s, s]; }
+  else if (st.kind === 'lib' || st.kind === 'rle') {
+    const pat = st.kind === 'lib' ? LIB[st.key].pat : st.pat;
+    if (pat.w <= N && pat.h <= N) { const [x0, y0] = placePattern(life, pat, N / 2, N / 2); startBox = [x0, y0, pat.w, pat.h]; }
+  }
+  countPop(life); histReset(); ringReset(); signature(); dirty = true; settleGen = -1; settled = null;
+  if (life.pop === 0) deathGen = 0;
+}
+function fitView() {
+  const r = cv.getBoundingClientRect(), N = P.n;
+  let [x0, y0, w, h] = startBox || [0, 0, N, N];
+  if (P.start.kind === 'lib' && P.start.key === 'gosper') { w += 60; h += 60; }   // leave room for the glider stream (south-east)
+  if (P.start.kind === 'soup' && w < 256) { const e = (Math.min(256, N) - w) / 2; x0 -= e; y0 -= e; w += 2 * e; h += 2 * e; }   // small soups spread
+  const m = Math.max(w, h) >= N / 2 ? 1 : P.start.kind === 'lib' && P.start.key === 'gosper' ? 1.15 : 2.4;
+  V.s = clamp(Math.min(r.width / (w * m), r.height / (h * m)), [minScale(), 24]);
+  V.cx = x0 + w / 2; V.cy = y0 + h / 2; dirty = true;
+}
+function minScale() { const r = cv.getBoundingClientRect(); return Math.max(0.05, Math.min(r.width, r.height) / P.n); }
+
+function setRule(R, keepText) {
+  P.rule = R; if (!keepText) $('rule').value = R.text; $('rule').classList.remove('bad');
+  $('ruleMsg').textContent = `出生：${R.B.length ? R.B.join('、') : '无'} 个邻居 · 存活：${R.S.length ? R.S.join('、') : '无'} 个邻居`;
+  $('ruleMsg').className = '';
+  ringReset(); syncUI();
+}
+function loadLib(key) { const o = LIB[key]; P.libKey = key; if (o.rule) setRule(parseRule(o.rule)); P.start = { kind: 'lib', key }; P.preset = ''; rebuild(); fitView(); syncUI(); }
+function applyPreset(key) {
+  const pr = PRESETS[key]; P.preset = key; setRule(parseRule(pr.rule));
+  if (pr.lib) { P.start = { kind: 'lib', key: pr.lib }; P.libKey = pr.lib; }
+  else { P.start = { kind: 'soup' }; P.d = pr.soup.d; P.s = Math.min(pr.soup.s, P.n); P.libKey = null; }
+}
+
+// ---------- drawing ----------
+const BG = [10, 13, 18];
+const pack = (r, g, b) => (255 << 24 | b << 16 | g << 8 | r) >>> 0;
+const LUT = new Uint32Array(256);
+(() => {   // 255 = alive; 254 … 1 = the trail of a dead cell, warm to cold to background
+  const stops = [[0, BG], [0.3, [30, 44, 86]], [0.75, [170, 72, 60]], [1, [255, 150, 70]]];
+  for (let h = 0; h < 255; h++) {
+    const t = h / 254; let j = 0; while (j < stops.length - 2 && t > stops[j + 1][0]) j++;
+    const [ta, ca] = stops[j], [tb, cb] = stops[j + 1], f = (t - ta) / (tb - ta);
+    LUT[h] = pack(...ca.map((v, i) => Math.round(v + (cb[i] - v) * f)));
+  }
+  LUT[255] = pack(255, 236, 170);
+})();
+function allocImage() {
+  const N = life.N; gc.width = gc.height = N;
+  img = gctx.createImageData(N, N); px32 = new Uint32Array(img.data.buffer); px32.fill(LUT[0]);
+  heat = new Uint8Array(N * N); hot = new Uint8Array(life.W * N).fill(1);
+}
+// grid → image, 1 pixel per cell. dec = how far the trail fades since the last frame, applied through a table
+const DEC = new Uint8Array(256);
+function renderGrid(dec) {
+  const { N, W, a } = life, ht = heat, px = px32, hw = hot, lut = LUT, dt = DEC;
+  for (let h = 0; h < 256; h++) DEC[h] = !P.trail ? 0 : h === 255 ? Math.max(0, 254 - dec) : Math.max(0, h - dec);
+  for (let y = 0; y < N; y++) for (let w = 0; w < W; w++) {
+    const wi = y * W + w, v = a[wi];
+    if (!v && !hw[wi]) continue;
+    const o = y * N + (w << 5); let warm = 0;
+    for (let i = 0; i < 32; i++) {
+      const k = o + i, h = (v >>> i) & 1 ? 255 : dt[ht[k]];
+      ht[k] = h; px[k] = lut[h]; warm |= h;
+    }
+    hw[wi] = warm ? 1 : 0;
+  }
+  gctx.putImageData(img, 0, 0);
+}
+function draw() {
+  const dec = Math.min(254, pending * 22); pending = 0;
+  renderGrid(dec);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#05070a'; ctx.fillRect(0, 0, W, H);
+  const N = life.N, sd = V.s * dpr, vx0 = V.cx - W / 2 / sd, vy0 = V.cy - H / 2 / sd, vx1 = V.cx + W / 2 / sd, vy1 = V.cy + H / 2 / sd;
+  ctx.imageSmoothingEnabled = sd < 1; ctx.imageSmoothingQuality = 'high';
+  // the torus is drawn tiled: every copy that meets the screen, clipped to its visible part
+  for (let ty = Math.floor(vy0 / N), c1 = 0; ty <= Math.floor(vy1 / N) && c1 < 8; ty++, c1++)
+    for (let tx = Math.floor(vx0 / N), c2 = 0; tx <= Math.floor(vx1 / N) && c2 < 8; tx++, c2++) {
+      const sx0 = Math.max(0, Math.floor(vx0 - tx * N)), sy0 = Math.max(0, Math.floor(vy0 - ty * N));
+      const sx1 = Math.min(N, Math.ceil(vx1 - tx * N)), sy1 = Math.min(N, Math.ceil(vy1 - ty * N));
+      if (sx1 <= sx0 || sy1 <= sy0) continue;
+      ctx.drawImage(gc, sx0, sy0, sx1 - sx0, sy1 - sy0, W / 2 + (tx * N + sx0 - V.cx) * sd, H / 2 + (ty * N + sy0 - V.cy) * sd, (sx1 - sx0) * sd, (sy1 - sy0) * sd);
+    }
+  const X = x => W / 2 + (x - V.cx) * sd, Y = y => H / 2 + (y - V.cy) * sd;
+  if (sd >= 6) {   // cell grid when cells are big enough
+    ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.09, (sd - 6) / 60 + 0.03)})`; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = Math.ceil(vx0); x <= vx1; x++) { const sx = Math.round(X(x)) + 0.5; ctx.moveTo(sx, 0); ctx.lineTo(sx, H); }
+    for (let y = Math.ceil(vy0); y <= vy1; y++) { const sy = Math.round(Y(y)) + 0.5; ctx.moveTo(0, sy); ctx.lineTo(W, sy); }
+    ctx.stroke();
+  }
+  // seams of the torus
+  ctx.strokeStyle = 'rgba(159,180,208,.35)'; ctx.setLineDash([6 * dpr, 6 * dpr]); ctx.lineWidth = 1 * dpr; ctx.beginPath();
+  for (let k = Math.ceil(vx0 / N), c = 0; k * N <= vx1 && c < 8; k++, c++) { ctx.moveTo(X(k * N), 0); ctx.lineTo(X(k * N), H); }
+  for (let k = Math.ceil(vy0 / N), c = 0; k * N <= vy1 && c < 8; k++, c++) { ctx.moveTo(0, Y(k * N)); ctx.lineTo(W, Y(k * N)); }
+  ctx.stroke(); ctx.setLineDash([]);
+  if (hoverCell && P.tool === 'stamp') {   // stamp preview
+    const pat = LIB[P.stampKey].pat, x0 = Math.round(hoverCell[0] - pat.w / 2), y0 = Math.round(hoverCell[1] - pat.h / 2);
+    ctx.fillStyle = 'rgba(127,255,212,.55)';
+    for (let k = 0; k < pat.cells.length; k += 2) ctx.fillRect(X(x0 + pat.cells[k]), Y(y0 + pat.cells[k + 1]), Math.max(1, sd), Math.max(1, sd));
+  }
+  dirty = false;
+}
+
+function drawPlot() {
+  const c = $('plot'), d = devicePixelRatio || 1, w = Math.round(348 * d), h = Math.round(120 * d);
+  if (c.width !== w) { c.width = w; c.height = h; }
+  const g = c.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#0f141b'; g.fillRect(0, 0, w, h);
+  let mx = 1; for (let i = 0; i < hLen; i++) if (hist[i] > mx) mx = hist[i];
+  const ml = 44 * d, mb = 16 * d, mt = 8 * d, pw = w - ml - 6 * d, ph = h - mb - mt, span = Math.max(1, (hLen - 1) * stride);
+  g.font = `${10 * d}px ui-monospace, Menlo, monospace`; g.fillStyle = '#8c98a5'; g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1;
+  for (const f of [0, 0.5, 1]) { const y = mt + ph * (1 - f); g.beginPath(); g.moveTo(ml, y); g.lineTo(w - 6 * d, y); g.stroke();
+    const v = Math.round(mx * f); g.fillText(v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : String(v), ml - 4 * d, y); }
+  g.textAlign = 'left'; g.textBaseline = 'top'; g.fillText('0', ml, h - mb + 3 * d);
+  g.textAlign = 'right'; g.fillText(`第 ${((hLen - 1) * stride).toLocaleString()} 代`, w - 6 * d, h - mb + 3 * d);
+  // one vertical min–max bar per pixel column, so spikes survive the compression
+  g.strokeStyle = '#ffb35c'; g.lineWidth = Math.max(1, d); g.beginPath();
+  const cols = Math.max(1, Math.round(pw));
+  for (let col = 0; col < cols; col++) {
+    const i0 = Math.floor(col / cols * (hLen - 1)), i1 = Math.max(i0, Math.floor((col + 1) / cols * (hLen - 1)));
+    let lo = Infinity, hi = -Infinity; for (let i = i0; i <= i1 && i < hLen; i++) { if (hist[i] < lo) lo = hist[i]; if (hist[i] > hi) hi = hist[i]; }
+    if (!Number.isFinite(lo)) continue;
+    const x = ml + col + 0.5;
+    if (col === 0) g.moveTo(x, mt + ph * (1 - lo / mx));
+    g.lineTo(x, mt + ph * (1 - hi / mx)); g.lineTo(x, mt + ph * (1 - lo / mx));
+  }
+  g.stroke();
+}
+
+// ---------- live read-out ----------
+let live = {}, settleGen = -1, settled = null;
+function liveInfo() {
+  const lines = [], pr = period();
+  lines.push(`第 ${gen.toLocaleString()} 代 · 种群 ${life.pop.toLocaleString()} · 规则 ${P.rule.text}`);
+  if (deathGen >= 0 && life.pop === 0) lines.push(`第 ${deathGen} 代全部死亡`);
+  else if (pr) {
+    const v = Math.max(Math.abs(pr.dx), Math.abs(pr.dy));
+    if (pr.p === 1) lines.push('静物：每一代都不变（周期 1）');
+    else if (!v) lines.push(`振荡子：周期 ${pr.p}`);
+    else { const g = gcd(v, pr.p); lines.push(`飞船：周期 ${pr.p}，每周期位移 (${pr.dx}, ${pr.dy})，速度 ${v / g === 1 ? '' : v / g}c/${pr.p / g}` + (pr.dx && pr.dy ? '（对角）' : '（正交）')); }
+  } else if (life.pop > 4000) lines.push('图样太大，不做精确周期检测（> 4000 格）');
+  else lines.push('整体近 126 代没有重复，平移后也不重合（不是单个静物、振荡子或飞船）');
+  const p30 = histAt(gen - 30);
+  if (gen !== settleGen && (gen - settleGen >= 16 || gen < settleGen)) { settleGen = gen; settled = stride === 1 ? settle(hist.subarray(0, hLen), 300) : settled; }   // after decimation keep the last answer
+  const st = settled;
+  if (Number.isFinite(p30)) lines.push(`近 30 代种群变化：${life.pop - p30 >= 0 ? '+' : ''}${life.pop - p30}`);
+  if (st && life.pop > 0) lines.push(`种群从第 ${st.T} 代起以周期 ${st.p} 重复`);
+  $('live').textContent = lines.join('\n');
+  live = { gen, pop: life.pop, rule: P.rule.text, N: life.N, period: pr, deathGen, settle: st, d30: Number.isFinite(p30) ? life.pop - p30 : null };
+  window.__life = live;
+  $('stat').textContent = `第 ${gen.toLocaleString()} 代 · 种群 ${life.pop.toLocaleString()} · ${P.rule.text} · ${life.N}×${life.N} 环面 · ${fps.toFixed(0)} 代/秒` + (P.running ? '' : ' · 已暂停');
+}
+const gcd = (a, b) => { for (let i = 0; b && i < 64; i++) [a, b] = [b, a % b]; return a; };
+
+// ---------- measurements ----------
+const M = { meth: null, methRes: [], soups: null, goe: null };
+const METH = ['rpent', 'acorn', 'diehard'];
+function methStart() {
+  M.methRes = []; M.meth = { i: 0, run: null };
+  window.__meth = null;
+}
+function methTick(budget) {
+  const t0 = performance.now(), m = M.meth;
+  for (let guard = 0; guard < 1e6 && performance.now() - t0 < budget; guard++) {
+    if (!m.run) {
+      if (m.i >= METH.length) { M.meth = null; window.__meth = M.methRes; break; }
+      const pat = LIB[METH[m.i]].pat; m.run = makeRun(512, 24, P.rule, L => placePattern(L, pat, 256, 256));
+    }
+    if (advanceRun(m.run, 32)) {
+      const r = m.run; M.methRes.push({ key: METH[m.i], T: r.T, per: r.per, final: r.final, maxP: r.maxP, maxG: r.maxG, ash: r.ash, lost: r.lost });
+      m.run = null; m.i++;
+    }
+  }
+  methShow();
+}
+function methShow() {
+  const L = [];
+  for (const r of M.methRes) {
+    const nm = LIB[r.key].name;
+    if (r.T < 0) { L.push(`${nm}：3 万代内没有稳定`); continue; }
+    L.push(r.final ? `${nm}：第 ${r.T} 代稳定（种群周期 ${r.per}），最终 ${r.final} 格，峰值 ${r.maxP} 格（第 ${r.maxG} 代）`
+      : `${nm}：第 ${r.T} 代全部死亡，峰值 ${r.maxP} 格（第 ${r.maxG} 代）`);
+    if (r.ash && r.final) L.push('  灰烬：' + Object.entries(r.ash).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}×${v}`).join(' '));
+  }
+  if (M.meth) L.push(`正在跑 ${LIB[METH[M.meth.i]]?.name ?? ''}：第 ${M.meth.run ? M.meth.run.gen : 0} 代…`);
+  $('methOut').textContent = L.join('\n');
+}
+function soupsStart(n, seed) {
+  M.soups = { n, seed, rule: P.rule, i: 0, run: null, T: [], died: 0, unstable: 0, ash: {}, objs: 0, finalSum: 0, lost: 0, lostSoups: 0 };
+}
+const CENSUS_N = 512;   // on 256² about 1 soup in 20 spread its ash into the band
+function soupSeedFn(seed) { return L => { const r = rng(seed), o = CENSUS_N / 2 - 8; for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (r() < 0.5) setCell(L, o + x, o + y, 1); }; }
+function soupsTick(budget) {
+  const S = M.soups, t0 = performance.now();
+  for (let guard = 0; guard < 1e7 && S.i < S.n && performance.now() - t0 < budget; guard++) {
+    if (!S.run) S.run = makeRun(CENSUS_N, 24, S.rule, soupSeedFn(S.seed * 100003 + S.i));
+    if (advanceRun(S.run, 64)) {
+      const r = S.run; S.run = null; S.i++;
+      if (r.T < 0) { S.unstable++; continue; }
+      S.T.push(r.T); S.finalSum += r.final; S.lost += r.lost; if (r.lost) S.lostSoups++;
+      if (!r.final) S.died++;
+      for (const [k0, v] of Object.entries(r.ash)) { const k = k0.replace(/ \d+ 格$/, ''); S.ash[k] = (S.ash[k] || 0) + v; S.objs += v; }
+    }
+  }
+  if (S.i >= S.n) S.done = true;
+  soupsShow();
+}
+function soupsShow() {
+  const S = M.soups; if (!S) { $('ashOut').textContent = ''; return; }
+  const T = S.T.slice().sort((a, b) => a - b), mean = T.reduce((a, b) => a + b, 0) / Math.max(1, T.length);
+  const L = [`${S.i} / ${S.n} 锅` + (S.done ? ' · 完成' : ' · 进行中') + `（规则 ${S.rule.text}，种子 ${S.seed}）`];
+  if (T.length) {
+    L.push(`稳定所需代数：平均 ${mean.toFixed(0)}，中位数 ${T[T.length >> 1]}，最长 ${T[T.length - 1]}`);
+    L.push(`稳定后平均 ${(S.finalSum / T.length).toFixed(1)} 个活格子；完全死光 ${S.died} 锅` + (S.unstable ? `；超过 3 万代未稳定 ${S.unstable} 锅` : ''));
+    L.push(`吸收带删掉的非飞船碎片：${S.lostSoups} 锅，共 ${S.lost} 格`);
+    L.push(`共 ${S.objs} 个对象：`);
+    const rows = Object.entries(S.ash).sort((a, b) => b[1] - a[1]);
+    for (const [k, v] of rows.slice(0, 20)) L.push(`  ${k.padEnd(12)} ${String(v).padStart(6)}  ${(100 * v / S.objs).toFixed(2).padStart(6)}%  每锅 ${(v / S.i).toFixed(3)}`);
+    if (rows.length > 20) L.push(`  …另有 ${rows.length - 20} 种`);
+  }
+  $('ashOut').textContent = L.join('\n');
+  window.__ash = { n: S.i, total: S.n, done: !!S.done, T: { mean, median: T[T.length >> 1], max: T[T.length - 1] }, died: S.died, unstable: S.unstable,
+    meanFinal: S.finalSum / Math.max(1, T.length), objs: S.objs, lost: S.lost, lostSoups: S.lostSoups, ash: Object.fromEntries(Object.entries(S.ash).sort((a, b) => b[1] - a[1])) };
+}
+// Garden of Eden on an n×n torus: next row r depends only on rows r−1, r, r+1, so one table of 2^(3n) entries
+// turns a step into n lookups; every state's successor is marked, the unmarked states have no predecessor
+function goeStart(n) {
+  const mask = (1 << n) - 1, Tb = new Uint8Array(1 << (3 * n)), R = P.rule;
+  for (let i = 0; i < Tb.length; i++) {
+    const a = i >> (2 * n), b = (i >> n) & mask, c = i & mask; let out = 0;
+    for (let x = 0; x < n; x++) {
+      const l = (x + n - 1) % n, r = (x + 1) % n, bit = (v, k) => (v >> k) & 1;
+      const cnt = bit(a, l) + bit(a, x) + bit(a, r) + bit(b, l) + bit(b, r) + bit(c, l) + bit(c, x) + bit(c, r);
+      if (bit(b, x) ? R.S.includes(cnt) : R.B.includes(cnt)) out |= 1 << x;
+    }
+    Tb[i] = out;
+  }
+  const total = 2 ** (n * n);
+  M.goe = { n, mask, Tb, total, s: 0, seen: new Uint32Array(Math.max(1, total / 32)), rule: R.text, t0: performance.now() };
+}
+function goeTick(budget) {
+  const G = M.goe, { n, mask, Tb, seen, total } = G, t0 = performance.now(), n2 = 2 * n;
+  while (G.s < total && performance.now() - t0 < budget) {
+    const end = Math.min(total, G.s + 65536);
+    for (let s = G.s; s < end; s++) {
+      let nx = 0;
+      for (let r = 0; r < n; r++) {
+        const up = (s >>> (n * ((r + n - 1) % n))) & mask, md = (s >>> (n * r)) & mask, dn = (s >>> (n * ((r + 1) % n))) & mask;
+        nx |= Tb[(up << n2) | (md << n) | dn] << (n * r);
+      }
+      nx >>>= 0; seen[nx >>> 5] |= 1 << (nx & 31);
+    }
+    G.s = end;
+  }
+  let msg = `${n}×${n} 环面 · ${G.rule} · 已走 ${G.s.toLocaleString()} / ${total.toLocaleString()} 个状态`;
+  if (G.s >= total) {
+    let reach = 0; for (let i = 0; i < seen.length; i++) { let v = seen[i]; v = v - ((v >>> 1) & 0x55555555); v = (v & 0x33333333) + ((v >>> 2) & 0x33333333); reach += Math.imul((v + (v >>> 4)) & 0x0F0F0F0F, 0x01010101) >>> 24; }
+    const orphan = total - reach;
+    msg = `${n}×${n} 环面 · ${G.rule}\n状态总数 2^${n * n} = ${total.toLocaleString()}\n能被走到的 ${reach.toLocaleString()}（${(100 * reach / total).toFixed(3)}%）\n没有前身的 ${orphan.toLocaleString()}（${(100 * orphan / total).toFixed(3)}%）\n用时 ${((performance.now() - G.t0) / 1000).toFixed(1)} 秒`;
+    (window.__goe = window.__goe || {})[n] = { rule: G.rule, total, reach, orphan };
+    M.goe = null;
+  }
+  $('goeOut').textContent = msg;
+}
+
+// ---------- UI ----------
+function button(parent, text, data, on) { const b = document.createElement('button'); b.textContent = text; Object.assign(b.dataset, data); b.onclick = on; parent.appendChild(b); return b; }
+for (const [g, title] of Object.entries(GROUPS)) {
+  const h = document.createElement('h3'); h.textContent = title; $('lib').appendChild(h);
+  const box = document.createElement('div'); box.className = 'presets'; $('lib').appendChild(box);
+  for (const [k, o] of Object.entries(LIB)) if (o.g === g) button(box, o.name, { lib: k }, () => {
+    if (P.tool === 'stamp') { P.stampKey = k; syncUI(); return; }
+    loadLib(k);
+  });
+}
+for (const [k, [nm, txt]] of Object.entries(RULES)) button($('rules'), `${nm} ${txt}`, { rule: txt }, () => setRule(parseRule(txt)));
+for (const [k, pr] of Object.entries(PRESETS)) button($('pre'), pr.name, { p: k }, () => { applyPreset(k); rebuild(); fitView(); syncUI(); });
+for (const [k, nm] of Object.entries(TOOLS)) button($('tools'), nm, { tool: k }, () => { P.tool = k; cv.style.cursor = k === 'pan' ? 'grab' : 'crosshair'; syncUI(); });
+
+const sideVal = () => Math.round(clamp(2 ** +$('S').value, LIM.s));
+const soupsVal = () => Math.round(clamp(10 ** +$('T').value, LIM.T) / 10) * 10;
+function syncUI() {
+  $('Spd').value = P.spd; $('vSpd').textContent = P.spd >= 0 ? `每帧 ${2 ** P.spd} 代` : `每 ${2 ** -P.spd} 帧 1 代`;
+  $('D').value = P.d; $('vD').textContent = P.d.toFixed(3);
+  $('S').value = Math.log2(P.s); $('vS').textContent = `${Math.min(Math.round(P.s), P.n)}`;
+  $('Seed').value = P.seed; $('vSeed').textContent = P.seed;
+  $('Nsl').value = Math.log2(P.n); $('vN').textContent = `${P.n}×${P.n}`;
+  $('T').value = Math.log10(P.T); $('vT').textContent = P.T;
+  $('trail').checked = P.trail;
+  $('play').textContent = P.running ? '⏸ 暂停' : '▶ 播放';
+  document.querySelectorAll('[data-rule]').forEach(b => b.classList.toggle('on', b.dataset.rule === P.rule.text));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === P.tool));
+  document.querySelectorAll('[data-lib]').forEach(b => b.classList.toggle('on', P.tool === 'stamp' ? b.dataset.lib === P.stampKey
+    : P.start.kind === 'lib' && b.dataset.lib === P.start.key));
+}
+$('play').onclick = () => { P.running = !P.running; syncUI(); };
+$('stepB').onclick = () => { P.running = false; advance(1); syncUI(); };
+$('step30').onclick = () => { P.running = false; advance(30); syncUI(); };
+$('reset').onclick = () => { rebuild(); syncUI(); };
+$('clear').onclick = () => { P.start = { kind: 'empty' }; P.preset = ''; rebuild(); syncUI(); };
+$('Spd').oninput = e => { P.spd = Math.round(clamp(+e.target.value, LIM.spd)); syncUI(); };
+const tryRule = () => {
+  const R = parseRule($('rule').value);
+  if (!R) { $('rule').classList.add('bad'); $('ruleMsg').textContent = '格式应为 B数字/S数字，数字取 0–8，例如 B36/S23 或 B2/S'; $('ruleMsg').className = 'err'; return; }
+  setRule(R);
+};
+$('ruleGo').onclick = tryRule;
+$('rule').addEventListener('keydown', e => { if (e.key === 'Enter') tryRule(); });
+$('rleGo').onclick = () => {
+  const r = parseRLE($('rle').value);
+  if (r.err) { $('rleMsg').textContent = 'RLE 有误：' + r.err; $('rleMsg').className = 'err'; return; }
+  if (r.w > P.n || r.h > P.n) { $('rleMsg').textContent = `图样 ${r.w}×${r.h} 比网格大`; $('rleMsg').className = 'err'; return; }
+  if (r.rule) setRule(r.rule);
+  P.start = { kind: 'rle', pat: r }; P.preset = ''; rebuild(); fitView(); syncUI();
+  $('rleMsg').textContent = `已载入 ${r.w}×${r.h}，${r.cells.length / 2} 个活格子`; $('rleMsg').className = '';
+};
+$('rleOut').onclick = () => {   // current grid → RLE (row by row, bounding box only)
+  if (life.pop > 20000 || !life.pop) { $('rleMsg').textContent = life.pop ? '活格子太多' : '网格是空的'; return; }
+  const g = unpack(life), N = life.N; let x0 = N, x1 = -1, y0 = N, y1 = -1;
+  for (let i = 0; i < N * N; i++) if (g[i]) { const x = i % N, y = (i / N) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  let out = '', blank = 0;
+  const run = (n, c) => (n > 1 ? n : '') + c;
+  for (let y = y0; y <= y1; y++) {
+    let row = '', x = x0;
+    while (x <= x1) { const v = g[y * N + x]; let n = 0; while (x <= x1 && g[y * N + x] === v) { n++; x++; } if (v || x <= x1) row += run(n, v ? 'o' : 'b'); }
+    if (!row) { blank++; continue; }
+    out += (out ? run(blank + 1, '$') : '') + row; blank = 0;
+  }
+  $('rle').value = `x = ${x1 - x0 + 1}, y = ${y1 - y0 + 1}, rule = ${P.rule.text}\n${out}!`;
+  $('rleMsg').textContent = '已导出到上面的文本框'; $('rleMsg').className = '';
+};
+$('D').oninput = e => { P.d = clamp(+e.target.value, LIM.d); syncUI(); };
+$('S').oninput = () => { P.s = sideVal(); syncUI(); };
+$('Seed').oninput = e => { P.seed = Math.round(clamp(+e.target.value, LIM.seed)); syncUI(); };
+$('soupGo').onclick = () => { P.start = { kind: 'soup' }; P.preset = ''; rebuild(); fitView(); syncUI(); };
+$('Nsl').oninput = e => { const n = 2 ** Math.round(clamp(+e.target.value, LIM.n)); if (n !== P.n) { P.n = n; P.s = Math.min(P.s, n); rebuild(); fitView(); } syncUI(); };
+$('trail').onchange = e => { P.trail = e.target.checked; hot.fill(1); dirty = true; };
+$('fit').onclick = fitView;
+$('T').oninput = () => { P.T = soupsVal(); syncUI(); };
+$('methGo').onclick = () => { if (!M.meth) methStart(); };
+$('soupsGo').onclick = () => { if (M.soups && !M.soups.done) { M.soups.done = true; soupsShow(); } else soupsStart(P.T, P.seed); };
+document.querySelectorAll('[data-goe]').forEach(b => b.onclick = () => { if (!M.goe) goeStart(+b.dataset.goe); });
+
+// ---------- mouse: draw / erase / stamp / pan / zoom ----------
+let drag = null, hoverCell = null;
+function toCell(e) {
+  const r = cv.getBoundingClientRect();
+  return [V.cx + (e.clientX - r.left - r.width / 2) / V.s, V.cy + (e.clientY - r.top - r.height / 2) / V.s];
+}
+function paintLine(a, b, v) {   // every cell on the segment, so a fast stroke has no gaps
+  const [x0, y0] = a.map(Math.floor), [x1, y1] = b.map(Math.floor), n = Math.min(8192, Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)));
+  for (let i = 0; i <= n; i++) setCell(life, Math.round(x0 + (x1 - x0) * i / (n || 1)), Math.round(y0 + (y1 - y0) * i / (n || 1)), v);
+  edited();
+}
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  const c = toCell(e), pan = e.button !== 0 || P.tool === 'pan';
+  if (pan) { drag = { pan: true, x: e.clientX, y: e.clientY }; cv.style.cursor = 'grabbing'; return; }
+  if (P.tool === 'stamp') { placePattern(life, LIB[P.stampKey].pat, c[0], c[1]); edited(); return; }
+  const v = P.tool === 'erase' || e.shiftKey ? 0 : 1;
+  drag = { pan: false, v, last: c }; paintLine(c, c, v);
+});
+cv.addEventListener('pointermove', e => {
+  const c = toCell(e); hoverCell = c; if (P.tool === 'stamp') dirty = true;
+  if (!drag) return;
+  if (drag.pan) {
+    V.cx = ((V.cx - (e.clientX - drag.x) / V.s) % P.n + P.n) % P.n; V.cy = ((V.cy - (e.clientY - drag.y) / V.s) % P.n + P.n) % P.n;
+    drag.x = e.clientX; drag.y = e.clientY; dirty = true;
+  } else { paintLine(drag.last, c, drag.v); drag.last = c; }
+});
+cv.addEventListener('pointerup', () => { drag = null; cv.style.cursor = P.tool === 'pan' ? 'grab' : 'crosshair'; });
+cv.addEventListener('pointerleave', () => { hoverCell = null; dirty = true; });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), mx = e.clientX - r.left - r.width / 2, my = e.clientY - r.top - r.height / 2;
+  const ax = V.cx + mx / V.s, ay = V.cy + my / V.s;   // keep the cell under the cursor fixed
+  V.s = clamp(V.s * Math.exp(-e.deltaY * 0.0015), [minScale(), 40]);
+  V.cx = ax - mx / V.s; V.cy = ay - my / V.s; dirty = true;
+}, { passive: false });
+addEventListener('keydown', e => {
+  if (e.target !== document.body) return;
+  if (e.key === ' ') { e.preventDefault(); $('play').onclick(); }
+  else if (e.key === 'n' || e.key === 'N') $('stepB').onclick();
+  else if (e.key === 'f' || e.key === 'F') fitView();
+  else if (e.key === 'h' || e.key === 'H') { document.body.classList.toggle('noui'); resize(); }
+});
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+  V.s = Math.max(V.s, minScale()); dirty = true;
+}
+addEventListener('resize', resize);
+
+// test hooks (bounded): advance n generations synchronously; run measurements to completion
+window.__run = n => { advance(Math.round(clamp(+n || 0, [0, 20000]))); draw(); liveInfo(); drawPlot(); return gen; };
+window.__methSync = () => { methStart(); for (let i = 0; i < 1e5 && M.meth; i++) methTick(1e4); return M.methRes; };
+window.__censusSync = (n, seed) => { soupsStart(Math.round(clamp(+n || 0, LIM.T)), Math.round(clamp(+seed || 1, LIM.seed))); for (let i = 0; i < 1e5 && !M.soups.done; i++) soupsTick(1e4); return window.__ash; };
+window.__goeSync = n => { goeStart(Math.round(clamp(+n || 3, [3, 5]))); for (let i = 0; i < 1e5 && M.goe; i++) goeTick(1e4); return window.__goe; };
+
+// ---------- URL params ----------
+// e.g. ?p=gun  ?p=glider&z=20  ?rule=B36/S23&p=replicator&g=200  ?p=soup&d=0.3&seed=5&s=256&n=512&ui=0
+// Numbers must be finite and are clamped to the slider ranges; p must be an own key of PRESETS or LIB; rule must match RULE_RE.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { const v = q.get(k); if (v !== null && v.trim() !== '') { const x = Number(v); if (Number.isFinite(x)) f(x); } };
+num('n', x => { P.n = 2 ** Math.round(clamp(Math.log2(Math.max(1, x)), LIM.n)); });
+P.s = Math.min(P.s, P.n);
+applyPreset('soup'); P.s = P.n;
+const pk = q.get('p');
+if (pk !== null && Object.hasOwn(PRESETS, pk)) applyPreset(pk);
+else if (pk !== null && Object.hasOwn(LIB, pk)) { P.start = { kind: 'lib', key: pk }; P.preset = ''; P.libKey = pk; if (LIB[pk].rule) setRule(parseRule(LIB[pk].rule)); }
+P.s = Math.min(P.s, P.n);
+{ const r = q.get('rule'), R = r !== null ? parseRule(r) : null; if (R) { setRule(R); P.preset = ''; } }
+num('d', x => { P.d = clamp(x, LIM.d); });
+num('s', x => { P.s = Math.round(clamp(x, [LIM.s[0], P.n])); });
+num('seed', x => { P.seed = Math.round(clamp(x, LIM.seed)); });
+num('spd', x => { P.spd = Math.round(clamp(x, LIM.spd)); });
+num('T', x => { P.T = Math.round(clamp(x, LIM.T)); });
+{ const t = q.get('tool'); if (t !== null && Object.hasOwn(TOOLS, t)) P.tool = t; }
+if (q.get('trail') === '0') P.trail = false;
+if (q.get('run') === '0') P.running = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+let ffLeft = 0; num('g', x => { ffLeft = Math.round(clamp(x, LIM.g)); });
+
+setRule(P.rule); resize(); allocImage(); rebuild(); fitView();
+num('z', x => { V.s = clamp(x, [minScale(), LIM.z[1]]); });
+num('cx', x => { V.cx = clamp(x, [0, P.n]); });
+num('cy', x => { V.cy = clamp(x, [0, P.n]); });
+syncUI();
+
+// ---------- main loop ----------
+let frameNo = 0, fps = 0, fpsGen = 0, fpsT = performance.now();
+const ffDeadline = performance.now() + 6000;   // fast-forward from ?g= stops after 6 s whatever the grid size
+(function loop() {
+  frameNo++;
+  const t0 = performance.now();
+  if (ffLeft > 0) {
+    while (ffLeft > 0 && performance.now() - t0 < 40) { advance(1); ffLeft--; }
+    if (performance.now() > ffDeadline) ffLeft = 0;
+  } else if (P.running) {
+    const n = P.spd >= 0 ? 2 ** P.spd : (frameNo % 2 ** -P.spd === 0 ? 1 : 0);
+    for (let i = 0; i < n && performance.now() - t0 < 30; i++) advance(1);
+  }
+  if (M.meth) methTick(10);
+  if (M.soups && !M.soups.done) soupsTick(10);
+  if (M.goe) goeTick(10);
+  const now = performance.now();
+  if (now - fpsT > 500) { fps = (gen - fpsGen) * 1000 / (now - fpsT); fpsGen = gen; fpsT = now; }
+  if (dirty) { draw(); drawPlot(); }
+  if (frameNo % 4 === 0 || ffLeft === 0) liveInfo();
+  if (ffLeft === 0 && !window.__ready) { liveInfo(); window.__ready = true; }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

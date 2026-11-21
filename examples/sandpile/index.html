@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>沙堆模型 · 自组织临界</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0d0c0a; color: #ebe6dc;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(31,28,23,.93); border: 1px solid #4a4234; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #e3c58f; border-top: 1px solid #4a4234; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #9a9284; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #332e26; color: #ebe6dc; border: 1px solid #4d4537;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #413a30; }
+  button.on { background: #6b5530; border-color: #9a7a45; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #c4bcae; margin-top: 4px; white-space: pre-wrap; }
+  .legend { display: flex; gap: 10px; margin-top: 4px; font: 11px ui-monospace, Menlo, monospace; color: #c4bcae; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; border: 1px solid #0006; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(13,12,10,.8); color: #d8d1c4; font-size: 12px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  /* ui=0 (screenshots): canvas only. Must come after the @media rule so it also wins on narrow screens. */
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#c9b48d;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>沙堆模型 · 自组织临界</h1>
+  <small>L×L 的格子上每格放几粒沙。一格有 4 粒或更多时就<b>倒塌</b>：拿出 4 粒，给上下左右的邻居各一粒，落到边外的沙就丢掉。倒塌可能引起邻居倒塌，连成一场<b>雪崩</b>。规则只有这一条，却长出分形、一个群，和不需要调参数的临界态。</small>
+
+  <h2>模式</h2>
+  <div class="presets" id="modes"></div>
+  <small id="modeNote"></small>
+
+  <div id="secPile">
+    <h2>中心放 N 粒</h2>
+    <div class="row">
+      <label>粒数 N <b id="vN"></b></label>
+      <input id="logN" type="range" min="10" max="21" step="0.25">
+      <small>用“翻倍”算法：先稳定 N/2 粒的沙堆，把每格加倍再稳定，就等于直接稳定 N 粒（交换律）。按 N 的二进制位逐位进行，每一步都在右边的图上记一个点。</small>
+    </div>
+    <div class="info" id="pileInfo"></div>
+  </div>
+
+  <div id="secId">
+    <h2>沙堆群的单位元</h2>
+    <div class="row">
+      <label>边长 L <b id="vLid"></b></label>
+      <input id="Lid" type="range" min="16" max="320" step="1">
+      <small>L = 128 不到 2 秒；L = 256 算 e 约 7 秒，连同下面的检验约 20 秒</small>
+    </div>
+    <div class="info" id="idInfo"></div>
+  </div>
+
+  <div id="secSoc">
+    <h2>一粒一粒地撒</h2>
+    <div class="row">
+      <label>边长 L <b id="vLsoc"></b></label>
+      <input id="Lsoc" type="range" min="16" max="256" step="1">
+    </div>
+    <div class="checks"><label><input id="anim" type="checkbox"> 动画显示雪崩（一波一波地倒）</label></div>
+    <div class="presets"><button id="warm">跳到稳态（快速撒到 34 L² 粒）</button></div>
+    <div class="info" id="socInfo"></div>
+  </div>
+
+  <div id="secAb">
+    <h2>两种顺序加同一批沙</h2>
+    <div class="row">
+      <label>边长 L <b id="vLab"></b></label>
+      <input id="Lab" type="range" min="16" max="128" step="1">
+    </div>
+    <div class="row">
+      <label>加入粒数 K <b id="vK"></b></label>
+      <input id="K" type="range" min="2" max="4.30103" step="0.01">
+    </div>
+    <div class="info" id="abInfo"></div>
+  </div>
+
+  <h2>运行</h2>
+  <div class="row" id="speedRow">
+    <label><span id="speedName">速度</span> <b id="vSpeed"></b></label>
+    <input id="speed" type="range" min="0" max="5" step="0.25">
+  </div>
+  <div class="row" id="seedRow">
+    <label>种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+    <small>所有随机数来自带种子的伪随机数发生器：种子和参数相同，结果完全相同</small>
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button></div>
+  <div class="checks" id="plotsRow"><label><input id="plots" type="checkbox"> 测量曲线</label></div>
+  <div class="legend" id="legend"></div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+// Slider ranges; every URL param is clamped to these.
+const LIM = { logN: [10, 21], seed: [1, 999], speed: [0, 5], K: [100, 20000],
+  L: { identity: [16, 320], soc: [16, 256], abelian: [16, 128] } };
+const MODES = { pile: '大沙堆', identity: '单位元', soc: '自组织临界', abelian: '交换律' };
+const NOTES = {
+  pile: '在中心一格放 N 粒沙，让它倒塌到稳定。沙堆长成一个近似圆盘，直径 ∝ √N，图案是分形。',
+  identity: '在 L×L 的格子上算出沙堆群的单位元 e = (6 − (6)°)°，° 表示“稳定化”。把 e 加到任意常返构形 c 上再稳定，c 不变。',
+  soc: '每次在随机一格加一粒沙，记录这粒沙引起的倒塌次数 s。不用调任何参数，系统自己走到临界态：s 的分布是幂律。',
+  abelian: '同一个初始构形，同一批 K 粒沙，A 按一种顺序逐粒加入并稳定，B 按打乱后的顺序。中途两者不同，加完以后完全一样。',
+};
+const PRESETS = {
+  pile18: { name: '沙堆 N = 2¹⁸', mode: 'pile', logN: 18 },
+  pile20: { name: '沙堆 N = 2²⁰（约 100 万粒）', mode: 'pile', logN: 20 },
+  pile21: { name: '沙堆 N = 2²¹（约 210 万粒，约 2 分钟）', mode: 'pile', logN: 21 },
+  id128: { name: '单位元 L = 128', mode: 'identity', L: 128 },
+  id256: { name: '单位元 L = 256', mode: 'identity', L: 256 },
+  soc128: { name: '自组织临界 L = 128', mode: 'soc', L: 128, speed: 4, anim: false },
+  socAnim: { name: '雪崩动画 L = 64', mode: 'soc', L: 64, speed: 0, anim: true, warm: true },
+  abel: { name: '交换律 L = 64，K = 3000', mode: 'abelian', L: 64, K: 3000, speed: 1 },
+};
+// colours of heights 0..3; ≥ 4 (unstable, only while computing) is white
+const HCOL = [[22, 28, 40], [63, 127, 191], [232, 193, 112], [200, 85, 61]];
+const HOT = [255, 255, 255];
+// height probabilities of the infinite-lattice stationary state (Majumdar–Dhar 1991, Priezzhev 1994)
+const PI = Math.PI;
+const PEXACT = [2 / PI ** 2 - 4 / PI ** 3, 1 / 4 - 1 / (2 * PI) - 3 / PI ** 2 + 12 / PI ** 3, 3 / 8 + 1 / PI - 12 / PI ** 3];
+PEXACT.push(1 - PEXACT[0] - PEXACT[1] - PEXACT[2]);
+const ZEXACT = 17 / 8;
+const FRAME_MS = 12;    // compute budget per animation frame
+const CHUNK = 20000;    // topplings between time checks
+
+const P = { mode: 'pile', preset: 'pile20', logN: 20, L: { identity: 128, soc: 128, abelian: 64 }, seed: 7, speed: 3, anim: false, K: 3000, plots: true, warm: false };
+let running = true;
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+const now = () => performance.now();
+
+function rng(seed) {   // mulberry32
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+
+// ---------- the L×L lattice with a sink ----------
+// Site (x, y), 1 ≤ x, y ≤ L, lives at index y·W + x with W = L + 2. The border ring is the sink: it collects
+// grains that fall off and is never toppled. Invariant: a site is on the stack exactly when it holds ≥ 4 grains.
+function makeGrid(L) {
+  const W = L + 2, n = W * W, inner = new Uint8Array(n);
+  for (let y = 1; y <= L; y++) for (let x = 1; x <= L; x++) inner[y * W + x] = 1;
+  return { L, W, n, a: new Int32Array(n), odo: new Uint32Array(n), st: new Int32Array(L * L + 4), sp: 0, inner, topp: 0 };
+}
+function pushUnstable(g) {   // after a bulk change: put every unstable site on the stack
+  const { a, inner, st } = g; let sp = 0;
+  for (let i = 0; i < g.n; i++) if (inner[i] && a[i] >= 4) st[sp++] = i;
+  g.sp = sp;
+}
+function addGrain(g, i, k = 1) { const o = g.a[i]; g.a[i] = o + k; if (o < 4 && o + k >= 4) g.st[g.sp++] = i; }
+// Topple up to maxPops sites. A site with h grains topples ⌊h/4⌋ times at once. Returns true when stable.
+function stab(g, maxPops) {
+  const { a, st, odo, inner, W } = g;
+  let sp = g.sp, n = 0, tt = 0;
+  while (sp && n < maxPops) {
+    const i = st[--sp], h = a[i], t = h >> 2;
+    a[i] = h & 3; odo[i] += t; tt += t; n++;
+    let j = i - 1, o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4 && inner[j]) st[sp++] = j;
+    j = i + 1; o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4 && inner[j]) st[sp++] = j;
+    j = i - W; o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4 && inner[j]) st[sp++] = j;
+    j = i + W; o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4 && inner[j]) st[sp++] = j;
+  }
+  g.sp = sp; g.topp += tt;
+  return sp === 0;
+}
+function clearSink(g) { let lost = 0; for (let i = 0; i < g.n; i++) if (!g.inner[i]) { lost += g.a[i]; g.a[i] = 0; } return lost; }
+function* settle(g) { pushUnstable(g); while (!stab(g, CHUNK)) yield; clearSink(g); }
+function diffCount(a, b, g) { let d = 0; for (let i = 0; i < g.n; i++) if (g.inner[i] && a[i] !== b[i]) d++; return d; }
+
+// ---------- mode 1: N grains at the centre, on one eighth of the plane ----------
+// The pile is symmetric under the 8 symmetries of the square, so only cells 0 ≤ y ≤ x ≤ R are stored, at
+// index (y+1)·W + (x+1). A stored cell r receives, from a toppling stored cell s, one grain per neighbour of r
+// whose mirror image is s. That weight table is built once; cells away from the axes and the diagonal have the
+// four ordinary neighbours with weight 1.
+function* pileJob(N) {
+  const R = Math.ceil(0.42 * Math.sqrt(N)) + 8, W = R + 3, n = W * W;
+  const idx = (x, y) => (y + 1) * W + x + 1;
+  const rep = (x, y) => { x = Math.abs(x); y = Math.abs(y); if (y > x) { const t = x; x = y; y = t; } return x > R ? -1 : idx(x, y); };
+  const inner = new Uint8Array(n), mult = new Uint8Array(n);
+  for (let y = 0; y <= R; y++) for (let x = y; x <= R; x++) { inner[idx(x, y)] = 1; mult[idx(x, y)] = x === 0 ? 1 : (y === 0 || y === x) ? 4 : 8; }
+  // A cell with 2 ≤ y ≤ x − 2 and x < R sends one grain to each of its four neighbours, like on the plane;
+  // the table is only needed near the axis, the diagonal and the outer edge.
+  const ordinary = (x, y) => y >= 2 && y <= x - 2 && x < R;
+  const send = new Map();   // s → Map(r → weight) for the other cells
+  const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (let y = 0; y <= R; y++) for (let x = y; x <= R; x++) for (const [dx, dy] of NB) {
+    const sx = Math.abs(x + dx), sy = Math.abs(y + dy);
+    if (ordinary(Math.max(sx, sy), Math.min(sx, sy))) continue;
+    const s = rep(sx, sy); if (s < 0) continue;
+    if (!send.has(s)) send.set(s, new Map());
+    const m = send.get(s), r = idx(x, y); m.set(r, (m.get(r) || 0) + 1);
+  }
+  // cells at x = R also send grains to x = R + 1, which is not stored; the pile never gets there (checked below)
+  const kind = new Uint8Array(n), sStart = new Int32Array(n + 1), sJ = [], sW = [];
+  for (let i = 0; i < n; i++) {
+    sStart[i] = sJ.length;
+    const m = send.get(i); if (!m) continue;
+    kind[i] = 1; for (const [j, w] of m) { sJ.push(j); sW.push(w); }
+  }
+  sStart[n] = sJ.length;
+  const SJ = Int32Array.from(sJ), SW = Int32Array.from(sW);
+  const a = new Int32Array(n), st = new Int32Array(n);
+  const S = Pile = { N, R, W, a, inner, mult, idx, rmax: 0, cur: 0, hist: [], busy: 0, topp: 0, done: false, ok: true, dirty: true, t0: now(), wall: 0 };
+  let sp = 0;
+  for (const bit of N.toString(2)) {
+    const lim = Math.min(R, S.rmax + 1);   // a is zero beyond rmax
+    for (let y = 0; y <= lim; y++) for (let x = y, i = idx(y, y); x <= lim; x++, i++) a[i] *= 2;
+    if (bit === '1') a[idx(0, 0)]++;
+    S.cur = 2 * S.cur + (bit === '1' ? 1 : 0);
+    for (let y = 0; y <= lim; y++) for (let x = y, i = idx(y, y); x <= lim; x++, i++) if (a[i] >= 4) st[sp++] = i;
+    while (sp) {
+      let k = 0, tt = 0;
+      while (sp && k < CHUNK) {
+        const i = st[--sp], h = a[i], t = h >> 2; a[i] = h & 3; tt += t * mult[i]; k++;   // count topplings on the full lattice
+        if (kind[i] === 0) {   // ordinary cells: all four neighbours are stored, unstable ones get pushed
+          let j = i - 1, o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4) st[sp++] = j;
+          j = i + 1; o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4) st[sp++] = j;
+          j = i - W; o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4) st[sp++] = j;
+          j = i + W; o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4) st[sp++] = j;
+        } else for (let q = sStart[i]; q < sStart[i + 1]; q++) {
+          const j = SJ[q], d = t * SW[q], o = a[j]; a[j] = o + d; if (o < 4 && o + d >= 4 && inner[j]) st[sp++] = j;
+        }
+      }
+      S.topp += tt;
+      if (sp) yield;
+    }
+    while (S.rmax < R) {   // the pile only grows: extend rmax while column rmax + 1 is not empty
+      let any = false; const x = S.rmax + 1;
+      for (let y = 0; y <= x; y++) if (a[idx(x, y)]) { any = true; break; }
+      if (!any) break; S.rmax = x;
+    }
+    if (S.rmax >= R - 1) S.ok = false;   // grains would reach the edge of the stored region
+    S.hist.push({ N: S.cur, d: 2 * S.rmax + 1, topp: S.topp, ms: S.busy });
+    S.dirty = true;
+    yield;
+  }
+  let mass = 0; const cnt = [0, 0, 0, 0];
+  for (let i = 0; i < n; i++) if (inner[i]) { mass += mult[i] * a[i]; }
+  // height counts inside the bounding disk of radius rmax, on the full lattice
+  for (let y = 0; y <= S.rmax; y++) for (let x = y; x <= S.rmax; x++) if (x * x + y * y <= S.rmax * S.rmax) cnt[a[idx(x, y)]] += mult[idx(x, y)];
+  Object.assign(S, { done: true, mass, cnt, wall: now() - S.t0, dirty: true });
+}
+let Pile = null;
+
+// ---------- mode 2: the identity of the sandpile group ----------
+function* identityJob(L, seed) {
+  const r = rng(seed * 7919 + L);
+  const S = Ident = { L, stage: '', live: null, e: null, c: null, ce: null, r: null, unburnt: null, res: {}, busy: 0, done: false, t0: now() };
+  const run = function* (g, name) { S.stage = name; S.live = g; yield* settle(g); return g; };
+  const copy = g => Int32Array.from(g.a);
+  // 1. stabilise 6 grains everywhere; 2. subtract from 6 and stabilise again
+  let g = makeGrid(L); for (let i = 0; i < g.n; i++) if (g.inner[i]) g.a[i] = 6;
+  yield* run(g, '稳定 (6)'); const t6 = g.topp, s6 = copy(g);
+  g = makeGrid(L); for (let i = 0; i < g.n; i++) if (g.inner[i]) g.a[i] = 6 - s6[i];
+  yield* run(g, '稳定 6 − (6)°'); S.e = copy(g); S.res.toppE = t6 + g.topp; S.res.msE = S.busy;
+  // e is idempotent: (e + e)° = e
+  g = makeGrid(L); for (let i = 0; i < g.n; i++) g.a[i] = 2 * S.e[i];
+  yield* run(g, '检验 (e + e)°'); S.res.ee = diffCount(g.a, S.e, g);
+  // a random recurrent configuration c = (3 + random)°: anything added to the maximal stable configuration is recurrent
+  g = makeGrid(L); for (let i = 0; i < g.n; i++) if (g.inner[i]) g.a[i] = 3 + Math.floor(4 * r());
+  yield* run(g, '随机常返构形 c'); S.c = copy(g);
+  g = makeGrid(L); for (let i = 0; i < g.n; i++) g.a[i] = S.c[i] + S.e[i];
+  yield* run(g, '稳定 c + e'); S.ce = copy(g); S.res.ce = diffCount(S.ce, S.c, g);
+  // burning test: add β (one grain per edge to the sink); c is recurrent ⇔ (c + β)° = c, and then every site topples once
+  const burn = function* (cfg, name) {
+    const h = makeGrid(L);
+    for (let y = 1; y <= L; y++) for (let x = 1; x <= L; x++) { const i = y * h.W + x; h.a[i] = cfg[i] + (x === 1) + (x === L) + (y === 1) + (y === L); }
+    yield* run(h, name);
+    let once = 0, zero = 0; for (let i = 0; i < h.n; i++) if (h.inner[i]) { if (h.odo[i] === 1) once++; if (h.odo[i] === 0) zero++; }
+    return { same: diffCount(h.a, cfg, h) === 0, once, zero, odo: h.odo };
+  };
+  const bc = yield* burn(S.c, '烧图测试 c'); S.res.burnC = { same: bc.same, once: bc.once, zero: bc.zero };
+  // a uniformly random stable configuration is almost never recurrent
+  g = makeGrid(L); for (let i = 0; i < g.n; i++) if (g.inner[i]) g.a[i] = Math.floor(4 * r());
+  S.r = copy(g);
+  const br = yield* burn(S.r, '烧图测试 r'); S.res.burnR = { same: br.same, once: br.once, zero: br.zero };
+  S.unburnt = new Uint8Array(g.n); for (let i = 0; i < g.n; i++) S.unburnt[i] = g.inner[i] && br.odo[i] === 0 ? 1 : 0;
+  g = makeGrid(L); for (let i = 0; i < g.n; i++) g.a[i] = S.r[i] + S.e[i];
+  yield* run(g, '稳定 r + e'); S.res.re = diffCount(g.a, S.r, g);
+  let m = 0; for (let i = 0; i < g.n; i++) m += S.e[i]; S.res.meanE = m / (L * L);
+  Object.assign(S, { done: true, stage: '完成', live: null, wall: now() - S.t0 });
+}
+let Ident = null;
+
+// ---------- mode 3: self-organised criticality ----------
+const NBIN = 4;   // log bins per octave of avalanche size
+function makeSoc(L, seed) {
+  const g = makeGrid(L);
+  return Soc = { L, g, r: rng(seed * 104729 + L), drops: 0, active: false, start: 0, ava: 0, last: 0,
+    tag: new Uint32Array(g.n), hot: new Uint32Array(g.n), wave: 0, hold: 0, nx: new Int32Array(L * L + 4),
+    warm: Math.round(4 * L * L), hist: new Float64Array(NBIN * 40), nAva: 0, nZero: 0, smax: 0,
+    series: [], every: Math.max(1, Math.round(L * L / 50)), hc: [0, 0, 0, 0], hs: 0, busy: 0 };
+}
+let Soc = null;
+function socDrop(S) {
+  const { g } = S, L = S.L;
+  const x = 1 + Math.floor(S.r() * L), y = 1 + Math.floor(S.r() * L), i = y * g.W + x;
+  S.drops++; S.ava++; S.start = g.topp; S.active = true; S.wave = 0;
+  addGrain(g, i);
+}
+function socFinish(S) {
+  const s = S.g.topp - S.start;
+  S.active = false; S.last = s;
+  if (S.drops > S.warm) {
+    if (s === 0) S.nZero++;
+    else { S.hist[Math.floor(NBIN * Math.log2(s) + 1e-9)]++; if (s > S.smax) S.smax = s; }
+    S.nAva++;
+  }
+  if (S.drops % S.every === 0) {   // sample the mean height; empty the sink so it never overflows
+    const { g } = S; clearSink(g);
+    let m = 0; const hc = [0, 0, 0, 0];
+    for (let i = 0; i < g.n; i++) if (g.inner[i]) { m += g.a[i]; hc[g.a[i]]++; }
+    S.series.push([S.drops / (S.L * S.L), m / (S.L * S.L)]);
+    if (S.series.length > 4000) { S.series = S.series.filter((_, k) => k % 2 === 0); S.every *= 2; }   // bounded memory, even spacing
+    if (S.drops > S.warm) { for (let k = 0; k < 4; k++) S.hc[k] += hc[k]; S.hs += S.L * S.L; }
+  }
+}
+// fast: drop grains and stabilise them, up to maxDrops grains or the time budget
+function socFast(S, maxDrops, until) {
+  let k = 0;
+  while (k < maxDrops) {
+    if (!S.active) { socDrop(S); k++; }
+    if (!stab(S.g, CHUNK)) { if (now() > until) return; continue; }
+    socFinish(S);
+    if ((k & 63) === 0 && now() > until) return;
+  }
+}
+// animated: topple wave by wave. A wave topples every site that is unstable at its start.
+function socWave(S) {
+  const { g, nx, tag, hot } = S, { a, st, odo, inner, W } = g;
+  S.wave++;
+  const stamp = S.ava * 4096 + (S.wave & 4095);
+  let m = 0, tt = 0;
+  const sp = g.sp;
+  for (let k = 0; k < sp; k++) {
+    const i = st[k], h = a[i]; if (h < 4) continue;
+    const t = h >> 2; a[i] = h & 3; odo[i] += t; tt += t; tag[i] = S.ava; hot[i] = stamp;
+    for (const j of [i - 1, i + 1, i - W, i + W]) { const o = a[j]; a[j] = o + t; if (o < 4 && o + t >= 4 && inner[j]) nx[m++] = j; }
+  }
+  // sites that became unstable again within this wave are already in nx; carry them to the next wave
+  st.set(nx.subarray(0, m)); g.sp = m; g.topp += tt;
+  S.hotStamp = stamp;
+}
+
+// ---------- mode 4: the abelian property ----------
+function* abelianJob(L, K, seed) {
+  const r = rng(seed * 15485863 + L * 31 + K);
+  const base = makeGrid(L);
+  for (let i = 0; i < base.n; i++) if (base.inner[i]) base.a[i] = Math.floor(4 * r());
+  const sites = new Int32Array(K);
+  for (let k = 0; k < K; k++) sites[k] = (1 + Math.floor(r() * L)) * base.W + 1 + Math.floor(r() * L);
+  const shuffled = Int32Array.from(sites);
+  for (let k = K - 1; k > 0; k--) { const j = Math.floor(r() * (k + 1)), t = shuffled[k]; shuffled[k] = shuffled[j]; shuffled[j] = t; }
+  const A = makeGrid(L), B = makeGrid(L); A.a.set(base.a); B.a.set(base.a);
+  const S = Abel = { L, K, A, B, k: 0, maxDiff: 0, done: false, res: null, busy: 0 };
+  for (let k = 0; k < K; k++) {
+    addGrain(A, sites[k]); while (!stab(A, CHUNK)) yield;
+    addGrain(B, shuffled[k]); while (!stab(B, CHUNK)) yield;
+    S.k = k + 1;
+    if (S.k % 16 === 0 || S.k === K) { S.diff = diffCount(A.a, B.a, A); S.maxDiff = Math.max(S.maxDiff, S.diff); }
+    yield 1;   // one grain added to each
+  }
+  // C: all K grains at once, then a single stabilisation
+  const C = makeGrid(L); C.a.set(base.a); for (let k = 0; k < K; k++) C.a[sites[k]]++;
+  yield* settle(C);
+  clearSink(A); clearSink(B);
+  let odoAB = 0, odoAC = 0, umax = 0;
+  for (let i = 0; i < A.n; i++) if (A.inner[i]) { if (A.odo[i] !== B.odo[i]) odoAB++; if (A.odo[i] !== C.odo[i]) odoAC++; umax = Math.max(umax, A.odo[i]); }
+  S.res = { AB: diffCount(A.a, B.a, A), AC: diffCount(A.a, C.a, A), odoAB, odoAC, tA: A.topp, tB: B.topp, tC: C.topp, umax };
+  S.diff = S.res.AB; S.done = true;
+}
+let Abel = null;
+
+// ---------- job control ----------
+let job = null;
+function restart() {
+  Pile = Ident = Abel = null; job = null;
+  if (P.mode === 'pile') job = pileJob(Math.round(2 ** P.logN));
+  else if (P.mode === 'identity') job = identityJob(P.L.identity, P.seed);
+  else if (P.mode === 'abelian') job = abelianJob(P.L.abelian, P.K, P.seed);
+  else { makeSoc(P.L.soc, P.seed); if (P.warm) Soc.fastUntil = Soc.warm + 30 * P.L.soc ** 2; }
+  P.warm = false;
+}
+function step() {
+  if (!running) return;
+  const t0 = now(), until = t0 + FRAME_MS;
+  if (P.mode === 'soc') {
+    const S = Soc;
+    if (S.fastUntil && S.drops < S.fastUntil) socFast(S, S.fastUntil - S.drops, until);
+    else if (P.anim) {
+      S.fastUntil = 0;
+      if (S.hold > 0) S.hold--;
+      else {
+        if (!S.active) { for (let k = 0; k < 200 && S.g.sp === 0; k++) { socDrop(S); if (!S.g.sp) socFinish(S); } }
+        const waves = Math.round(10 ** P.speed);
+        for (let w = 0; w < waves && S.active && now() < until; w++) {
+          if (S.g.sp === 0) { socFinish(S); S.hold = 25; break; }
+          socWave(S);
+        }
+        if (S.active && S.g.sp === 0) { socFinish(S); S.hold = 25; }
+      }
+    } else { S.fastUntil = 0; socFast(S, Math.round(10 ** P.speed), until); }
+    S.busy += now() - t0;
+    return;
+  }
+  if (!job) return;
+  const S = Pile || Ident || Abel;
+  let grains = 0;
+  const cap = P.mode === 'abelian' ? Math.round(10 ** P.speed) : Infinity;
+  while (now() < until) {
+    const r = job.next();
+    if (r.done) { job = null; break; }
+    if (r.value === 1 && ++grains >= cap) break;
+  }
+  const S2 = Pile || Ident || Abel; if (S2) S2.busy += now() - t0;
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dpr = 1;
+const BG = '#0d0c0a';
+const font = (px, mono) => `${px * dpr}px ${mono ? 'ui-monospace, Menlo, monospace' : '-apple-system, "PingFang SC", sans-serif'}`;
+const pack = c => (255 << 24 | c[2] << 16 | c[1] << 8 | c[0]) >>> 0;   // ImageData is RGBA bytes = ABGR little-endian
+const HP = HCOL.map(pack), HOTP = pack(HOT);
+const mix = (c, d, t) => c.map((v, k) => Math.round(v + (d[k] - v) * t));
+const DIMP = HCOL.map(c => pack(mix(c, [13, 12, 10], 0.78)));   // unburnt sites
+const OFF = {};
+function offscreen(key, n) {
+  let o = OFF[key];
+  if (!o || o.n !== n) {
+    const c = document.createElement('canvas'); c.width = c.height = n;
+    const x = c.getContext('2d'), img = x.createImageData(n, n);
+    o = OFF[key] = { n, c, x, img, u: new Uint32Array(img.data.buffer) };
+  }
+  return o;
+}
+// paint an L×L lattice into an offscreen canvas; colour(i) gives the packed colour of the site at index i
+function latticeImage(key, L, Wd, colour) {
+  const o = offscreen(key, L);
+  for (let y = 0, p = 0; y < L; y++) for (let x = 0, i = (y + 1) * Wd + 1; x < L; x++, i++, p++) o.u[p] = colour(i);
+  o.x.putImageData(o.img, 0, 0);
+  return o.c;
+}
+const hcol = h => h < 4 ? HP[h] : HOTP;
+// nearest-neighbour when enlarging (every site a crisp square); smoothed when shrinking, to avoid aliasing
+function blit(c, x, y, s) { ctx.imageSmoothingEnabled = s < c.width; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(c, x, y, s, s); }
+function label(t, x, y, col = '#e8dfcf') { ctx.font = font(12); ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(t, x, y); }
+
+function layout(withPlots) {
+  const pad = 16 * dpr;
+  if (!withPlots) { const side = Math.max(10, Math.min(W, H) - 2 * pad); return { lx: (W - side) / 2, ly: (H - side) / 2, side }; }
+  const pw = clamp(W * 0.40, [280 * dpr, 520 * dpr]);
+  const side = Math.max(10, Math.min(H - 2 * pad, W - pw - 3 * pad));
+  return { lx: pad + Math.max(0, (W - pw - 3 * pad - side) / 2), ly: (H - side) / 2, side, px: W - pw - pad, pw };
+}
+// 2×2 panels with titles
+function grid4() {
+  const pad = 14 * dpr, top = 22 * dpr, bot = document.body.classList.contains('noui') ? 0 : 24 * dpr, Hh = H - bot;
+  const s = Math.max(10, Math.min((W - 3 * pad) / 2, (Hh - 2 * pad - 2 * top - pad) / 2));
+  const x0 = (W - 2 * s - pad) / 2, y0 = (Hh - 2 * (s + top) - pad) / 2 + top;
+  return [[x0, y0], [x0 + s + pad, y0], [x0, y0 + s + top + pad], [x0 + s + pad, y0 + s + top + pad]].map(([x, y]) => ({ x, y, s }));
+}
+
+// a framed plot; x and y are given already transformed (log₁₀ for log axes)
+function frame(x0, y0, w, h, title, [xa, xb], [ya, yb]) {
+  ctx.fillStyle = 'rgba(22,20,17,.94)'; ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = '#4a4234'; ctx.lineWidth = 1 * dpr; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+  const ml = 44 * dpr, mr = 10 * dpr, mt = 22 * dpr, mb = 20 * dpr;
+  const X = x => x0 + ml + (x - xa) / (xb - xa) * (w - ml - mr);
+  const Y = v => y0 + h - mb - (v - ya) / (yb - ya) * (h - mt - mb);
+  ctx.font = font(12); ctx.fillStyle = '#e8dfcf'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(title, x0 + 8 * dpr, y0 + 5 * dpr);
+  const F = { X, Y, ml, mr, mt, mb, x0, y0, w, h };
+  F.clip = () => { ctx.save(); ctx.beginPath(); ctx.rect(x0 + ml, y0 + mt, w - ml - mr, h - mt - mb); ctx.clip(); };
+  return F;
+}
+function axes(F, xt, yt) {
+  ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1 * dpr; ctx.font = font(10, true); ctx.fillStyle = '#9a9284';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const [x, t] of xt) { ctx.beginPath(); ctx.moveTo(F.X(x), F.y0 + F.mt); ctx.lineTo(F.X(x), F.y0 + F.h - F.mb); ctx.stroke(); ctx.fillText(t, F.X(x), F.y0 + F.h - F.mb + 3 * dpr); }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const [v, t] of yt) { const y = F.Y(v); ctx.beginPath(); ctx.moveTo(F.x0 + F.ml, y); ctx.lineTo(F.x0 + F.w - F.mr, y); ctx.stroke(); ctx.fillText(t, F.x0 + F.ml - 4 * dpr, y); }
+}
+const pow10 = e => e === 0 ? '1' : e === 1 ? '10' : `1e${e}`;
+const decades = (a, b) => { const o = []; for (let e = Math.ceil(a); e <= Math.floor(b) && o.length < 30; e++) o.push([e, pow10(e)]); return o; };
+function line(F, pts, col, lw = 1.6, dash = []) {
+  ctx.strokeStyle = col; ctx.lineWidth = lw * dpr; ctx.setLineDash(dash.map(v => v * dpr)); ctx.beginPath();
+  pts.forEach(([x, y], k) => k ? ctx.lineTo(F.X(x), F.Y(y)) : ctx.moveTo(F.X(x), F.Y(y)));
+  ctx.stroke(); ctx.setLineDash([]);
+}
+function dots(F, pts, col, r = 3) { ctx.fillStyle = col; for (const [x, y] of pts) { ctx.beginPath(); ctx.arc(F.X(x), F.Y(y), r * dpr, 0, 7); ctx.fill(); } }
+function texts(F, lines, col = '#e8dfcf', right = false) {
+  ctx.font = font(10, true); ctx.fillStyle = col; ctx.textBaseline = 'top'; ctx.textAlign = right ? 'right' : 'left';
+  lines.forEach((t, k) => ctx.fillText(t, right ? F.x0 + F.w - F.mr - 6 * dpr : F.x0 + F.ml + 6 * dpr, F.y0 + F.mt + 4 * dpr + k * 14 * dpr));
+}
+// least squares slope and intercept
+function fit(pts) {
+  const n = pts.length; if (n < 2) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const [x, y] of pts) { sx += x; sy += y; sxx += x * x; sxy += x * y; }
+  const d = n * sxx - sx * sx; if (!(Math.abs(d) > 1e-12)) return null;
+  const b = (n * sxy - sx * sy) / d; return { b, a: (sy - b * sx) / n };
+}
+
+// --- pile ---
+function pileImage() {
+  const S = Pile, D = 2 * S.rmax + 1, o = offscreen('pile', D), { a, idx } = S, c = S.rmax;
+  const h = (x, y) => x >= y ? a[idx(x, y)] : a[idx(y, x)];
+  const ext = new Int32Array(c + 1).fill(-1);   // per row: the outermost occupied cell; beyond it is background
+  for (let y = 0; y <= c; y++) for (let x = c; x >= 0; x--) if (h(x, y)) { ext[y] = x; break; }
+  const bg = pack([13, 12, 10]);
+  for (let py = 0, p = 0; py < D; py++) {
+    const ay = Math.abs(py - c);
+    for (let px = 0; px < D; px++, p++) { const ax = Math.abs(px - c); o.u[p] = ax > ext[ay] ? bg : hcol(h(ax, ay)); }
+  }
+  o.x.putImageData(o.img, 0, 0);
+  S.dirty = false; S.lastImg = now();
+  return o.c;
+}
+function pileFits() {
+  const S = Pile, h = S.hist.filter(q => q.N >= 256);
+  const fd = fit(h.map(q => [Math.log10(q.N), Math.log10(q.d)]));
+  const ft = fit(h.filter(q => q.topp > 0).map(q => [Math.log10(q.N), Math.log10(q.topp)]));
+  return { slopeD: fd ? fd.b : NaN, slopeT: ft ? ft.b : NaN, fd, ft };
+}
+function drawPile() {
+  const S = Pile; if (!S) return;
+  const Lo = layout(P.plots);
+  if (S.dirty && (S.done || !S.lastImg || now() - S.lastImg > 250)) pileImage();
+  const o = OFF.pile;
+  if (o) {   // keep the scale of the final pile so the picture grows instead of zooming
+    const Dfin = 2 * Math.ceil(0.37 * Math.sqrt(S.N)) + 1, sc = Lo.side / Math.max(o.n, Dfin), s = o.n * sc;
+    blit(o.c, Lo.lx + (Lo.side - s) / 2, Lo.ly + (Lo.side - s) / 2, s);
+  }
+  if (!P.plots) return;
+  const gap = 10 * dpr, x0 = Lo.px, w = Lo.pw, h = (H - 2 * 12 * dpr - gap) / 2, E = pileFits(), xr = [0, Math.log10(S.N) + 0.2];
+  // diameter against N
+  let y0 = 12 * dpr;
+  let F = frame(x0, y0, w, h, '直径 d 对粒数 N（双对数）', xr, [0, 3.4]);
+  axes(F, decades(0, xr[1]), decades(0, 3.4));
+  F.clip();
+  if (E.fd) line(F, [[0, E.fd.a], [xr[1], E.fd.a + E.fd.b * xr[1]]], 'rgba(255,255,255,.35)', 1, [5, 4]);
+  dots(F, S.hist.map(q => [Math.log10(q.N), Math.log10(q.d)]), '#e8c170');
+  ctx.restore();
+  texts(F, ['d = 沙堆外接正方形的边长', `虚线：N ≥ 256 的最小二乘拟合，斜率 ${Number.isFinite(E.slopeD) ? E.slopeD.toFixed(3) : '—'}`, '√N 对应斜率 0.5']);
+  // topplings against N
+  y0 += h + gap;
+  const top = Math.max(2, Math.ceil(Math.log10(Math.max(10, ...S.hist.map(q => q.topp))) + 0.5));
+  F = frame(x0, y0, w, h, '累计倒塌次数 T 对粒数 N（双对数）', xr, [0, top]);
+  axes(F, decades(0, xr[1]), decades(0, top).filter(([e]) => e % 2 === 0));
+  F.clip();
+  if (E.ft) line(F, [[0, E.ft.a], [xr[1], E.ft.a + E.ft.b * xr[1]]], 'rgba(255,255,255,.35)', 1, [5, 4]);
+  dots(F, S.hist.filter(q => q.topp > 0).map(q => [Math.log10(q.N), Math.log10(q.topp)]), '#c8553d');
+  ctx.restore();
+  texts(F, [`拟合斜率 ${Number.isFinite(E.slopeT) ? E.slopeT.toFixed(3) : '—'}：工作量 ∝ N²`, '计算时间和倒塌次数成正比']);
+}
+
+// --- identity ---
+function drawIdentity() {
+  const S = Ident; if (!S) return;
+  const L = S.L, Wd = L + 2, G = grid4();
+  const panels = [
+    { t: '单位元 e = (6 − (6)°)°', a: S.e, live: ['稳定 (6)', '稳定 6 − (6)°'] },
+    { t: '随机常返构形 c', a: S.c, live: ['随机常返构形 c'] },
+    { t: '(c + e)° ' + (S.res.ce === 0 ? '= c ✓' : S.ce ? `与 c 差 ${S.res.ce} 格` : ''), a: S.ce, live: ['稳定 c + e'] },
+    { t: '随机构形 r 的烧图测试：只有亮色格点被烧到', a: S.r, mark: S.unburnt, live: [] },
+  ];
+  panels.forEach((q, k) => {
+    const { x, y, s } = G[k];
+    ctx.fillStyle = '#16140f'; ctx.fillRect(x, y, s, s);
+    let src = q.a;
+    if (!src && S.live && q.live.includes(S.stage)) src = S.live.a;   // the panel being computed shows the live lattice
+    if (src) {
+      const m = q.mark;
+      blit(latticeImage('id' + k, L, Wd, m ? (i => m[i] ? DIMP[src[i] & 3] : HP[src[i] & 3]) : (i => hcol(src[i]))), x, y, s);
+    } else { ctx.font = font(12); ctx.fillStyle = '#7d7669'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('等待计算…', x + s / 2, y + s / 2); }
+    label(q.t, x, y - 5 * dpr);
+  });
+}
+
+// --- SOC ---
+function socBins() {
+  const S = Soc, out = [], tot = S.nAva; if (!tot) return out;
+  for (let b = 0; b < S.hist.length; b++) {
+    if (!S.hist[b]) continue;
+    const lo = Math.ceil(2 ** (b / NBIN) - 1e-9), hi = Math.ceil(2 ** ((b + 1) / NBIN) - 1e-9) - 1, width = hi - lo + 1;
+    if (width < 1) continue;
+    out.push({ s: Math.sqrt(lo * hi), lo, hi, c: S.hist[b], p: S.hist[b] / width / tot });
+  }
+  return out;
+}
+function socFit() {
+  const S = Soc, lo = 10, hi = Math.max(100, S.L * S.L / 10);
+  const pts = socBins().filter(q => q.lo >= lo && q.hi <= hi && q.c >= 20).map(q => [Math.log10(q.s), Math.log10(q.p)]);
+  const f = fit(pts); return { lo, hi, n: pts.length, tau: f ? -f.b : NaN, f };
+}
+function drawSoc() {
+  const S = Soc; if (!S) return;
+  const Lo = layout(P.plots), L = S.L, Wd = L + 2, { a } = S.g;
+  const anim = P.anim && !(S.fastUntil && S.drops < S.fastUntil);
+  const hl = HCOL.map(c => pack(mix(c, [255, 255, 255], 0.45)));
+  const img = latticeImage('soc', L, Wd, anim ? (i => S.hot[i] === S.hotStamp && S.active ? HOTP : S.tag[i] === S.ava ? hl[a[i] & 3] : hcol(a[i])) : (i => hcol(a[i])));
+  blit(img, Lo.lx, Lo.ly, Lo.side);
+  if (!P.plots) return;
+  const gap = 8 * dpr, x0 = Lo.px, w = Lo.pw, h = (H - 2 * 12 * dpr - 2 * gap) / 3;
+  // 1. avalanche size distribution
+  let y0 = 12 * dpr;
+  const bins = socBins(), E = socFit();
+  const xmax = Math.max(2, Math.log10(Math.max(10, S.smax)) + 0.2);
+  const ymin = bins.length ? Math.floor(Math.min(...bins.map(q => Math.log10(q.p)))) : -6;
+  let F = frame(x0, y0, w, h, '雪崩大小分布 P(s)（双对数）', [0, xmax], [ymin, 0]);
+  axes(F, decades(0, xmax), decades(ymin, 0).filter(([e]) => (e - ymin) % 2 === 0));
+  F.clip();
+  ctx.fillStyle = 'rgba(232,193,112,.07)'; ctx.fillRect(F.X(Math.log10(E.lo)), F.y0 + F.mt, F.X(Math.log10(E.hi)) - F.X(Math.log10(E.lo)), F.h - F.mt - F.mb);
+  if (E.f) line(F, [[0, E.f.a], [xmax, E.f.a + E.f.b * xmax]], 'rgba(255,255,255,.4)', 1, [5, 4]);
+  dots(F, bins.map(q => [Math.log10(q.s), Math.log10(q.p)]), '#e8c170', 2.6);
+  ctx.restore();
+  texts(F, [`雪崩 ${S.nAva.toLocaleString()} 次（s ≥ 1：${(S.nAva - S.nZero).toLocaleString()}）`,
+    `阴影 ${E.lo} ≤ s ≤ ${Math.round(E.hi)} 内拟合 τ ≈ ${Number.isFinite(E.tau) ? E.tau.toFixed(3) : '—'}`], '#e8dfcf', true);
+  // 2. mean height
+  y0 += h + gap;
+  const xs = Math.max(6, S.drops / (L * L) * 1.05);
+  F = frame(x0, y0, w, h, '平均高度 对 已撒粒数 / L²', [0, xs], [0, 3]);
+  const raw = xs / 6, mag = 10 ** Math.floor(Math.log10(raw)), st = [1, 2, 5, 10].map(k => k * mag).find(v => v >= raw);
+  const xt = []; for (let v = 0; v <= xs && xt.length < 40; v += st) xt.push([v, String(v)]);
+  axes(F, xt, [[0, '0'], [1, '1'], [ZEXACT, '17/8']]);
+  F.clip();
+  ctx.fillStyle = 'rgba(255,255,255,.04)'; ctx.fillRect(F.X(0), F.y0 + F.mt, F.X(S.warm / (L * L)) - F.X(0), F.h - F.mt - F.mb);
+  line(F, [[0, ZEXACT], [xs, ZEXACT]], 'rgba(255,255,255,.4)', 1, [5, 4]);
+  if (S.series.length) line(F, S.series, '#6fb3ff', 1.4);
+  ctx.restore();
+  const zb = S.hs ? (S.hc[1] + 2 * S.hc[2] + 3 * S.hc[3]) / S.hs : NaN;
+  texts(F, [`灰色：前 4L² 粒是暖机，不计入统计`, `稳态平均高度 ${Number.isFinite(zb) ? zb.toFixed(4) : '—'}（无穷大格子 17/8 = 2.125）`], '#e8dfcf', true);
+  // 3. height distribution against the exact infinite-lattice values
+  y0 += h + gap;
+  F = frame(x0, y0, w, h, '高度分布：柱 = 测量，白线 = 无穷格子精确值', [-0.6, 3.6], [0, 0.56]);
+  axes(F, [[0, '0'], [1, '1'], [2, '2'], [3, '3']], [[0, '0'], [0.25, '0.25'], [0.5, '0.5']]);
+  for (let k = 0; k < 4; k++) {
+    const f = S.hs ? S.hc[k] / S.hs : 0, bw = (F.X(1) - F.X(0)) * 0.5;
+    ctx.fillStyle = `rgb(${HCOL[k].join(',')})`; ctx.fillRect(F.X(k) - bw / 2, F.Y(f), bw, F.Y(0) - F.Y(f));
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.moveTo(F.X(k) - bw * 0.7, F.Y(PEXACT[k])); ctx.lineTo(F.X(k) + bw * 0.7, F.Y(PEXACT[k])); ctx.stroke();
+    ctx.font = font(10, true); ctx.fillStyle = '#e8dfcf'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(S.hs ? f.toFixed(3) : '—', F.X(k), Math.min(F.Y(f), F.Y(PEXACT[k])) - 3 * dpr);
+  }
+}
+
+// --- abelian ---
+function drawAbelian() {
+  const S = Abel; if (!S) return;
+  const L = S.L, Wd = L + 2, G = grid4(), { A, B } = S;
+  let umax = 1; for (let i = 0; i < A.n; i++) if (A.inner[i] && A.odo[i] > umax) umax = A.odo[i];
+  const lu = Math.log(1 + umax);
+  const heat = u => { const t = Math.log(1 + u) / lu; return pack([Math.round(30 + 225 * t), Math.round(22 + 170 * t * t), Math.round(18 + 60 * t ** 4)]); };
+  const same = pack([30, 28, 24]), red = pack([255, 70, 70]);
+  const imgs = [
+    [latticeImage('ab0', L, Wd, i => hcol(A.a[i])), `A：按原顺序加入 ${S.k} 粒`],
+    [latticeImage('ab1', L, Wd, i => hcol(B.a[i])), `B：按打乱的顺序加入 ${S.k} 粒`],
+    [latticeImage('ab2', L, Wd, i => A.a[i] === B.a[i] ? same : red), S.done ? `A 与 B 不同的格点：${S.res.AB}` : `红色：此刻 A 与 B 不同的格点（${S.diff ?? 0} 个）`],
+    [latticeImage('ab3', L, Wd, i => heat(A.odo[i])), `A 每格的倒塌次数 u（最大 ${umax}）`],
+  ];
+  imgs.forEach(([c, t], k) => { const { x, y, s } = G[k]; blit(c, x, y, s); label(t, x, y - 5 * dpr, k === 2 && S.done && S.res.AB === 0 ? '#9be39b' : '#e8dfcf'); });
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  ({ pile: drawPile, identity: drawIdentity, soc: drawSoc, abelian: drawAbelian })[P.mode]();
+}
+
+// ---------- read-outs ----------
+const fmtN = n => n.toLocaleString();
+const sec = ms => (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + ' 秒';
+function info() {
+  const out = { mode: P.mode };
+  if (P.mode === 'pile' && Pile) {
+    const S = Pile, E = pileFits(), d = 2 * S.rmax + 1;
+    const lines = [`N = ${fmtN(S.N)}（二进制 ${S.N.toString(2).length} 位）`,
+      `已完成 ${S.hist.length} / ${S.N.toString(2).length} 步，当前 ${fmtN(S.cur)} 粒` + (S.done ? ' · 完成' : running ? ' · 计算中' : ' · 已暂停'),
+      `直径 d = ${d}，d / √N = ${(d / Math.sqrt(Math.max(1, S.cur))).toFixed(4)}`,
+      `累计倒塌 ${fmtN(S.topp)} 次`,
+      `计算时间 ${sec(S.busy)}` + (S.done ? `（墙钟 ${sec(S.wall)}）` : ''),
+      `d ∝ N^${Number.isFinite(E.slopeD) ? E.slopeD.toFixed(3) : '—'}，倒塌次数 ∝ N^${Number.isFinite(E.slopeT) ? E.slopeT.toFixed(3) : '—'}`];
+    if (S.done) {
+      const tot = S.cnt.reduce((x, y) => x + y, 0);
+      lines.push(`粒子守恒：沙堆里共 ${fmtN(S.mass)} 粒` + (S.mass === S.N ? ' ✓' : ' ✗'));
+      lines.push(`半径 ${S.rmax} 的圆内高度 0/1/2/3 占比：` + S.cnt.map(c => (c / tot).toFixed(3)).join(' / '));
+      lines.push(`圆内平均高度 ${((S.cnt[1] + 2 * S.cnt[2] + 3 * S.cnt[3]) / tot).toFixed(4)}`);
+    }
+    if (!S.ok) lines.push('⚠ 沙子碰到了存储区边界，结果无效');
+    $('pileInfo').textContent = lines.join('\n');
+    $('stat').textContent = `大沙堆 · N = ${fmtN(S.cur)} / ${fmtN(S.N)} · 直径 ${d}`;
+    Object.assign(out, { N: S.N, cur: S.cur, done: S.done, ok: S.ok, d, ratio: d / Math.sqrt(Math.max(1, S.cur)), topp: S.topp, busyMs: S.busy, wallMs: S.wall,
+      slopeD: E.slopeD, slopeT: E.slopeT, mass: S.mass, cnt: S.cnt, hist: S.hist });
+  } else if (P.mode === 'identity' && Ident) {
+    const S = Ident, r = S.res, lines = [`L = ${S.L} · ${S.stage}` + (S.done ? '' : running ? ' …' : ' · 已暂停')];
+    if (r.toppE !== undefined) lines.push(`算 e：倒塌 ${fmtN(r.toppE)} 次，用时 ${sec(r.msE)}`);
+    if (r.ee !== undefined) lines.push(`(e + e)° 与 e 不同的格点：${r.ee}`);
+    if (r.ce !== undefined) lines.push(`(c + e)° 与 c 不同的格点：${r.ce}`);
+    if (r.burnC) lines.push(`烧图测试 c：(c + β)° ${r.burnC.same ? '= c' : '≠ c'}，倒塌恰好一次的格点 ${fmtN(r.burnC.once)} / ${fmtN(S.L * S.L)} → ${r.burnC.same && r.burnC.once === S.L * S.L ? '常返' : '非常返'}`);
+    if (r.burnR) lines.push(`烧图测试 r：(r + β)° ${r.burnR.same ? '= r' : '≠ r'}，烧不到的格点 ${fmtN(r.burnR.zero)} → ${r.burnR.same && r.burnR.once === S.L * S.L ? '常返' : '非常返'}`);
+    if (r.re !== undefined) lines.push(`(r + e)° 与 r 不同的格点：${r.re}（r 不在群里，e 对它不是单位元）`);
+    if (r.meanE !== undefined) lines.push(`e 的平均高度 ${r.meanE.toFixed(4)}`);
+    if (S.done) lines.push(`总计算时间 ${sec(S.busy)}`);
+    $('idInfo').textContent = lines.join('\n');
+    $('stat').textContent = `单位元 · L = ${S.L} · ${S.stage}`;
+    Object.assign(out, { L: S.L, done: S.done, stage: S.stage, busyMs: S.busy, ...r });
+  } else if (P.mode === 'soc' && Soc) {
+    const S = Soc, E = socFit(), zb = S.hs ? (S.hc[1] + 2 * S.hc[2] + 3 * S.hc[3]) / S.hs : NaN;
+    const fr = S.hs ? S.hc.map(c => c / S.hs) : null;
+    let m = 0; for (let i = 0; i < S.g.n; i++) if (S.g.inner[i]) m += S.g.a[i];
+    const lines = [`已撒 ${fmtN(S.drops)} 粒 = ${(S.drops / (S.L * S.L)).toFixed(2)} L²` + (S.drops > S.warm ? '' : `（暖机到 ${fmtN(S.warm)}）`),
+      `当前平均高度 ${(m / (S.L * S.L)).toFixed(4)}`,
+      `稳态平均高度 ${Number.isFinite(zb) ? zb.toFixed(4) : '—'}（17/8 = 2.125）`,
+      `统计的雪崩 ${fmtN(S.nAva)} 次，其中不倒塌 ${S.nAva ? (100 * S.nZero / S.nAva).toFixed(1) : '—'}%`,
+      `最大雪崩 s = ${fmtN(S.smax)}，上一次 s = ${fmtN(S.last)}`,
+      `τ ≈ ${Number.isFinite(E.tau) ? E.tau.toFixed(3) : '—'}（拟合 ${E.lo} ≤ s ≤ ${Math.round(E.hi)}，${E.n} 个对数分箱）`,
+      `计算时间 ${sec(S.busy)}`];
+    $('socInfo').textContent = lines.join('\n');
+    $('stat').textContent = `自组织临界 · L = ${S.L} · 已撒 ${fmtN(S.drops)} 粒` + (S.active && P.anim ? ` · 雪崩第 ${S.wave} 波，已倒塌 ${fmtN(S.g.topp - S.start)} 次` : '');
+    Object.assign(out, { L: S.L, drops: S.drops, warm: S.warm, nAva: S.nAva, nZero: S.nZero, smax: S.smax, tau: E.tau, fitN: E.n, fitLo: E.lo, fitHi: E.hi,
+      zbar: zb, frac: fr, meanNow: m / (S.L * S.L), busyMs: S.busy, bins: socBins() });
+  } else if (P.mode === 'abelian' && Abel) {
+    const S = Abel, lines = [`L = ${S.L}，K = ${fmtN(S.K)} 粒，已加入 ${fmtN(S.k)}`, `中途 A 与 B 最多相差 ${fmtN(S.maxDiff)} 格`];
+    if (S.done) {
+      const q = S.res;
+      lines.push(`最终 A 与 B 不同的格点：${q.AB}`, `C（一次全部加入再稳定）与 A 不同：${q.AC}`,
+        `倒塌总数 A ${fmtN(q.tA)} · B ${fmtN(q.tB)} · C ${fmtN(q.tC)}`, `每格倒塌次数不同的格点：A/B ${q.odoAB}，A/C ${q.odoAC}`);
+    }
+    $('abInfo').textContent = lines.join('\n');
+    $('stat').textContent = `交换律 · L = ${S.L} · 已加入 ${fmtN(S.k)} / ${fmtN(S.K)} 粒`;
+    Object.assign(out, { L: S.L, K: S.K, k: S.k, done: S.done, maxDiff: S.maxDiff, diff: S.diff, ...(S.res || {}) });
+  }
+  window.__sand = out;
+}
+
+// ---------- UI ----------
+function syncUI() {
+  for (const m of Object.keys(MODES)) document.querySelector(`[data-m="${m}"]`).classList.toggle('on', m === P.mode);
+  $('modeNote').textContent = NOTES[P.mode];
+  $('secPile').style.display = P.mode === 'pile' ? '' : 'none';
+  $('secId').style.display = P.mode === 'identity' ? '' : 'none';
+  $('secSoc').style.display = P.mode === 'soc' ? '' : 'none';
+  $('secAb').style.display = P.mode === 'abelian' ? '' : 'none';
+  $('speedRow').style.display = P.mode === 'soc' || P.mode === 'abelian' ? '' : 'none';
+  $('seedRow').style.display = P.mode === 'pile' ? 'none' : '';
+  $('plotsRow').style.display = P.mode === 'pile' || P.mode === 'soc' ? '' : 'none';
+  $('logN').value = P.logN; $('vN').textContent = `2^${P.logN} = ${fmtN(Math.round(2 ** P.logN))}`;
+  $('Lid').value = P.L.identity; $('vLid').textContent = P.L.identity;
+  $('Lsoc').value = P.L.soc; $('vLsoc').textContent = P.L.soc;
+  $('Lab').value = P.L.abelian; $('vLab').textContent = P.L.abelian;
+  $('K').value = Math.log10(P.K); $('vK').textContent = fmtN(P.K);
+  $('speed').value = P.speed;
+  const sp = Math.round(10 ** P.speed);
+  $('speedName').textContent = P.mode === 'abelian' ? '每帧加入粒数（A、B 各）' : P.anim ? '每帧倒塌波数' : '每帧最多撒的粒数';
+  $('vSpeed').textContent = fmtN(sp);
+  $('Seed').value = P.seed; $('vSeed').textContent = P.seed;
+  $('anim').checked = P.anim; $('plots').checked = P.plots;
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+function applyPreset(key) {
+  const p = PRESETS[key];
+  P.preset = key; P.mode = p.mode;
+  if (p.logN !== undefined) P.logN = p.logN;
+  if (p.L !== undefined) P.L[p.mode] = p.L;
+  if (p.speed !== undefined) P.speed = p.speed;
+  if (p.anim !== undefined) P.anim = p.anim;
+  if (p.K !== undefined) P.K = p.K;
+  P.warm = !!p.warm;
+}
+const changed = () => { P.preset = ''; syncUI(); restart(); };
+for (const [key, name] of Object.entries(MODES)) {
+  const b = document.createElement('button'); b.textContent = name; b.dataset.m = key;
+  b.onclick = () => { if (P.mode !== key) { P.mode = key; changed(); } };
+  $('modes').appendChild(b);
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button'); b.textContent = p.name; b.dataset.p = key;
+  b.onclick = () => { applyPreset(key); running = true; syncUI(); restart(); };
+  $('pre').appendChild(b);
+}
+HCOL.forEach((c, k) => {
+  const s = document.createElement('span'), i = document.createElement('i');
+  i.style.background = `rgb(${c.join(',')})`; s.appendChild(i); s.appendChild(document.createTextNode(`${k} 粒`)); $('legend').appendChild(s);
+});
+{ const s = document.createElement('span'), i = document.createElement('i'); i.style.background = '#fff'; s.appendChild(i); s.appendChild(document.createTextNode('正在倒塌')); $('legend').appendChild(s); }
+$('logN').oninput = e => { const v = clamp(+e.target.value, LIM.logN); if (v !== P.logN) { P.logN = v; changed(); } };
+$('Lid').oninput = e => { P.L.identity = Math.round(clamp(+e.target.value, LIM.L.identity)); changed(); };
+$('Lsoc').oninput = e => { P.L.soc = Math.round(clamp(+e.target.value, LIM.L.soc)); changed(); };
+$('Lab').oninput = e => { P.L.abelian = Math.round(clamp(+e.target.value, LIM.L.abelian)); changed(); };
+$('K').oninput = e => { P.K = Math.round(clamp(10 ** +e.target.value, LIM.K) / 10) * 10; changed(); };
+$('Seed').oninput = e => { P.seed = Math.round(clamp(+e.target.value, LIM.seed)); changed(); };
+$('speed').oninput = e => { P.speed = clamp(+e.target.value, LIM.speed); P.preset = ''; syncUI(); };
+$('anim').onchange = e => { P.anim = e.target.checked; if (P.anim && P.speed > 1) P.speed = 0; P.preset = ''; syncUI(); };
+$('plots').onchange = e => { P.plots = e.target.checked; if (Pile) Pile.dirty = true; };
+$('warm').onclick = () => { if (Soc) Soc.fastUntil = Math.max(Soc.drops, Soc.warm + 30 * Soc.L ** 2); };
+$('play').onclick = () => { running = !running; syncUI(); };
+$('restart').onclick = () => { running = true; syncUI(); restart(); };
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=socAnim  or  ?mode=identity&L=200&seed=3&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { const v = q.get(k); if (v !== null && v.trim() !== '') { const x = Number(v); if (Number.isFinite(x)) f(x); } };
+{ const v = q.get('p'); if (v !== null && Object.hasOwn(PRESETS, v)) applyPreset(v); }
+{ const v = q.get('mode'); if (v !== null && Object.hasOwn(MODES, v) && v !== P.mode) { P.mode = v; P.preset = ''; } }
+num('logN', x => { P.logN = Math.round(clamp(x, LIM.logN) * 4) / 4; P.preset = ''; });
+num('L', x => { if (P.mode !== 'pile') { P.L[P.mode] = Math.round(clamp(x, LIM.L[P.mode])); P.preset = ''; } });
+num('seed', x => { P.seed = Math.round(clamp(x, LIM.seed)); });
+num('speed', x => { P.speed = clamp(x, LIM.speed); });
+num('K', x => { P.K = Math.round(clamp(x, LIM.K)); P.preset = ''; });
+if (q.get('anim') === '1') P.anim = true;
+if (q.get('anim') === '0') P.anim = false;
+if (q.get('warm') === '1') P.warm = true;
+if (q.get('plots') === '0') P.plots = false;
+if (q.get('run') === '0') running = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI(); restart();
+
+(function loop() {
+  step();
+  draw(); info();
+  window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
