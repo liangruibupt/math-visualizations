@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Raup 贝壳卷曲模型 · 3D</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <style>
   html, body { margin: 0; height: 100%; background: #14161a; color: #e6e6e6;
     font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
@@ -53,7 +54,8 @@
   </div>
   <div class="row">
     <label>圈数 <b id="vN"></b></label>
-    <input id="N" type="range" min="1" max="12" step="0.25">
+    <input id="N" type="range" min="0.5" max="12" step="0.05">
+    <small>可以少于 1 圈，例如双壳</small>
   </div>
 
   <h2>管口形状</h2>
@@ -119,6 +121,16 @@
     <input id="GA" type="range" min="0" max="0.12" step="0.005">
   </div>
 
+  <h2>内部构造</h2>
+  <div class="checks"><label><input id="SPon" type="checkbox"> 显示隔板</label></div>
+  <div class="row">
+    <label>每圈隔板数 <b id="vSP"></b></label>
+    <input id="SP" type="range" min="0" max="24" step="1">
+    <small>头足类（鹦鹉螺、菊石）把旧的螺管用隔板封成气室；最后约 1/3 圈是住室，没有隔板</small>
+  </div>
+  <div class="checks"><label><input id="SI" type="checkbox"> 显示体管</label></div>
+  <small style="color:#8c95a3">体管是穿过各隔板、连通所有气室的细管，用来调节浮力</small>
+
   <h2>显示</h2>
   <div class="row">
     <label>透明度 <b id="vO"></b></label>
@@ -139,11 +151,13 @@
     <small>剖切面始终包含中轴，绕中轴旋转；截面按管壁实体填充</small>
   </div>
   <div class="presets">
-    <button data-p="1.9,0.35,0,6">菊石</button>
-    <button data-p="3.2,0,0,4">鹦鹉螺</button>
+    <button data-p="1.9,0.35,0,6" data-x='{"E":0.75,"SP":14}'>菊石</button>
+    <button data-p="3.2,0,0,4" data-x='{"E":0.62,"SP":12}'>鹦鹉螺</button>
     <button data-p="2.0,0.15,1.6,5">蜗牛</button>
     <button data-p="1.25,0.15,4.5,10">锥螺</button>
     <button data-p="2.8,0.4,0.4,3">盘螺</button>
+    <button data-p="4.5,0.45,0.7,2.5">羊角</button>
+    <button data-p="1000,0,0.05,0.65" data-x='{"E":0.5}'>双壳</button>
   </div>
 </div>
 <div id="hint">左键拖动旋转 · 滚轮缩放 · 右键平移</div>
@@ -179,6 +193,11 @@ const matBack = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE
 const matFront = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.FrontSide,
   roughness: 0.45, metalness: 0.05, transparent: true });
 const matWire = new THREE.MeshBasicMaterial({ color: 0x9fd0ff, wireframe: true, transparent: true, opacity: 0.25 });
+// Septa and siphuncle are open surfaces: opaque, outside the stencil passes (they would corrupt
+// the cap count), drawn after the cap and before the transparent shell so they show through it.
+const matSepta = new THREE.MeshStandardMaterial({ color: 0xeadfcd, roughness: 0.3, metalness: 0.08,
+  side: THREE.DoubleSide, emissive: 0x2a2218 });
+const matSiph = new THREE.MeshStandardMaterial({ color: 0xb5643c, roughness: 0.6, side: THREE.DoubleSide });
 
 // Solid section caps (stencil technique): count clipped back/front faces per pixel;
 // where the count is non-zero the plane lies inside the wall, so draw the cap there.
@@ -222,12 +241,12 @@ function buildGeometry(p) {
 
   // unit aperture profile (radial u, axial v) at growth fraction t (0 = apex, 1 = aperture):
   // superellipse with radial semi-axis 1 and axial semi-axis E, then tilted by R
-  const profile = t => {
+  const profile = (t, n = segV) => {
     const E = g0.E + (p.E - g0.E) * t, ex = 2 / (g0.S + (p.S - g0.S) * t);
     const tau = THREE.MathUtils.degToRad(g0.R + (p.R - g0.R) * t), cT = Math.cos(tau), sT = Math.sin(tau);
     const out = [];
-    for (let j = 0; j <= segV; j++) {
-      const ph = 2 * Math.PI * j / segV, c = Math.cos(ph), s = Math.sin(ph);
+    for (let j = 0; j <= n; j++) {
+      const ph = 2 * Math.PI * j / n, c = Math.cos(ph), s = Math.sin(ph);
       const u = Math.sign(c) * Math.pow(Math.abs(c), ex), v = E * Math.sign(s) * Math.pow(Math.abs(s), ex);
       out.push([u * cT - v * sT, u * sT + v * cT, ph]);
     }
@@ -307,22 +326,125 @@ function buildGeometry(p) {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
-  return g;
+  return { g, septa: p.SP > 0 ? buildSepta() : null, siph: p.SP > 0 && p.SI ? buildSiphuncle() : null };
+
+  // ---- internal structure (ported from shell-morphospace-3d) ----
+  // centre line, tube size and aperture-shape fraction at angle th
+  function frameAt(th) {
+    const s = Math.pow(p.W, th / (2 * Math.PI) - turns);
+    const rc = (1 + p.D) / 2 * s, a = (1 - p.D) / 2 * s;
+    return { s, rc, a, zc: -p.T * rc, t: gam < 1e-3 ? th / thetaMax : (Math.pow(s, gam) - sMinG) / (1 - sMinG) };
+  }
+  // unit tangent of the centre line (direction of growth)
+  function tangentAt(th) {
+    const { rc } = frameAt(th), drc = rc * Math.log(p.W) / (2 * Math.PI);
+    const ct = Math.cos(th), st = Math.sin(th);
+    const x = drc * ct - rc * st, y = -p.T * drc, z = drc * st + rc * ct, n = Math.hypot(x, y, z) || 1;
+    return [x / n, y / n, z / n];
+  }
+  // chamber walls: perTurn per turn, none in the body chamber (last 1/3 turn before the aperture)
+  function septaThetas() {
+    const step = 2 * Math.PI / p.SP, out = [];
+    for (let th = thetaMax - 2 * Math.PI / 3; th > step * 0.5; th -= step) out.push(th);
+    return out;
+  }
+  // Each septum is a shallow dome spanning the INNER wall cross-section at th, bulging toward the apex
+  // (concave toward the aperture). Where the previous whorl pushes into this cross-section (involute
+  // shells) the septum stops on that whorl's outer wall instead of cutting through it.
+  function buildSepta() {
+    const NV = 96, RINGS = 10, depth = 0.22, inset = 0.97;
+    const sp = [], si = [];
+    const bm = 1 + (p.RN > 0 ? p.RA : 0) + (p.GN > 0 ? p.GA : 0);   // outer wall incl. ornament
+    for (const th of septaThetas()) {
+      const f = frameAt(th), prof = profile(f.t, NV);
+      const P2 = prof.map(([u, v]) => [f.rc + k * f.a * u, f.zc + k * f.a * v]);
+      const reach = new Float32Array(NV + 1).fill(1);
+      if (th > 2 * Math.PI) {
+        const fp = frameAt(th - 2 * Math.PI);
+        const Q = profile(fp.t, NV).map(([u, v]) => [fp.rc + bm * fp.a * u, fp.zc + bm * fp.a * v]);
+        // centre inside the previous whorl: no room for a septum here
+        let inside = false;
+        for (let i = 0, j = NV - 1; i < NV; j = i++)
+          if ((Q[i][1] > f.zc) !== (Q[j][1] > f.zc) &&
+              f.rc < (Q[j][0] - Q[i][0]) * (f.zc - Q[i][1]) / (Q[j][1] - Q[i][1]) + Q[i][0]) inside = !inside;
+        if (inside) continue;
+        // first crossing of the ray centre -> inner wall with the previous whorl's outline
+        for (let j = 0; j <= NV; j++) {
+          const dx = P2[j][0] - f.rc, dy = P2[j][1] - f.zc;
+          for (let i = 0; i < NV; i++) {
+            const ex = Q[i + 1][0] - Q[i][0], ey = Q[i + 1][1] - Q[i][1];
+            const den = dx * ey - dy * ex;
+            if (Math.abs(den) < 1e-15) continue;
+            const qx = Q[i][0] - f.rc, qy = Q[i][1] - f.zc;
+            const m = (qx * ey - qy * ex) / den, w = (qx * dy - qy * dx) / den;
+            if (m >= 0 && m < reach[j] && w >= 0 && w <= 1) reach[j] = m;
+          }
+        }
+      }
+      const [tx, ty, tz] = tangentAt(th), ct = Math.cos(th), st = Math.sin(th), base = sp.length / 3;
+      for (let r = 0; r <= RINGS; r++) {
+        const u = r / RINGS, back = -depth * k * f.a * (1 - u * u);
+        for (let j = 0; j <= NV; j++) {
+          const m = u * inset * reach[j];
+          const rad = f.rc + m * (P2[j][0] - f.rc), y = f.zc + m * (P2[j][1] - f.zc);
+          sp.push(rad * ct + back * tx, y + back * ty, rad * st + back * tz);
+        }
+      }
+      for (let r = 0; r < RINGS; r++) for (let j = 0; j < NV; j++) {
+        const a0 = base + r * (NV + 1) + j, b0 = a0 + NV + 1;
+        si.push(a0, b0, a0 + 1, b0, b0 + 1, a0 + 1);
+      }
+    }
+    if (!si.length) return null;
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+    sg.setIndex(si);
+    sg.computeVertexNormals();
+    return sg;
+  }
+  // siphuncle: thin tube on the centre line from the apex through every septum to the last one
+  function buildSiphuncle() {
+    const ths = septaThetas();
+    if (!ths.length) return null;
+    const thEnd = ths[0], NU = Math.max(24, Math.ceil(thEnd / (2 * Math.PI) * 120)), NV = 12;
+    const sp = [], si = [], rs = 0.08 * k * Math.min(1, p.E, p.G ? p.E0 : 1);
+    for (let i = 0; i <= NU; i++) {
+      const th = thEnd * i / NU, f = frameAt(th), r = rs * f.a, ct = Math.cos(th), st = Math.sin(th);
+      for (let j = 0; j <= NV; j++) {
+        const ph = 2 * Math.PI * j / NV, rad = f.rc + r * Math.cos(ph);
+        sp.push(rad * ct, f.zc + r * Math.sin(ph), rad * st);
+      }
+    }
+    for (let i = 0; i < NU; i++) for (let j = 0; j < NV; j++) {
+      const a0 = i * (NV + 1) + j, b0 = a0 + NV + 1;
+      si.push(a0, b0, a0 + 1, b0, b0 + 1, a0 + 1);
+    }
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+    sg.setIndex(si);
+    sg.computeVertexNormals();
+    return sg;
+  }
 }
 
 function rebuild() {
   meshes.forEach(m => group.remove(m));
   if (meshes[0]) meshes[0].geometry.dispose();
+  for (const m of meshes.slice(5)) m.geometry.dispose();
   if (axisLine) { group.remove(axisLine); axisLine.geometry.dispose(); }
-  const g = buildGeometry(P);
+  const { g, septa, siph } = buildGeometry(P);
   g.computeBoundingBox();
-  const bb = g.boundingBox;
-  g.translate(0, -(bb.min.y + bb.max.y) / 2, 0);   // keep the shell vertically centred on screen
+  const bb = g.boundingBox, dy = -(bb.min.y + bb.max.y) / 2;
+  g.translate(0, dy, 0);   // keep the shell vertically centred on screen
   const mk = (mat, order) => { const m = new THREE.Mesh(g, mat); m.renderOrder = order; return m; };
   const stB = mk(matStBack, 1), stF = mk(matStFront, 1);
   const back = mk(matBack, 2), front = mk(matFront, 3), wire = mk(matWire, 4);
   stB.visible = stF.visible = P.cut; wire.visible = P.wire;
   meshes = [stB, stF, back, front, wire];
+  for (const [sg, mat] of [[septa, matSepta], [siph, matSiph]]) if (sg) {
+    sg.translate(0, dy, 0);
+    const m = new THREE.Mesh(sg, mat); m.renderOrder = 1.5; meshes.push(m);
+  }
   group.add(...meshes);
   const h = (bb.max.y - bb.min.y) / 2 + 0.3;
   axisLine = new THREE.Line(
@@ -346,7 +468,7 @@ function applyCut() {
   const a = THREE.MathUtils.degToRad(P.A), sgn = P.flip ? -1 : 1;
   cutPlane.normal.set(sgn * Math.cos(a), 0, sgn * Math.sin(a));
   const planes = P.cut ? [cutPlane] : [];
-  for (const m of [matBack, matFront, matWire]) { m.clippingPlanes = planes; m.needsUpdate = true; }
+  for (const m of [matBack, matFront, matWire, matSepta, matSiph]) { m.clippingPlanes = planes; m.needsUpdate = true; }
   cap.visible = P.cut;
   cap.position.set(0, 0, 0);
   cap.lookAt(cutPlane.normal);
@@ -354,13 +476,13 @@ function applyCut() {
 }
 
 // ---- UI ----
-const Wmin = 1.05, Wmax = 12;
+const Wmin = 1.05, Wmax = 1000;   // up to 1000 so a bivalve valve (huge W, < 1 turn) fits
 const w2s = w => 1000 * Math.log(w / Wmin) / Math.log(Wmax / Wmin);
 const s2w = s => Wmin * Math.pow(Wmax / Wmin, s / 1000);
 // A=225 keeps the far half, so the cut faces the default camera
 const P = { W: 2.0, D: 0.15, T: 1.6, N: 5, E: 1, R: 0, S: 2, H: 0.12, O: 0.45,
   G: false, E0: 0.6, R0: 0, S0: 2, C: 1,
-  RN: 24, RA: 0.04, GN: 48, GA: 0.02,
+  RN: 24, RA: 0.04, GN: 48, GA: 0.02, SP: 0, SI: true,
   wire: false, axis: true, cut: false, flip: false, A: 225 };
 const $ = id => document.getElementById(id);
 const fmt = { W: 2, D: 2, T: 2, E: 2, S: 1, H: 2, O: 2, E0: 2, S0: 1, C: 2, RA: 3, GA: 3 };
@@ -369,7 +491,8 @@ function syncUI() {
   $('W').value = w2s(P.W);
   for (const k of ['D', 'T', 'N', 'E', 'R', 'S', 'H', 'O', 'A', 'E0', 'R0', 'S0', 'C', 'RN', 'RA', 'GN', 'GA']) $(k).value = P[k];
   for (const k in fmt) $('v' + k).textContent = P[k].toFixed(fmt[k]);
-  $('vN').textContent = P.N; $('vR').textContent = P.R + '°'; $('vA').textContent = P.A + '°';
+  $('SP').value = P.SP; $('vSP').textContent = P.SP; $('SPon').checked = P.SP > 0; $('SI').checked = P.SI;
+  $('vN').textContent = +P.N.toFixed(2); $('vR').textContent = P.R + '°'; $('vA').textContent = P.A + '°';
   $('vRN').textContent = P.RN; $('vGN').textContent = P.GN;
   $('vR0').textContent = P.R0 + '°';
   $('cut').checked = P.cut; $('flip').checked = P.flip;
@@ -385,14 +508,24 @@ $('wire').onchange = e => { P.wire = e.target.checked; meshes[4].visible = P.wir
 $('axis').onchange = e => { P.axis = e.target.checked; axisLine.visible = P.axis; };
 $('cut').onchange = e => { P.cut = e.target.checked; applyCut(); };
 $('flip').onchange = e => { P.flip = e.target.checked; applyCut(); };
+let lastSP = 12;   // restored when 显示隔板 is ticked again
+$('SP').oninput = e => { P.SP = +e.target.value; if (P.SP) lastSP = P.SP; syncUI(); rebuild(); };
+$('SPon').onchange = e => { P.SP = e.target.checked ? lastSP : 0; syncUI(); rebuild(); };
+$('SI').onchange = e => { P.SI = e.target.checked; rebuild(); };
+// presets set W,D,T,N and reset the aperture shape and septa; data-x adds per-preset overrides
+const SHAPE_DEFAULTS = { E: 1, R: 0, S: 2, G: false, SP: 0 };
 document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
   const [w, d, t, n] = b.dataset.p.split(',').map(Number);
-  Object.assign(P, { W: w, D: d, T: t, N: n }); syncUI(); rebuild();
+  Object.assign(P, SHAPE_DEFAULTS, { W: w, D: d, T: t, N: n }, b.dataset.x ? JSON.parse(b.dataset.x) : {});
+  if (P.SP) lastSP = P.SP;
+  syncUI(); rebuild();
 });
 
 // URL params let you share a shape, e.g. shell.html?W=2&D=0.15&T=1.6&E=1.4&R=20&S=3&H=0.2&cut=1
 const q = new URLSearchParams(location.search);
-for (const k of ['W', 'D', 'T', 'N', 'E', 'R', 'S', 'H', 'O', 'A', 'E0', 'R0', 'S0', 'C', 'RN', 'RA', 'GN', 'GA']) if (q.has(k)) P[k] = +q.get(k);
+for (const k of ['W', 'D', 'T', 'N', 'E', 'R', 'S', 'H', 'O', 'A', 'E0', 'R0', 'S0', 'C', 'RN', 'RA', 'GN', 'GA', 'SP']) if (q.has(k)) P[k] = +q.get(k);
+if (P.SP) lastSP = P.SP;
+if (q.has('SI')) P.SI = q.get('SI') === '1';
 if (q.has('G')) P.G = q.get('G') === '1';
 if (q.has('cut')) P.cut = q.get('cut') === '1';
 if (q.has('flip')) P.flip = q.get('flip') === '1';
