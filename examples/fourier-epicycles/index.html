@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>傅里叶本轮 · 圆叠圆画出任意曲线</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0f17; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(24,28,40,.93); border: 1px solid #323a52; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a9bde0; border-top: 1px solid #323a52; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8d94a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2a3044; color: #e6e6e6; border: 1px solid #3c4560;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #37405a; }
+  button.on { background: #3f5a8a; border-color: #5f7fb8; }
+  button:disabled { opacity: .4; cursor: default; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #spec { width: 100%; height: 72px; display: block; margin-top: 4px; background: #121625; border-radius: 4px; }
+  #info { font: 11px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #a9b0c4; margin-top: 4px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+  #stat { position: absolute; left: 10px; top: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(12,15,23,.8); color: #cfd6e6; font-size: 12px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>傅里叶本轮 · 圆叠圆画曲线</h1>
+  <small>把一条闭合曲线看成复数函数 <span class="mono">z(t)</span>，离散傅里叶变换把它拆成 M 个匀速旋转的圆 <span class="mono">c<sub>k</sub>·e<sup>ikt</sup></span>。按半径从大到小首尾相接，最后一个圆上的笔尖画出的就是原曲线。</small>
+
+  <h2>项数</h2>
+  <div class="row">
+    <label>圆的个数 N <b id="vN"></b></label>
+    <input id="N" type="range" min="1" max="255" step="1">
+    <small>只用半径最大的 N 个圆（再加一个不转的常数项 c<sub>0</sub>）。N = M − 1 时正好穿过全部 M 个采样点。</small>
+  </div>
+  <div class="row">
+    <label>采样点数 M <b id="vM"></b></label>
+    <input id="M" type="range" min="6" max="10" step="1">
+  </div>
+  <div id="info"></div>
+  <canvas id="spec"></canvas>
+  <small>|c<sub>k</sub>| 从大到小排开（对数坐标），金色是正在用的 N 项。角越尖，尾巴衰减得越慢。</small>
+
+  <h2>动画</h2>
+  <div class="row">
+    <label>转一圈用时 <b id="vS"></b></label>
+    <input id="S" type="range" min="2" max="30" step="0.5">
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 从头画</button></div>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="circ" type="checkbox"> 圆</label>
+    <label><input id="tgt" type="checkbox"> 原曲线</label>
+    <label><input id="full" type="checkbox"> 整条近似曲线</label>
+    <label><input id="sq" type="checkbox"> 一维方波（奇次正弦）</label>
+  </div>
+
+  <h2>笔画首尾怎么接</h2>
+  <div class="presets" id="close"></div>
+  <small>只对折线类曲线（正方形、星、π、∑、手画）有效。“跳回起点”让 z(t) 在终点处跳变，近似曲线会在跳变两侧冲出头：Gibbs 现象。</small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">在右边画布上按住鼠标拖动，画一条你自己的曲线（松开后自动重采样成 M 个点）</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+const TAU = 2 * Math.PI;
+const PATH_S = 1024;     // samples of the approximating curve; a multiple of every M (M = 2^6 … 2^10)
+const MAX_RAW = 4000;    // most mouse points kept for one drawn stroke
+const MAX_COLS = 4096;   // most pixel columns of the square-wave plot
+const CLOSE = { line: '直线连回起点', retrace: '原路返回', jump: '跳回起点' };
+const CLOSE_KEYS = Object.keys(CLOSE);
+
+// scale and centre a point list so its bounding box is [-1, 1] on the longer side
+function normalize(pts) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const s = 2 / Math.max(1e-9, x1 - x0, y1 - y0), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  return pts.map(([x, y]) => [(x - cx) * s, (y - cy) * s]);
+}
+function starPoly() {
+  const p = [];
+  for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.38 : 1, a = Math.PI / 2 + i * Math.PI / 5; p.push([r * Math.cos(a), r * Math.sin(a)]); }
+  return p;
+}
+
+// ---------- presets ----------
+// poly: a polyline, resampled by arc length (constant pen speed). fn: a parametric curve, sampled at equal t.
+// π is one pen stroke that walks the bar and both legs; "原路返回" turns it into a closed tour of the glyph.
+const PRESETS = {
+  square: { name: '正方形', close: 'line', poly: [[-1, 1], [1, 1], [1, -1], [-1, -1]] },
+  star: { name: '五角星', close: 'line', poly: starPoly() },
+  heart: { name: '心形', fn: t => [16 * Math.sin(t) ** 3, 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)] },
+  trefoil: { name: '三叶线（只要 2 个圆）', fn: t => [Math.sin(t) + 2 * Math.sin(2 * t), Math.cos(t) - 2 * Math.cos(2 * t)] },
+  pi: { name: '手写 π', close: 'retrace', poly: [[-0.95, 0.3], [-0.82, 0.47], [-0.6, 0.55], [0.95, 0.55], [0.38, 0.55],
+    [0.36, 0.1], [0.4, -0.45], [0.52, -0.72], [0.7, -0.78], [0.86, -0.66], [0.7, -0.78], [0.52, -0.72], [0.4, -0.45],
+    [0.36, 0.1], [0.38, 0.55], [-0.3, 0.55], [-0.32, 0.1], [-0.42, -0.4], [-0.6, -0.78]] },
+  sigma: { name: '手写 ∑', close: 'retrace', poly: [[0.78, 0.58], [0.72, 0.8], [-0.7, 0.8], [0.15, 0], [-0.7, -0.8], [0.72, -0.8], [0.8, -0.56]] },
+};
+for (const p of Object.values(PRESETS)) if (p.poly) p.poly = normalize(p.poly);
+
+const P = { preset: 'pi', n: 40, mLog: 8, period: 10, close: 'retrace', circ: true, tgt: true, full: false, sq: false };
+let curve = PRESETS.pi;        // { poly } or { fn }; a drawn curve is { poly } in world coordinates
+let running = true, phase = 0; // phase in [0, 1): fraction of one turn
+
+const $ = id => document.getElementById(id);
+
+// ---------- sampling ----------
+function resample(poly, M, closed) {
+  const v = closed ? poly.concat([poly[0]]) : poly, cum = [0];
+  for (let i = 1; i < v.length; i++) cum.push(cum[i - 1] + Math.hypot(v[i][0] - v[i - 1][0], v[i][1] - v[i - 1][1]));
+  const L = cum[cum.length - 1];
+  if (!(L > 0)) return null;
+  const out = [];
+  for (let j = 0, i = 1; j < M; j++) {
+    const s = closed ? L * j / M : L * j / (M - 1);   // open: first and last sample sit on the two ends
+    while (i < v.length - 1 && cum[i] < s) i++;
+    const seg = cum[i] - cum[i - 1], f = seg > 0 ? (s - cum[i - 1]) / seg : 0;
+    out.push([v[i - 1][0] + (v[i][0] - v[i - 1][0]) * f, v[i - 1][1] + (v[i][1] - v[i - 1][1]) * f]);
+  }
+  return out;
+}
+function sampleCurve(M) {
+  if (curve.fn) return normalize(Array.from({ length: M }, (_, j) => curve.fn(TAU * j / M)));
+  const poly = P.close === 'retrace' ? curve.poly.concat(curve.poly.slice(0, -1).reverse()) : curve.poly;
+  return resample(poly, M, P.close !== 'jump');
+}
+
+// ---------- DFT ----------
+// c_k = (1/M) Σ_j z_j e^{-2πi kj/M}; index k > M/2 is the negative frequency k − M.
+let Z = [], C = [], eTotal = 1, size = 2;
+function analyse() {
+  const M = Z.length, cs = new Float64Array(M), sn = new Float64Array(M);
+  for (let j = 0; j < M; j++) { cs[j] = Math.cos(TAU * j / M); sn[j] = Math.sin(TAU * j / M); }
+  const all = [];
+  for (let k = 0; k < M; k++) {
+    let re = 0, im = 0;
+    for (let j = 0; j < M; j++) {
+      const a = (k * j) % M, x = Z[j][0], y = Z[j][1];
+      re += x * cs[a] + y * sn[a]; im += y * cs[a] - x * sn[a];
+    }
+    re /= M; im /= M;
+    all.push({ k: k <= M / 2 ? k : k - M, re, im, r: Math.hypot(re, im) });
+  }
+  const rest = all.slice(1).sort((a, b) => b.r - a.r || Math.abs(a.k) - Math.abs(b.k));
+  C = [all[0], ...rest];
+  eTotal = rest.reduce((s, c) => s + c.r * c.r, 0) || 1;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of Z) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  size = Math.max(1e-9, x1 - x0, y1 - y0);
+}
+
+// the curve drawn by the first N circles, at PATH_S equally spaced t
+const PC = new Float64Array(PATH_S), PS = new Float64Array(PATH_S);
+for (let s = 0; s < PATH_S; s++) { PC[s] = Math.cos(TAU * s / PATH_S); PS[s] = Math.sin(TAU * s / PATH_S); }
+const path = new Float64Array(2 * PATH_S);
+let maxErr = 0, energy = 0;
+function buildPath() {
+  for (let s = 0; s < PATH_S; s++) { path[2 * s] = C[0].re; path[2 * s + 1] = C[0].im; }
+  energy = 0;
+  for (let n = 1; n <= P.n; n++) {
+    const { k, re, im, r } = C[n];
+    energy += r * r;
+    for (let s = 0; s < PATH_S; s++) {
+      const a = ((k * s) % PATH_S + PATH_S) % PATH_S;
+      path[2 * s] += re * PC[a] - im * PS[a]; path[2 * s + 1] += re * PS[a] + im * PC[a];
+    }
+  }
+  const step = PATH_S / Z.length;
+  maxErr = 0;
+  for (let j = 0; j < Z.length; j++)
+    maxErr = Math.max(maxErr, Math.hypot(path[2 * j * step] - Z[j][0], path[2 * j * step + 1] - Z[j][1]));
+  waveDirty = true; drawSpec(); drawInfo();
+}
+
+function rebuild() {
+  const z = sampleCurve(2 ** P.mLog);
+  if (!z) return false;
+  Z = z; analyse();
+  P.n = Math.min(P.n, Z.length - 1);
+  syncUI(); buildPath();
+  return true;
+}
+
+// ---------- 1-D square wave: (4/π) Σ_{j=1..K} sin((2j−1)x)/(2j−1) ----------
+let wave = new Float32Array(1), waveDirty = true, wavePeak = 1;
+function squareSum(x, K) {
+  const ex = Math.cos(x), ey = Math.sin(x), e2x = ex * ex - ey * ey, e2y = 2 * ex * ey;
+  let zx = ex, zy = ey, s = 0;
+  for (let j = 1; j <= K; j++) { s += zy / (2 * j - 1); const t = zx * e2x - zy * e2y; zy = zx * e2y + zy * e2x; zx = t; }
+  return 4 / Math.PI * s;
+}
+function buildWave(cols) {
+  const K = P.n;
+  wave = new Float32Array(cols);
+  for (let i = 0; i < cols; i++) wave[i] = squareSum(TAU * (i + 0.5) / cols, K);
+  wavePeak = squareSum(Math.PI / (2 * K), K);   // first maximum of the partial sum, right of the jump at 0
+  waveDirty = false;
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d'), sp = $('spec'), sctx = sp.getContext('2d');
+let W = 1, H = 1, drawing = null, waveCols = 0;
+const layout = () => {
+  const Hm = P.sq ? Math.round(H * 0.64) : H;
+  return { Hm, U: Math.min(W, Hm) * 0.38, ox: W / 2, oy: Hm / 2 };
+};
+
+function polyline(pts, n, X, Y, closed) {
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) { const x = X(pts(i)[0]), y = Y(pts(i)[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  if (closed) ctx.closePath();
+  ctx.stroke();
+}
+
+function draw() {
+  const dpr = devicePixelRatio, { Hm, U, ox, oy } = layout();
+  const X = x => ox + x * U, Y = y => oy - y * U;
+  ctx.fillStyle = '#0c0f17'; ctx.fillRect(0, 0, W, H);
+  ctx.lineJoin = ctx.lineCap = 'round';
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, Hm); ctx.clip();
+
+  if (drawing) {
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr;
+    polyline(i => drawing[i], drawing.length, X, Y, false);
+    ctx.restore(); return;
+  }
+  if (P.tgt) {
+    ctx.strokeStyle = 'rgba(160,170,200,.35)'; ctx.lineWidth = 1.5 * dpr; ctx.setLineDash([5 * dpr, 4 * dpr]);
+    polyline(i => Z[i], Z.length, X, Y, curve.fn || P.close !== 'jump'); ctx.setLineDash([]);
+  }
+  const pt = i => [path[2 * i], path[2 * i + 1]];
+  if (P.full) { ctx.strokeStyle = 'rgba(255,211,138,.25)'; ctx.lineWidth = 1.5 * dpr; polyline(pt, PATH_S, X, Y, true); }
+
+  // epicycles at time t: c_0 + Σ c_k e^{ikt}, largest radius first
+  const t = phase * TAU;
+  let x = C[0].re, y = C[0].im;
+  ctx.lineWidth = 1 * dpr;
+  for (let n = 1; n <= P.n; n++) {
+    const { k, re, im, r } = C[n], c = Math.cos(k * t), s = Math.sin(k * t);
+    const nx = x + re * c - im * s, ny = y + re * s + im * c;
+    if (P.circ && r * U > 0.6) {
+      ctx.strokeStyle = 'rgba(130,155,215,.33)'; ctx.beginPath(); ctx.arc(X(x), Y(y), r * U, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(215,225,255,.75)'; ctx.beginPath(); ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(nx), Y(ny)); ctx.stroke();
+    }
+    x = nx; y = ny;
+  }
+  // trail: the approximating curve from t = 0 up to now, ending at the pen tip
+  const idx = Math.min(PATH_S - 1, Math.floor(phase * PATH_S));
+  ctx.strokeStyle = '#ffd38a'; ctx.lineWidth = 2.2 * dpr;
+  ctx.beginPath(); ctx.moveTo(X(path[0]), Y(path[1]));
+  for (let i = 1; i <= idx; i++) ctx.lineTo(X(path[2 * i]), Y(path[2 * i + 1]));
+  ctx.lineTo(X(x), Y(y)); ctx.stroke();
+  ctx.fillStyle = '#ff7a6b'; ctx.beginPath(); ctx.arc(X(x), Y(y), 4 * dpr, 0, TAU); ctx.fill();
+  ctx.restore();
+
+  if (P.sq) drawStrip(Hm, H - Hm, t);
+}
+
+// side view: odd-sine circles on the left, their height drawn as a function of x on the right
+function drawStrip(y0, h, t) {
+  const dpr = devicePixelRatio, K = P.n, cy = y0 + h * 0.52, A = h * 0.27;
+  const lw = Math.min(h * 0.95, W * 0.3), cx = lw * 0.5 + 8 * dpr, px0 = lw + 24 * dpr, px1 = W - 16 * dpr;
+  const cols = Math.max(1, Math.min(MAX_COLS, Math.round(px1 - px0)));
+  if (waveDirty || cols !== waveCols) { buildWave(cols); waveCols = cols; }
+  ctx.fillStyle = '#10141f'; ctx.fillRect(0, y0, W, h);
+  ctx.strokeStyle = '#323a52'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.moveTo(0, y0 + 0.5); ctx.lineTo(W, y0 + 0.5); ctx.stroke();
+  const PX = x => px0 + x / TAU * (px1 - px0);
+
+  // target square wave and axis
+  ctx.strokeStyle = 'rgba(160,170,200,.4)'; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.beginPath();
+  ctx.moveTo(px0, cy - A); ctx.lineTo(PX(Math.PI), cy - A); ctx.lineTo(PX(Math.PI), cy + A); ctx.lineTo(px1, cy + A);
+  ctx.moveTo(px0, cy); ctx.lineTo(px1, cy); ctx.stroke(); ctx.setLineDash([]);
+  // partial sum
+  ctx.strokeStyle = '#7fc4ff'; ctx.lineWidth = 1.6 * dpr; ctx.beginPath();
+  for (let i = 0; i < cols; i++) { const yy = cy - A * wave[i]; i ? ctx.lineTo(px0 + i + 0.5, yy) : ctx.moveTo(px0 + 0.5, yy); }
+  ctx.stroke();
+  // Gibbs peak
+  const xp = Math.PI / (2 * K), yp = cy - A * wavePeak;
+  ctx.strokeStyle = 'rgba(255,122,107,.6)'; ctx.setLineDash([3 * dpr, 3 * dpr]);
+  ctx.beginPath(); ctx.moveTo(px0, yp); ctx.lineTo(px1, yp); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#ff7a6b'; ctx.beginPath(); ctx.arc(PX(xp), yp, 3.5 * dpr, 0, TAU); ctx.fill();
+
+  // circles of radius (4/π)/(2j−1) turning at speed 2j−1
+  let x = cx, y = cy;
+  ctx.lineWidth = 1 * dpr;
+  for (let j = 1; j <= K; j++) {
+    const m = 2 * j - 1, r = A * 4 / Math.PI / m, nx = x + r * Math.cos(m * t), ny = y - r * Math.sin(m * t);
+    if (P.circ && r > 0.6) {
+      ctx.strokeStyle = 'rgba(130,155,215,.33)'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(215,225,255,.75)'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+    }
+    x = nx; y = ny;
+  }
+  const mx = PX(t);
+  ctx.strokeStyle = 'rgba(255,211,138,.6)'; ctx.setLineDash([2 * dpr, 3 * dpr]);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(mx, y); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#ffd38a'; ctx.beginPath(); ctx.arc(mx, y, 3.5 * dpr, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ff7a6b'; ctx.beginPath(); ctx.arc(x, y, 3.5 * dpr, 0, TAU); ctx.fill();
+
+  ctx.font = `${12 * dpr}px -apple-system, "PingFang SC", sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#cfd6e6';
+  const over = (wavePeak - 1) / 2 * 100;
+  ctx.fillText(`方波 ≈ (4/π)·(sin x + sin 3x/3 + sin 5x/5 + …)，取前 ${K} 个奇次项`, px0, y0 + 8 * dpr);
+  ctx.fillStyle = '#ff9a8e';
+  ctx.fillText(`跳跃旁的峰值 ${wavePeak.toFixed(4)}，冲出跳跃高度 2 的 ${over.toFixed(2)}%（项数再多也趋于 8.95%）`, px0, y0 + 26 * dpr);
+}
+
+// spectrum: |c_k| sorted by size, log scale
+function drawSpec() {
+  const dpr = devicePixelRatio, w = Math.max(1, Math.round(sp.clientWidth * dpr)), h = Math.max(1, Math.round(sp.clientHeight * dpr));
+  if (sp.width !== w || sp.height !== h) { sp.width = w; sp.height = h; }
+  sctx.clearRect(0, 0, w, h);
+  const n = C.length - 1, top = Math.log10(C[1] ? C[1].r || 1e-12 : 1), DEC = 6;
+  for (let px = 0; px < w; px++) {
+    const rank = Math.min(n - 1, Math.floor(px / w * n)), r = C[rank + 1].r;
+    const v = Math.max(0, 1 + (Math.log10(Math.max(r, 1e-300)) - top) / DEC);
+    sctx.fillStyle = rank < P.n ? '#ffd38a' : '#4b5472';
+    sctx.fillRect(px, h - v * (h - 2), 1, v * (h - 2));
+  }
+}
+function drawInfo() {
+  const top = C.slice(1, 6).map(c => `k=${c.k} r=${c.r.toFixed(3)}`).join('  ');
+  $('info').textContent = `前 N 项能量 ${(100 * energy / eTotal).toFixed(2)}% · 采样点最大偏差 ${(100 * maxErr / size).toFixed(2)}%（相对曲线尺寸）\n最大的圆：${top}`;
+  $('info').style.whiteSpace = 'pre-wrap';
+  $('stat').textContent = `${P.preset === 'draw' ? '手画曲线' : PRESETS[P.preset].name} · N = ${P.n} 个圆 / 共 ${Z.length - 1} 个` +
+    (running ? '' : ' · 已暂停');
+}
+
+// ---------- UI ----------
+function syncUI() {
+  const M = 2 ** P.mLog;
+  $('N').max = M - 1; $('N').value = P.n; $('vN').textContent = `${P.n} / ${M - 1}`;
+  $('M').value = P.mLog; $('vM').textContent = M;
+  $('S').value = P.period; $('vS').textContent = P.period.toFixed(1) + ' 秒';
+  for (const k of ['circ', 'tgt', 'full', 'sq']) $(k).checked = P[k];
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  document.querySelectorAll('[data-c]').forEach(b => { b.classList.toggle('on', b.dataset.c === P.close); b.disabled = !!curve.fn; });
+}
+
+function loadPreset(key) {
+  P.preset = key; curve = PRESETS[key];
+  if (curve.close) P.close = curve.close;
+  phase = 0; rebuild();
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+for (const key of CLOSE_KEYS) {
+  const b = document.createElement('button');
+  b.textContent = CLOSE[key]; b.dataset.c = key; b.onclick = () => { P.close = key; phase = 0; rebuild(); };
+  $('close').appendChild(b);
+}
+
+$('N').oninput = e => { P.n = Math.round(+e.target.value); syncUI(); buildPath(); };
+$('M').oninput = e => { P.mLog = Math.round(+e.target.value); rebuild(); };
+$('S').oninput = e => { P.period = +e.target.value; syncUI(); };
+for (const k of ['circ', 'tgt', 'full', 'sq']) $(k).onchange = e => { P[k] = e.target.checked; drawSpec(); };
+$('play').onclick = () => { running = !running; syncUI(); drawInfo(); };
+$('restart').onclick = () => { phase = 0; running = true; syncUI(); drawInfo(); };
+
+// draw your own curve: pointer positions go straight into world coordinates
+function toWorld(e) {
+  const r = cv.getBoundingClientRect(), dpr = devicePixelRatio, { U, ox, oy } = layout();
+  return [((e.clientX - r.left) * dpr - ox) / U, (oy - (e.clientY - r.top) * dpr) / U];
+}
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect();
+  if ((e.clientY - r.top) * devicePixelRatio > layout().Hm) return;
+  drawing = [toWorld(e)]; cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (!drawing || drawing.length >= MAX_RAW) return;
+  const p = toWorld(e), q = drawing[drawing.length - 1], { U } = layout();
+  if (Math.hypot(p[0] - q[0], p[1] - q[1]) * U >= 1.5 * devicePixelRatio) drawing.push(p);
+});
+const endDraw = () => {
+  if (!drawing) return;
+  const pts = drawing, { U } = layout();
+  drawing = null;
+  let len = 0;
+  for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  if (pts.length < 8 || len * U < 30 * devicePixelRatio) return;   // a click or a tiny scribble: keep the old curve
+  const prev = { curve, preset: P.preset, close: P.close };
+  curve = { poly: pts }; P.preset = 'draw'; P.close = 'line'; phase = 0;
+  if (!rebuild()) { curve = prev.curve; P.preset = prev.preset; P.close = prev.close; rebuild(); }
+};
+cv.addEventListener('pointerup', endDraw);
+cv.addEventListener('pointercancel', endDraw);
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * devicePixelRatio));
+  H = Math.max(1, Math.round(r.height * devicePixelRatio));
+  cv.width = W; cv.height = H; drawSpec();
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=square&n=12&m=256&close=2&sq=1. Every number is clamped to its slider's range.
+const q = new URLSearchParams(location.search);
+const num = (k, lo, hi, f) => { if (q.has(k) && q.get(k).trim() !== '') { const x = Number(q.get(k)); if (Number.isFinite(x)) f(Math.min(hi, Math.max(lo, x))); } };
+const flag = (k, f) => num(k, 0, 1, x => f(Math.round(x) === 1));
+if (Object.hasOwn(PRESETS, q.get('p'))) P.preset = q.get('p');
+curve = PRESETS[P.preset]; if (curve.close) P.close = curve.close;
+num('close', 0, CLOSE_KEYS.length - 1, x => P.close = CLOSE_KEYS[Math.round(x)]);
+num('m', 64, 1024, x => P.mLog = Math.round(Math.log2(x)));
+num('s', 2, 30, x => P.period = Math.round(x * 2) / 2);
+num('t', 0, 1, x => phase = x % 1);
+flag('c', v => P.circ = v); flag('tgt', v => P.tgt = v); flag('full', v => P.full = v); flag('sq', v => P.sq = v);
+flag('run', v => running = v);
+Z = sampleCurve(2 ** P.mLog); analyse();
+num('n', 1, Z.length - 1, x => P.n = Math.round(x));
+P.n = Math.min(P.n, Z.length - 1);
+resize(); syncUI(); buildPath();
+
+// test hook: read-only views of the current state
+window.__fe = { P, samples: () => Z.map(p => p.slice()), path: () => Array.from(path), err: () => maxErr / size,
+  energy: () => energy / eTotal, peak: () => wavePeak, coefs: () => C.map(c => ({ ...c })) };
+
+let last = performance.now();
+(function loop(now) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  if (running && !drawing) phase = (phase + dt / P.period) % 1;
+  draw(); window.__ready = true;
+  requestAnimationFrame(loop);
+})(last);
+</script>
+</body>
+</html>

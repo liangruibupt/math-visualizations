@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>向日葵叶序 · 黄金角与 Fibonacci 螺线</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #120f0b; color: #e8e4dc;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(34,28,20,.93); border: 1px solid #4a3d2c; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #e0c08a; border-top: 1px solid #4a3d2c; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #9a9284; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #3a3024; color: #e8e4dc; border: 1px solid #54473a;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #4a3e2f; }
+  button.on { background: #7a5a24; border-color: #a8803c; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  select { background: #2a231a; color: #e8e4dc; border: 1px solid #54473a; border-radius: 4px; font-size: 12px; }
+  #fam { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; margin-top: 4px; }
+  #fam .cw { color: #6fd3ff; } #fam .ccw { color: #ff8fb4; }
+  #cf { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #c9bfae; margin-top: 4px; word-break: break-all; }
+  #cf b { color: #ffd38a; font-weight: normal; }
+  #chart { width: 100%; height: 120px; display: block; margin-top: 4px; cursor: crosshair;
+    background: #1b1610; border: 1px solid #4a3d2c; border-radius: 4px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(18,15,11,.82); color: #d8d0c2; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #stat b { color: #fff; } #stat .cw { color: #6fd3ff; } #stat .ccw { color: #ff8fb4; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>向日葵叶序 · 黄金角</h1>
+  <small>第 n 颗种子放在角度 <span class="mono">θ = n·α</span>、半径 <span class="mono">r = c·√n</span> 处（Vogel 模型）。只改一个角度 α：137.5° 铺得又密又匀，差一点点就变成一根根直辐条。</small>
+
+  <h2>发散角 α</h2>
+  <div class="row">
+    <label>α <b id="vA"></b></label>
+    <input id="A" type="range" min="0" max="180" step="0.001">
+    <div class="presets">
+      <button data-d="-1">−1</button><button data-d="-0.1">−0.1</button><button data-d="-0.01">−0.01</button>
+      <button data-d="0.01">+0.01</button><button data-d="0.1">+0.1</button><button data-d="1">+1</button>
+    </div>
+  </div>
+  <div id="cf"></div>
+  <small>α/360° 的连分数和渐近分数 p/q。q 就是会出现的螺线条数（或辐条数）。</small>
+  <canvas id="chart"></canvas>
+  <small>曲线：均匀度 = 外侧种子的平均最近邻距离 ÷ 同密度六边形格点间距（1 = 最匀），取 N = 50、100、200、400、800 里最差的一个。金色虚线是黄金角，白线是当前 α；单击曲线可选角度。</small>
+  <div class="presets"><button id="chDef">130°–145°</button><button id="chFull">0°–180°</button><button id="chZoom">当前 α ±2°</button></div>
+
+  <h2>种子</h2>
+  <div class="row">
+    <label>种子数 N <b id="vN"></b></label>
+    <input id="N" type="range" min="10" max="5000" step="1">
+  </div>
+  <div class="row">
+    <label>种子大小 <b id="vS"></b></label>
+    <input id="S" type="range" min="0.2" max="1.5" step="0.01">
+  </div>
+  <div class="presets"><button id="grow">▶ 生长动画</button></div>
+  <small>动画里新种子从中心长出，老种子保持角度不变、被向外推。</small>
+
+  <h2>螺线族（斜列线）</h2>
+  <div class="checks">
+    <label><input id="cw" type="checkbox"> <span style="color:#6fd3ff">顺时针族</span></label>
+    <label><input id="ccw" type="checkbox"> <span style="color:#ff8fb4">逆时针族</span></label>
+    <label>着色 <select id="col">
+      <option value="plain">按半径</option><option value="cw">按顺时针螺线</option><option value="ccw">按逆时针螺线</option>
+    </select></label>
+  </div>
+  <div class="row" id="refRow">
+    <label>参考半径 <b id="vR"></b></label>
+    <input id="R" type="range" min="0.1" max="1" step="0.01">
+    <small>在虚线圈附近数螺线。往里拖，条数沿 Fibonacci 数列变小。</small>
+  </div>
+  <div id="fam"></div>
+
+  <h2>圆柱叶序（菠萝 / 松果）</h2>
+  <div class="checks">
+    <label><input id="cyl" type="checkbox"> 种子排在圆柱面上</label>
+    <label><input id="flat" type="checkbox"> 展开成平面</label>
+  </div>
+  <div class="row" id="hRow">
+    <label>每颗上升高度 h（周长 = 1） <b id="vH"></b></label>
+    <input id="Hh" type="range" min="-3" max="-1" step="0.01">
+    <small>第 n 颗在 (n·α/360°, n·h)。h 越小排得越密，看到的螺线条数越大。</small>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+const PHI = (1 + Math.sqrt(5)) / 2;
+const GOLDEN = 360 / (PHI * PHI);   // 137.50776…°
+const PRESETS = {
+  golden: { name: '黄金角 137.508°', a: GOLDEN, n: 1500, mode: 'disc' },
+  a1370: { name: '137.0°', a: 137.0, n: 1500, mode: 'disc' },
+  a1376: { name: '137.6°', a: 137.6, n: 1500, mode: 'disc' },
+  a144: { name: '360°×2/5 = 144°', a: 144, n: 1500, mode: 'disc' },
+  a1385: { name: '360°×5/13', a: 360 * 5 / 13, n: 1500, mode: 'disc' },
+  sqrt2: { name: '360°×(√2−1)', a: 360 * (Math.SQRT2 - 1), n: 1500, mode: 'disc' },
+  pi: { name: '360°×(π−3)', a: 360 * (Math.PI - 3), n: 3000, mode: 'disc' },
+  lucas: { name: '99.502°（另一个“高贵数”）', a: 360 / (2 + PHI), n: 1500, mode: 'disc' },
+  cone: { name: '松果 5/8', a: GOLDEN, n: 50, s: 0.75, h: 0.011, mode: 'cyl', cw: true, ccw: true },
+  pine: { name: '菠萝 8/13', a: GOLDEN, n: 130, s: 0.85, h: 0.004, mode: 'cyl', cw: true, ccw: true },
+};
+const LIM = { a: [0, 180], n: [10, 5000], s: [0.2, 1.5], ref: [0.1, 1], h: [0.001, 0.1] };
+const clamp = (x, [lo, hi]) => Math.max(lo, Math.min(hi, x));
+const M_MAX = 3000;   // largest neighbour offset searched when counting spirals
+
+const P = { preset: 'golden', a: GOLDEN, n: 1500, s: 0.75, ref: 0.9, h: 0.004, mode: 'disc', flat: false,
+  cw: false, ccw: false, col: 'plain' };
+let anim = null;      // { shown, phase } while the growth animation runs (or after it stopped)
+
+const $ = id => document.getElementById(id);
+const frac = x => x - Math.floor(x);
+const centred = x => x - Math.round(x);              // signed distance to the nearest integer, in (−½, ½]
+const isFib = (() => { const s = new Set(); for (let a = 1, b = 2; a < 1e7; [a, b] = [b, a + b]) s.add(a); return m => s.has(m); })();
+
+// ---------- model geometry (c = 1 in the disc, circumference = 1 on the cylinder) ----------
+// distance in model units between seed n and seed n+m
+function dist(n, m) {
+  const d = centred(m * P.a / 360);
+  if (P.mode === 'cyl') return Math.hypot(d, m * P.h);
+  const r1 = Math.sqrt(n), r2 = Math.sqrt(n + m);
+  return Math.sqrt(Math.max(0, r1 * r1 + r2 * r2 - 2 * r1 * r2 * Math.cos(2 * Math.PI * d)));
+}
+// spacing of a hexagonal lattice with the same density: one seed per area π (disc) or h (cylinder)
+const hexSpacing = () => Math.sqrt(2 * (P.mode === 'cyl' ? P.h : Math.PI) / Math.sqrt(3));
+
+// The two visible spiral families at seed n0: for each sign of the angular step centred(m·α/360°), the
+// offset m whose seed n0+m is closest to n0. Seeds n, n+m, n+2m, … form one spiral, so there are m of them.
+function families(n0) {
+  const best = { cw: null, ccw: null, spoke: null };
+  for (let m = 1; m <= M_MAX; m++) {
+    const d = dist(n0, m), s = centred(m * P.a / 360);
+    const k = Math.abs(s) < 1e-9 ? 'spoke' : s > 0 ? 'ccw' : 'cw';
+    if (!best[k] || d < best[k].d) best[k] = { m, d };
+  }
+  // at a rational angle the seeds sit on spokes and the "spirals" join far-apart seeds: drop them
+  const dmin = Math.min(...Object.values(best).filter(Boolean).map(f => f.d));
+  for (const k of ['cw', 'ccw']) if (best[k] && best[k].d > 2 * dmin) best[k] = null;
+  return best;
+}
+const refSeed = () => P.mode === 'cyl' ? 0 : Math.max(1, Math.round(P.ref * P.ref * ((anim ? anim.shown : P.n) - 1)));
+
+// continued fraction of x in [0,1) and its convergents p/q (q ≤ 1e5)
+function contFrac(x) {
+  const a = [Math.floor(x)], conv = [];
+  let r = x - a[0], p0 = 1, q0 = 0, p1 = a[0], q1 = 1;
+  for (let i = 0; i < 14 && r > 1e-9; i++) {
+    const y = 1 / r, ai = Math.floor(y + 1e-9);
+    r = Math.max(0, y - ai); a.push(ai);
+    const p = ai * p1 + p0, q = ai * q1 + q0;
+    if (q > 1e5) break;
+    conv.push([p, q]); [p0, q0, p1, q1] = [p1, q1, p, q];
+  }
+  return { a, conv };
+}
+
+// mean nearest-neighbour distance of the outer 3/4 of the disc, divided by the hexagonal spacing
+function evenness(a, N) {
+  const t = a / 360, cell = 2.2, xs = new Float64Array(N), ys = new Float64Array(N), grid = new Map();
+  for (let n = 0; n < N; n++) {
+    const r = Math.sqrt(n), th = 2 * Math.PI * t * n;
+    xs[n] = r * Math.cos(th); ys[n] = r * Math.sin(th);
+    const k = Math.floor(xs[n] / cell) * 4096 + Math.floor(ys[n] / cell);
+    let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(n);
+  }
+  let sum = 0, cnt = 0;
+  for (let n = N >> 2; n < N; n++) {
+    const gx = Math.floor(xs[n] / cell), gy = Math.floor(ys[n] / cell);
+    let best = cell * cell;   // a neighbour farther than one cell counts as one cell away
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      const b = grid.get((gx + i) * 4096 + gy + j); if (!b) continue;
+      for (const k of b) if (k !== n) { const dx = xs[k] - xs[n], dy = ys[k] - ys[n], d = dx * dx + dy * dy; if (d < best) best = d; }
+    }
+    sum += Math.sqrt(best); cnt++;
+  }
+  return sum / cnt / Math.sqrt(2 * Math.PI / Math.sqrt(3));
+}
+
+// a good angle must stay even while the head grows: take the worst of several sizes
+const worstEvenness = a => Math.min(...[50, 100, 200, 400, 800].map(N => evenness(a, N)));
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dirty = true;
+const COL = { cw: '111,211,255', ccw: '255,143,180' };
+const SEED = [[92, 58, 24], [176, 112, 36], [236, 176, 64], [250, 214, 120]];
+function seedColour(f) {   // f in [0,1]: centre -> rim
+  const t = Math.min(0.999, f) * (SEED.length - 1), j = Math.floor(t), u = t - j;
+  return SEED[j].map((c, i) => Math.round(c + (SEED[j + 1][i] - c) * u));
+}
+const STRIPES = ['#f2c14e', '#a8642a', '#e88a3c', '#6b3f1c'];
+
+function draw(fam) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#120f0b'; ctx.fillRect(0, 0, W, H);
+  const dpr = devicePixelRatio, shown = anim ? anim.shown : P.n, phase = anim ? anim.phase : 0;
+  const t = P.a / 360, cyl = P.mode === 'cyl';
+  const famM = { cw: fam.cw && fam.cw.m, ccw: fam.ccw && fam.ccw.m };
+  const colourOf = n => {
+    const m = P.col !== 'plain' && famM[P.col];
+    return m ? STRIPES[(n % m) % 2 + 2 * (n % m === 0)] : null;
+  };
+  // projection of seed n: returns [x, y, visible, depth] in pixels
+  let proj, unit, dotR;
+  if (!cyl) {
+    const R = 0.47 * Math.min(W, H), c = R / Math.sqrt(Math.max(1, P.n - 1) + 2 * P.s);
+    unit = c; dotR = 0.5 * P.s * hexSpacing() * c;
+    proj = n => { const r = c * Math.sqrt(n), th = 2 * Math.PI * (t * n + phase); return [W / 2 + r * Math.cos(th), H / 2 - r * Math.sin(th), true, 1]; };
+  } else {
+    const top = P.n * P.h, pad = 30 * dpr + 0.06 * Math.min(W, H) * P.s;
+    if (P.flat) {
+      const Cpx = Math.min(W - 2 * pad, (H - 2 * pad) / Math.max(1e-6, top)), x0 = (W - Cpx) / 2, y0 = H / 2 + top * Cpx / 2;
+      unit = Cpx; dotR = 0.5 * P.s * hexSpacing() * Cpx;
+      proj = n => [x0 + frac(t * n) * Cpx, y0 - n * P.h * Cpx, true, 1];
+      ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = dpr; ctx.setLineDash([5 * dpr, 4 * dpr]);
+      ctx.strokeRect(x0, y0 - top * Cpx, Cpx, top * Cpx); ctx.setLineDash([]);
+    } else {
+      const Rp = Math.min((W - 2 * pad) / 2, (H - 2 * pad) / Math.max(1e-6, 2 * Math.PI * top)), Cpx = 2 * Math.PI * Rp;
+      const y0 = H / 2 + top * Cpx / 2;
+      unit = Cpx; dotR = 0.5 * P.s * hexSpacing() * Cpx;
+      proj = n => { const th = 2 * Math.PI * t * n; return [W / 2 + Rp * Math.sin(th), y0 - n * P.h * Cpx, Math.cos(th) > 0.02, Math.cos(th)]; };
+    }
+  }
+  // seeds
+  for (let n = 0; n < shown; n++) {
+    const [x, y, vis, z] = proj(n); if (!vis) continue;
+    const sc = cyl && !P.flat ? 0.35 + 0.65 * z : 1;
+    const stripe = colourOf(n), base = seedColour(cyl ? 0.75 : Math.sqrt(n / Math.max(1, P.n - 1)));
+    ctx.fillStyle = stripe || `rgb(${base.map(v => Math.round(v * sc))})`;
+    if (stripe && sc < 1) ctx.globalAlpha = sc;
+    ctx.beginPath();
+    if (cyl && !P.flat) ctx.ellipse(x, y, Math.max(0.5, dotR * z), dotR, 0, 0, 2 * Math.PI);
+    else ctx.arc(x, y, Math.max(0.5, dotR), 0, 2 * Math.PI);
+    ctx.fill(); ctx.globalAlpha = 1;
+  }
+  // spiral families: segment n -> n+m, only where it joins near neighbours (length < 1.6 hex spacings)
+  const lim = 1.6 * hexSpacing();
+  for (const k of ['cw', 'ccw']) {
+    const m = famM[k]; if (!P[k] || !m) continue;
+    const step = centred(m * t);
+    for (let n = 0; n + m < shown; n++) {
+      if (dist(n, m) > lim) continue;
+      const a = proj(n), b = proj(n + m);
+      if (!a[2] || !b[2]) continue;
+      let bx = b[0], by = b[1];
+      if (cyl && P.flat) { bx = a[0] + step * unit; by = a[1] - m * P.h * unit; }
+      const main = n % m === 0;
+      ctx.strokeStyle = `rgba(${COL[k]},${main ? 1 : (n % m) % 2 ? 0.55 : 0.8})`;
+      ctx.lineWidth = (main ? 2.6 : 1.3) * dpr;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(bx, by); ctx.stroke();
+    }
+  }
+  // reference ring
+  if (!cyl && (P.cw || P.ccw)) {
+    const n0 = refSeed(), [x, y] = proj(n0), r = Math.hypot(x - W / 2, y - H / 2);
+    ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.2 * dpr; ctx.setLineDash([6 * dpr, 5 * dpr]);
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, r, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+// ---------- chart: evenness against α ----------
+const ch = $('chart'), cctx = ch.getContext('2d');
+let chartWin = [130, 145], chartData = null;
+function computeChart() {
+  const [lo, hi] = chartWin, K = 600;
+  chartData = new Float64Array(K + 1);
+  for (let i = 0; i <= K; i++) chartData[i] = worstEvenness(lo + (hi - lo) * i / K);
+}
+function drawChart() {
+  const dpr = devicePixelRatio, w = ch.clientWidth * dpr, h = ch.clientHeight * dpr;
+  if (ch.width !== w || ch.height !== h) { ch.width = w; ch.height = h; }
+  cctx.clearRect(0, 0, w, h);
+  if (!chartData) return;
+  const [lo, hi] = chartWin, K = chartData.length - 1, pad = 14 * dpr;
+  const X = a => (a - lo) / (hi - lo) * w, Y = v => h - pad - Math.min(1.05, v) / 1.05 * (h - 2 * pad);
+  cctx.strokeStyle = 'rgba(255,255,255,.15)'; cctx.lineWidth = dpr;
+  cctx.beginPath(); cctx.moveTo(0, Y(1)); cctx.lineTo(w, Y(1)); cctx.stroke();
+  cctx.strokeStyle = '#e0a84a'; cctx.lineWidth = 1.2 * dpr; cctx.beginPath();
+  for (let i = 0; i <= K; i++) { const x = i / K * w, y = Y(chartData[i]); i ? cctx.lineTo(x, y) : cctx.moveTo(x, y); }
+  cctx.stroke();
+  const vline = (a, style, dash) => { if (a < lo || a > hi) return; cctx.strokeStyle = style; cctx.setLineDash(dash);
+    cctx.beginPath(); cctx.moveTo(X(a), 0); cctx.lineTo(X(a), h); cctx.stroke(); cctx.setLineDash([]); };
+  vline(GOLDEN, '#ffd38a', [4 * dpr, 3 * dpr]); vline(P.a, '#fff', []);
+  cctx.fillStyle = '#9a9284'; cctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; cctx.textBaseline = 'top';
+  cctx.textAlign = 'left'; cctx.fillText(lo.toFixed(hi - lo < 10 ? 1 : 0) + '°', 2 * dpr, h - 12 * dpr);
+  cctx.textAlign = 'right'; cctx.fillText(hi.toFixed(hi - lo < 10 ? 1 : 0) + '°', w - 2 * dpr, h - 12 * dpr);
+  cctx.fillText('1.0', w - 2 * dpr, Y(1) + 2 * dpr);
+}
+ch.addEventListener('click', e => {
+  const r = ch.getBoundingClientRect(), f = (e.clientX - r.left) / r.width;
+  setAngle(chartWin[0] + (chartWin[1] - chartWin[0]) * f);
+});
+$('chDef').onclick = () => { chartWin = [130, 145]; computeChart(); drawChart(); };
+$('chFull').onclick = () => { chartWin = [0, 180]; computeChart(); drawChart(); };
+$('chZoom').onclick = () => { const lo = clamp(P.a - 2, [0, 176]); chartWin = [lo, lo + 4]; computeChart(); drawChart(); };
+
+// ---------- panel text ----------
+function describe(fam) {
+  const { a, conv } = contFrac(P.a / 360);
+  const tail = a.length > 1 ? a.slice(1).join(', ') : '';
+  $('cf').innerHTML = `α/360° = ${(P.a / 360).toFixed(9)} = [${a[0]}; <b>${tail}</b>${a.length >= 15 ? ', …' : ''}]<br>` +
+    'p/q：' + conv.slice(0, 10).map(([p, q]) => `${p}/<b>${q}</b>`).join('  ');
+  const line = (k, label) => {
+    const f = fam[k]; if (!f) return '';
+    return `<span class="${k}">${label}：${f.m} 条</span>${isFib(f.m) ? '（Fibonacci 数）' : conv.some(c => c[1] === f.m) ? '（渐近分数的分母）' : ''}　相邻距离 ${(f.d / hexSpacing()).toFixed(2)}×<br>`;
+  };
+  const cyl = P.mode === 'cyl';
+  let s = line('cw', cyl ? '向左上 \\' : '顺时针') + line('ccw', cyl ? '向右上 /' : '逆时针');
+  const sp = fam.spoke;
+  if (sp && sp.d <= Math.min(fam.cw ? fam.cw.d : Infinity, fam.ccw ? fam.ccw.d : Infinity) * 1.2)
+    s += `α/360° = p/${sp.m}：第 n 与 n+${sp.m} 颗同一方向，种子排成 ${sp.m} 条直辐条<br>`;
+  $('fam').innerHTML = s;
+  const st = (k, label) => fam[k] ? ` · <span class="${k}">${label} <b>${fam[k].m}</b></span>` : '';
+  const ev = cyl ? '' : ` · 均匀度 <b>${evenness(P.a, Math.min(anim ? anim.shown : P.n, 2000)).toFixed(3)}</b>`;
+  $('stat').innerHTML = `α = <b>${P.a.toFixed(3)}°</b> · <b>${(anim ? anim.shown : P.n).toLocaleString()}</b> 颗种子` +
+    st('cw', cyl ? '左上' : '顺时针') + st('ccw', cyl ? '右上' : '逆时针') + ev;
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('A').value = P.a; $('vA').textContent = P.a.toFixed(3) + '°' + (Math.abs(P.a - GOLDEN) < 5e-4 ? '（黄金角）' : '');
+  $('N').value = P.n; $('vN').textContent = P.n;
+  $('S').value = P.s; $('vS').textContent = P.s.toFixed(2);
+  $('R').value = P.ref; $('vR').textContent = P.ref.toFixed(2);
+  $('Hh').value = Math.log10(P.h); $('vH').textContent = P.h.toFixed(4);
+  $('cw').checked = P.cw; $('ccw').checked = P.ccw; $('col').value = P.col;
+  $('cyl').checked = P.mode === 'cyl'; $('flat').checked = P.flat; $('flat').disabled = P.mode !== 'cyl';
+  $('hRow').style.display = P.mode === 'cyl' ? '' : 'none'; $('refRow').style.display = P.mode === 'cyl' ? 'none' : '';
+  $('grow').textContent = anim && anim.running ? '⏸ 停止' : '▶ 生长动画';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+function changed(keepPreset) { if (!keepPreset) P.preset = ''; if (anim && !anim.running) anim = null; syncUI(); dirty = true; }
+function setAngle(a) { if (Number.isFinite(a)) { P.a = clamp(a, LIM.a); changed(); drawChart(); } }
+
+$('A').oninput = e => setAngle(+e.target.value);
+document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => setAngle(Math.round((P.a + +b.dataset.d) * 1000) / 1000));
+$('N').oninput = e => { P.n = clamp(Math.round(+e.target.value), LIM.n); anim = null; changed(); };
+$('S').oninput = e => { P.s = clamp(+e.target.value, LIM.s); changed(true); };
+$('R').oninput = e => { P.ref = clamp(+e.target.value, LIM.ref); changed(true); };
+$('Hh').oninput = e => { P.h = clamp(10 ** +e.target.value, LIM.h); changed(); };
+$('cw').onchange = e => { P.cw = e.target.checked; changed(true); };
+$('ccw').onchange = e => { P.ccw = e.target.checked; changed(true); };
+$('col').onchange = e => { P.col = ['cw', 'ccw'].includes(e.target.value) ? e.target.value : 'plain'; changed(true); };
+$('cyl').onchange = e => { P.mode = e.target.checked ? 'cyl' : 'disc'; anim = null; changed(); };
+$('flat').onchange = e => { P.flat = e.target.checked; changed(true); };
+$('grow').onclick = () => {
+  if (anim && anim.running) anim.running = false;
+  else anim = { shown: 1, phase: 0, running: true };
+  changed(true);
+};
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, a: p.a, n: p.n, s: p.s || 0.75, mode: p.mode, h: p.h || P.h,
+    cw: !!p.cw, ccw: !!p.ccw, flat: false });
+  anim = null; syncUI(); dirty = true; drawChart();
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * devicePixelRatio)); H = Math.max(1, Math.round(r.height * devicePixelRatio));
+  cv.width = W; cv.height = H; dirty = true; drawChart();
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=a144  or  ?a=137.3&n=2000&cw=1&ccw=1&ref=0.6  or  ?mode=cyl&h=0.002&flat=1
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+if (Object.hasOwn(PRESETS, q.get('p'))) loadPreset(q.get('p'));
+num('a', x => { P.a = clamp(x, LIM.a); P.preset = ''; });
+num('n', x => P.n = clamp(Math.round(x), LIM.n));
+num('s', x => P.s = clamp(x, LIM.s));
+num('ref', x => P.ref = clamp(x, LIM.ref));
+num('h', x => P.h = clamp(x, LIM.h));
+if (q.get('mode') === 'cyl' || q.get('mode') === 'disc') P.mode = q.get('mode');
+if (['plain', 'cw', 'ccw'].includes(q.get('col'))) P.col = q.get('col');
+for (const k of ['cw', 'ccw', 'flat']) if (q.has(k)) P[k] = q.get(k) === '1';
+if (q.get('grow') === '1') anim = { shown: 1, phase: 0, running: true };
+
+syncUI(); resize();
+computeChart(); drawChart();
+
+(function loop() {
+  if (anim && anim.running) {
+    // one birth per step; the meristem turns by −α per birth, so every seed keeps its own angle
+    anim.shown = Math.min(P.n, anim.shown + Math.max(1, Math.round(P.n / 360)));
+    anim.phase = -frac((anim.shown - 1) * P.a / 360);
+    if (anim.shown >= P.n) { anim.running = false; syncUI(); }
+    dirty = true;
+  }
+  if (dirty) {
+    dirty = false;
+    const fam = families(refSeed());
+    draw(fam); describe(fam);
+    window.__ready = true;
+    window.__done = !(anim && anim.running);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
