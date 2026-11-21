@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>一维元胞自动机 · 规则 30 与规则 110</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0f14; color: #e3e8ee;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(21,28,37,.93); border: 1px solid #33414f; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #9cc3d9; border-top: 1px solid #33414f; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8c98a5; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #26313d; color: #e3e8ee; border: 1px solid #3a4858;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #31404f; }
+  button.on { background: #2f5f7a; border-color: #4f8aab; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #b3bfcb; margin-top: 4px; white-space: pre-wrap; }
+  #ruleRow { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  #rule { width: 64px; background: #151c25; color: #ffd38a; border: 1px solid #3a4858; border-radius: 4px;
+    padding: 3px 4px; font: 15px ui-monospace, Menlo, Consolas, monospace; }
+  #bin { font: 13px ui-monospace, Menlo, Consolas, monospace; color: #b3bfcb; letter-spacing: 1px; }
+  /* the 8 neighbourhoods 111 … 000, each with the new centre cell below it */
+  #bits { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 6px; }
+  .tile { cursor: pointer; padding: 3px 0 2px; border: 1px solid #33414f; border-radius: 4px; background: #121820;
+    display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; }
+  .tile:hover { border-color: #4f8aab; }
+  .tile .nb { display: flex; gap: 1px; }
+  .tile i { width: 9px; height: 9px; display: block; background: #2a3440; }
+  .tile i.on { background: #e9eef5; }
+  .tile .out { outline: 1px solid #ffd38a; }
+  .tile .k { font: 9px ui-monospace, Menlo, monospace; color: #8c98a5; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 12px; }
+  .legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; background: var(--c); }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(11,15,20,.8); color: #cdd6df; font-size: 12px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>一维元胞自动机 · 规则 30 与规则 110</h1>
+  <small>一排格子，每格只有黑白两种状态。下一步每格的颜色只看它自己和左右两个邻居：3 个格子有 8 种组合，给每种组合指定一个结果，就是一条规则，一共 2⁸ = 256 条。时间向下走，一行一行画出来，就是时空图。</small>
+
+  <h2>规则（Wolfram 编号）</h2>
+  <div id="ruleRow">
+    <button id="rDown">−</button><input id="rule" type="number" min="0" max="255" step="1"><button id="rUp">＋</button>
+    <span id="bin"></span>
+  </div>
+  <div id="bits"></div>
+  <small>上排是邻域（左、中、右），下面带金框的格子是中间那格的新状态。单击一个邻域就翻转它的结果。从左到右读出下排的 8 位二进制数，就是规则编号。</small>
+  <div class="presets"><button id="toM">镜像</button><button id="toC">黑白互换</button><button id="toMC">两者都做</button></div>
+  <div class="info" id="symInfo"></div>
+
+  <h2>初始行与边界</h2>
+  <div class="presets"><button id="iOne">单个黑格</button><button id="iRand">随机行</button></div>
+  <div class="row">
+    <label>随机行的黑格比例 <b id="vDens"></b></label>
+    <input id="Dens" type="range" min="0.01" max="0.99" step="0.01">
+  </div>
+  <div class="row">
+    <label>种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+    <small>随机行来自带种子的伪随机数（mulberry32），种子相同，图就相同</small>
+  </div>
+  <div class="presets"><button id="bRing">周期边界（首尾相接）</button><button id="bFixed">固定边界（外面全白）</button></div>
+  <div class="row">
+    <label>格子大小 <b id="vCs"></b></label>
+    <input id="Cs" type="range" min="1" max="24" step="1">
+  </div>
+  <div class="row">
+    <label>先跳过的步数 <b id="vSkip"></b></label>
+    <input id="Skip" type="range" min="0" max="2000" step="10">
+  </div>
+  <div class="presets"><button id="play">▶ 继续演化（向上滚动）</button><button id="restart">↺ 回到第 0 步</button></div>
+
+  <h2>显示</h2>
+  <div class="presets"><button id="vSt">时空图</button><button id="vGal">256 条规则总览</button></div>
+  <div class="checks">
+    <label><input id="center" type="checkbox"> 标出中心列</label>
+    <label><input id="ether" type="checkbox"> 以太滤波（规则 110）</label>
+    <label><input id="pascal" type="checkbox"> 杨辉三角数（规则 90）</label>
+    <label><input id="flow" type="checkbox"> 车流（规则 184）</label>
+    <label><input id="reps" type="checkbox"> 总览只亮 88 个代表</label>
+  </div>
+  <div class="info" id="topicInfo"></div>
+
+  <h2>Wolfram 分类（启发式）</h2>
+  <div class="legend"><span style="--c:#8a94a3">I 归于均匀</span><span style="--c:#4f9dff">II 周期 / 局部</span><span style="--c:#ff6b6b">III 混沌</span><span style="--c:#ffc457">IV 复杂</span></div>
+  <div class="info" id="clsInfo"></div>
+  <small>页面对 88 类各取一个代表，在 401 格的环上从随机行演化 300 步：最后一行全同算 I；和 ≤ 100 步前的某一行（允许平移）完全相同算 II；否则看压缩率（LZ76 复杂度）和翻转一个格子后差异扩散的宽度来分 II、III、IV。这是经验判别，不是定理。</small>
+
+  <h2>中心列当随机数</h2>
+  <div class="row">
+    <label>取中心列的位数 <b id="vNb"></b></label>
+    <input id="Nb" type="range" min="10" max="14" step="1">
+  </div>
+  <div class="info" id="rngInfo"></div>
+  <small>从单个黑格出发、在无限长的行上演化，记下正中那一格每一步的颜色。对照组是同样位数的 mulberry32 输出。</small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">总览里单击一条规则就打开它的时空图 · 鼠标停在总览上可以看规则编号和分类</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+const LIM = { rule: [0, 255], dens: [0.01, 0.99], seed: [1, 999], cs: [1, 24], skip: [0, 2000], nb: [10, 14] };   // slider ranges; URL params are clamped to these
+const INITS = { one: '单个黑格', rand: '随机行' };
+const BOUNDS = { ring: '周期边界', fixed: '固定边界' };
+const VIEWS = { st: '时空图', gal: '总览' };
+const PRESETS = {
+  r30: { name: '规则 30 · 单个黑格', rule: 30, init: 'one', cs: 3 },
+  r30c: { name: '规则 30 · 中心列', rule: 30, init: 'one', cs: 7, center: true },
+  r90: { name: '规则 90 · Sierpinski 三角', rule: 90, init: 'one', cs: 2 },
+  r90p: { name: '规则 90 · 杨辉三角 mod 2', rule: 90, init: 'one', cs: 22, pascal: true },
+  r110: { name: '规则 110 · 以太与滑翔机', rule: 110, init: 'rand', cs: 2, ether: true, skip: 300 },
+  r110one: { name: '规则 110 · 单个黑格', rule: 110, init: 'one', cs: 2 },
+  r184: { name: '规则 184 · 车流 ρ = 0.35', rule: 184, init: 'rand', dens: 0.35, cs: 4, flow: true },
+  r184j: { name: '规则 184 · 堵车 ρ = 0.6', rule: 184, init: 'rand', dens: 0.6, cs: 4, flow: true },
+  r150: { name: '规则 150 · 异或三格', rule: 150, init: 'one', cs: 2 },
+  r18: { name: '规则 18 · 随机行', rule: 18, init: 'rand', cs: 2 },
+  r54: { name: '规则 54 · 随机行', rule: 54, init: 'rand', cs: 2, skip: 200 },
+  gal: { name: '256 条规则总览', view: 'gal', init: 'one' },
+  galr: { name: '总览 · 随机行', view: 'gal', init: 'rand' },
+  gal88: { name: '88 个等价类代表', view: 'gal', init: 'one', reps: true },
+};
+const DEF = { preset: 'r30', rule: 30, init: 'one', dens: 0.5, seed: 1, bound: 'ring', cs: 3, skip: 0, view: 'st',
+  center: false, ether: false, pascal: false, flow: false, reps: false };
+const P = { ...DEF, nb: 12 };
+let running = false;
+
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+
+function rng(seed) {   // mulberry32: same seed, same row
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+
+// ---------- rules ----------
+// A rule is an 8-bit number. Neighbourhood (l, c, r) is the index k = 4l + 2c + r; bit k of the rule is the new centre.
+const ruleTable = rule => Uint8Array.from({ length: 8 }, (_, k) => rule >> k & 1);
+function mirror(rule) {   // swap the roles of left and right
+  let m = 0;
+  for (let k = 0; k < 8; k++) if (rule >> k & 1) m |= 1 << ((k & 1) << 2 | k & 2 | k >> 2);
+  return m;
+}
+function complement(rule) {   // swap black and white everywhere: f'(x) = 1 − f(x̄), and x̄ has index 7 − k
+  let m = 0;
+  for (let k = 0; k < 8; k++) if (!(rule >> (7 - k) & 1)) m |= 1 << k;
+  return m;
+}
+const orbit = r => [...new Set([r, mirror(r), complement(r), mirror(complement(r))])].sort((a, b) => a - b);
+const rep = r => orbit(r)[0];
+
+// one time step of a row of n cells; ring = periodic, otherwise the cells outside are white (0)
+function stepRow(tab, a, b, n, ring) {
+  const right = ring ? a[0] : 0;
+  let k = (ring ? a[n - 1] : 0) << 1 | a[0];
+  for (let i = 0; i < n - 1; i++) { k = (k << 1 | a[i + 1]) & 7; b[i] = tab[k]; }
+  k = (k << 1 | right) & 7; b[n - 1] = tab[k];
+}
+
+function initRow(n, init, dens, seed) {
+  const a = new Uint8Array(n);
+  if (init === 'one') a[n >> 1] = 1;
+  else { const r = rng(seed); for (let i = 0; i < n; i++) a[i] = r() < dens ? 1 : 0; }
+  return a;
+}
+
+// ---------- symmetries: 256 rules -> 88 classes ----------
+const SYM = (() => {
+  const reps = [], fix = { M: 0, C: 0, MC: 0 };
+  for (let r = 0; r < 256; r++) {
+    if (rep(r) === r) reps.push(r);
+    if (mirror(r) === r) fix.M++;
+    if (complement(r) === r) fix.C++;
+    if (mirror(complement(r)) === r) fix.MC++;
+  }
+  const sizes = {}; for (const r of reps) { const s = orbit(r).length; sizes[s] = (sizes[s] || 0) + 1; }
+  return { reps, fix, sizes, burnside: (256 + fix.M + fix.C + fix.MC) / 4 };
+})();
+
+// ---------- heuristic Wolfram classes ----------
+// Literature classes of the 88 representatives (Martínez 2013); used only to report agreement.
+const REF = { 1: [0, 8, 32, 40, 128, 136, 160, 168], 3: [18, 22, 30, 45, 60, 90, 105, 122, 126, 146, 150], 4: [41, 54, 106, 110] };
+const refClass = r => { const m = rep(r); for (const c of [1, 3, 4]) if (REF[c].includes(m)) return c; return 2; };
+
+// LZ76 complexity (Kaspar–Schuster): number of new phrases while scanning s, normalised by n / log₂ n (≈ 1 for coin flips)
+function lz76(s) {
+  const n = s.length; let c = 1, l = 1, i = 0, k = 1, kmax = 1;
+  for (let guard = 0; guard < 4 * n * n; guard++) {
+    if (s[i + k - 1] === s[l + k - 1]) { k++; if (l + k > n) { c++; break; } }
+    else {
+      if (k > kmax) kmax = k;
+      i++;
+      if (i === l) { c++; l += kmax; if (l + 1 > n) break; i = 0; k = 1; kmax = 1; } else k = 1;
+    }
+  }
+  return c / (n / Math.log2(n));
+}
+
+const CL = { N: 401, T: 300, PMAX: 100, D: 100, K: 8, ROWS: 32, seed: 1 };
+function classify(rule) {
+  const { N, T, PMAX, D, K, ROWS } = CL, tab = ruleTable(rule);
+  const hist = [initRow(N, 'rand', 0.5, CL.seed)];
+  for (let t = 0; t < T; t++) { const b = new Uint8Array(N); stepRow(tab, hist[t], b, N, true); hist.push(b); }
+  const last = hist[T];
+  if (last.every(v => v === last[0])) return { cls: 1, per: 1, shift: 0, lz: 0, spread: 0 };
+  // periodic up to a shift: on a ring the rule commutes with shifts, so one match means periodic forever
+  for (let p = 1; p <= PMAX; p++) {
+    const o = hist[T - p];
+    for (let s = -p; s <= p; s++) {
+      let ok = true;
+      for (let i = 0; i < N; i++) if (last[i] !== o[(i - s + N) % N]) { ok = false; break; }
+      if (ok) return { cls: 2, per: p, shift: s, lz: 0, spread: 0 };
+    }
+  }
+  const s = new Uint8Array(ROWS * N);
+  for (let j = 0; j < ROWS; j++) s.set(hist[T - ROWS + 1 + j], j * N);
+  const lz = lz76(s);
+  // damage spreading: flip one cell, run both copies D steps, measure how far the difference reached on each side
+  let spread = 0;
+  for (let k = 0; k < K; k++) {
+    let x = last.slice(), y = last.slice(), bx = new Uint8Array(N), by = new Uint8Array(N);
+    const c = Math.floor(N * (k + 0.5) / K); y[c] ^= 1;
+    for (let t = 0; t < D; t++) { stepRow(tab, x, bx, N, true); [x, bx] = [bx, x]; stepRow(tab, y, by, N, true); [y, by] = [by, y]; }
+    let L = 0, R = 0;
+    for (let d = 1; d <= D; d++) { if (x[(c - d + N) % N] !== y[(c - d + N) % N]) L = d; if (x[(c + d) % N] !== y[(c + d) % N]) R = d; }
+    spread += (L + R) / (2 * D) / K;
+  }
+  const cls = lz > 0.75 || spread > 0.55 ? 3 : spread >= 0.08 ? 4 : 2;
+  return { cls, per: 0, shift: 0, lz, spread };
+}
+let CLS = null;   // per rule: features of its representative (equivalent rules behave identically up to mirror / colour swap)
+function classifyAll() {
+  const t0 = performance.now(), byRep = {};
+  for (const r of SYM.reps) byRep[r] = classify(r);
+  CLS = Array.from({ length: 256 }, (_, r) => byRep[rep(r)]);
+  const count = { 1: 0, 2: 0, 3: 0, 4: 0 }, countRep = { 1: 0, 2: 0, 3: 0, 4: 0 }, off = [];
+  let agree = 0;
+  for (let r = 0; r < 256; r++) count[CLS[r].cls]++;
+  for (const r of SYM.reps) { countRep[CLS[r].cls]++; if (CLS[r].cls === refClass(r)) agree++; else off.push(r); }
+  CLS.stats = { count, countRep, agree, off, ms: performance.now() - t0 };
+}
+
+// ---------- the space-time diagram ----------
+const G = { key: '', cols: 0, rows: 0, t0: 0, grid: [], tab: null, cur: null };
+function buildGrid(cols, rows) {
+  const key = `${P.rule}/${P.init}/${P.dens}/${P.seed}/${P.bound}/${P.skip}/${cols}/${rows}`;
+  if (G.key === key) return;
+  G.key = key; G.cols = cols; G.rows = rows; G.tab = ruleTable(P.rule);
+  let a = initRow(cols, P.init, P.dens, P.seed), b = new Uint8Array(cols);
+  for (let t = 0; t < P.skip; t++) { stepRow(G.tab, a, b, cols, P.bound === 'ring'); [a, b] = [b, a]; }
+  G.grid = [a]; G.t0 = P.skip;
+  for (let t = 1; t < rows; t++) { const n = new Uint8Array(cols); stepRow(G.tab, G.grid[t - 1], n, cols, P.bound === 'ring'); G.grid.push(n); }
+  dirty = true;
+}
+function advance(k) {   // scroll: drop the top rows, append new ones at the bottom
+  for (let j = 0; j < k; j++) {
+    const n = G.grid.shift();
+    stepRow(G.tab, G.grid[G.grid.length - 1], n, G.cols, P.bound === 'ring');
+    G.grid.push(n); G.t0++;
+  }
+  dirty = true;
+}
+
+// Rule 110 ether: a row pattern of period 14 that the rule only translates (by 4 cells each step on a 14-ring).
+const ETHER = (() => {
+  const m = new Uint8Array(1 << 14), base = '11111000100110';
+  for (let k = 0; k < 14; k++) m[parseInt(base.slice(k) + base.slice(0, k), 2)] = 1;
+  return m;
+})();
+function etherMask(row, n) {   // 1 where the cell lies inside some 14-window that is a rotation of the ether row
+  const hit = new Uint8Array(n), out = new Uint8Array(n);
+  let w = 0;
+  for (let i = 0; i < n; i++) { w = (w << 1 | row[i]) & 0x3fff; if (i >= 13 && ETHER[w]) hit[i - 13] = 1; }
+  let run = 0;
+  for (let i = 0; i < n; i++) { if (hit[i]) run = 14; if (run > 0) { out[i] = 1; run--; } }
+  return out;
+}
+
+// ---------- the centre column on an infinite row ----------
+// Only the cells within distance min(t, n − t) of the centre can affect the centre at time n, so each step updates that band.
+function centreColumn(rule, n) {
+  const tab = ruleTable(rule), L = 2 * n + 5, c = n + 2, bits = new Uint8Array(n);
+  let a = new Uint8Array(L), b = new Uint8Array(L), bg = 0;
+  a[c] = 1;
+  for (let t = 0; t < n; t++) {
+    bits[t] = a[c];
+    const m = Math.min(t + 1, n - t), nbg = tab[bg * 7];
+    for (let x = c - m; x <= c + m; x++) b[x] = tab[a[x - 1] << 2 | a[x] << 1 | a[x + 1]];
+    b[c - m - 1] = b[c + m + 1] = b[c - m - 2] = b[c + m + 2] = nbg; bg = nbg;
+    [a, b] = [b, a];
+  }
+  return bits;
+}
+const erfc = x => {   // Abramowitz–Stegun 7.1.26, |error| < 1.5e-7
+  const t = 1 / (1 + 0.3275911 * Math.abs(x));
+  const y = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-x * x);
+  return x >= 0 ? y : 2 - y;
+};
+const pNorm = z => erfc(Math.abs(z) / Math.SQRT2);   // two-sided
+function pChi2(x, k) {   // upper tail of χ² with k degrees of freedom: 1 − P(k/2, x/2), series for the lower gamma
+  const a = k / 2, z = x / 2;
+  if (z <= 0) return 1;
+  if (x > 200) return 0;   // far in the tail (15 degrees of freedom: mean 15, sd 5.5)
+  let sum = 1 / a, term = 1 / a;
+  for (let i = 1; i < 500; i++) { term *= z / (a + i); sum += term; if (term < sum * 1e-15) break; }
+  const lg = a => { let s = 0; for (let i = 1; i < a; i++) s += Math.log(i); return s; };   // ln Γ(a), a an integer or half-integer here
+  const lnGamma = Number.isInteger(a) ? lg(a) : Math.log(Math.sqrt(Math.PI)) + (() => { let s = 0; for (let i = 0.5; i < a; i++) s += Math.log(i); return s; })();
+  return Math.max(0, 1 - Math.exp(Math.log(sum) + a * Math.log(z) - z - lnGamma));
+}
+function randomness(bits) {
+  const n = bits.length;
+  let ones = 0, runs = 1;
+  for (let i = 0; i < n; i++) { ones += bits[i]; if (i && bits[i] !== bits[i - 1]) runs++; }
+  const z1 = (ones - n / 2) / Math.sqrt(n / 4);
+  // Wald–Wolfowitz runs test given the observed numbers of 0s and 1s
+  const n1 = ones, n0 = n - ones, mu = 1 + 2 * n1 * n0 / n, v = (mu - 1) * (mu - 2) / (n - 1);
+  const zr = v > 0 ? (runs - mu) / Math.sqrt(v) : NaN;
+  // non-overlapping 4-bit blocks: 16 cells, 15 degrees of freedom
+  const cnt = new Array(16).fill(0), m = Math.floor(n / 4);
+  for (let j = 0; j < m; j++) cnt[bits[4 * j] << 3 | bits[4 * j + 1] << 2 | bits[4 * j + 2] << 1 | bits[4 * j + 3]]++;
+  const e = m / 16, chi = cnt.reduce((s, o) => s + (o - e) ** 2 / e, 0);
+  return { n, ones, frac: ones / n, z1, p1: pNorm(z1), runs, runsExp: mu, zr, pr: Number.isFinite(zr) ? pNorm(zr) : 0, chi, pc: pChi2(chi, 15) };
+}
+const RNG = { key: '', bits: null, test: null, ref: null };
+function ensureRng() {
+  const key = `${P.rule}/${P.nb}`;
+  if (RNG.key === key) return;
+  const n = 2 ** P.nb, t0 = performance.now();
+  RNG.key = key; RNG.bits = centreColumn(P.rule, n); RNG.test = randomness(RNG.bits); RNG.ms = performance.now() - t0;
+  const r = rng(2024), mb = new Uint8Array(n); for (let i = 0; i < n; i++) mb[i] = r() < 0.5 ? 1 : 0;
+  RNG.ref = randomness(mb);
+}
+
+// ---------- rule 184: traffic ----------
+// Cars are black cells and move one cell right when the cell ahead is empty. Flux J = moving cars per cell per step.
+const flux = (row, n, ring) => { let m = 0; for (let i = 0; i < n; i++) if (row[i] && !(i + 1 < n ? row[i + 1] : ring ? row[0] : 0)) m++; return m / n; };
+let FD = null;   // fundamental diagram J(ρ), ring of 800 cells, averaged over steps 400…799
+function fundamental() {
+  if (FD) return FD;
+  const N = 800, tab = ruleTable(184), pts = [];
+  for (let k = 1; k < 40; k++) {
+    const rho = k / 40;
+    let a = new Uint8Array(N), b = new Uint8Array(N);
+    const r = rng(500 + k), idx = Array.from({ length: N }, (_, i) => i);   // exactly ρN cars at random places
+    for (let i = N - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    for (let i = 0; i < Math.round(rho * N); i++) a[idx[i]] = 1;
+    let J = 0;
+    for (let t = 0; t < 800; t++) { if (t >= 400) J += flux(a, N, true) / 400; stepRow(tab, a, b, N, true); [a, b] = [b, a]; }
+    pts.push({ rho, J });
+  }
+  return FD = pts;
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d'), lc = document.createElement('canvas'), lctx = lc.getContext('2d');
+let W = 1, H = 1, dpr = 1, dirty = true, hover = -1;
+const BG = [11, 15, 20], ON = [233, 238, 245];
+const CLASS_COL = { 1: [138, 148, 163], 2: [79, 157, 255], 3: [255, 107, 107], 4: [255, 196, 87] };
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+const font = (px, mono) => `${px * dpr}px ${mono ? 'ui-monospace, Menlo, monospace' : '-apple-system, "PingFang SC", sans-serif'}`;
+
+function dims() {
+  const s = P.cs * dpr, cols = Math.max(3, Math.floor(W / s)), rows = Math.max(2, Math.floor(H / s));
+  // from one cell the pattern grows one cell per step on each side: stop before the two edges meet (unless scrolling)
+  return { s, cols, rows: P.init === 'one' && !running ? Math.min(rows, Math.min(cols >> 1, cols - 1 - (cols >> 1)) + 1) : rows };
+}
+
+const TOPIC = {};   // measurements of the current diagram, shown in the panel and exported
+function drawDiagram() {
+  const { s, cols, rows } = dims();
+  buildGrid(cols, rows);
+  if (lc.width !== cols || lc.height !== rows) { lc.width = cols; lc.height = rows; }
+  const img = lctx.createImageData(cols, rows), d = img.data, cx = cols >> 1, ring = P.bound === 'ring';
+  const ether = P.ether, traffic = P.flow;
+  let etherCells = 0, J = 0, cars = 0;
+  for (let y = 0; y < rows; y++) {
+    const row = G.grid[y], em = ether ? etherMask(row, cols) : null;
+    for (let x = 0; x < cols; x++) {
+      const v = row[x], o = (y * cols + x) * 4;
+      let c = v ? ON : BG;
+      if (em) { if (em[x]) { etherCells++; c = v ? [58, 72, 88] : [17, 23, 30]; } else c = v ? [255, 170, 90] : [56, 36, 22]; }
+      if (traffic && v) c = (x + 1 < cols ? row[x + 1] : ring ? row[0] : 0) ? [255, 107, 107] : [124, 214, 122];
+      if (P.center && x === cx) c = v ? [255, 92, 92] : [70, 24, 28];
+      d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+      cars += v;
+    }
+    J += flux(row, cols, ring) / rows;
+  }
+  lctx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  const ox = Math.floor((W - cols * s) / 2), oy = Math.floor((H - rows * s) / 2);
+  ctx.drawImage(lc, ox, oy, cols * s, rows * s);
+  Object.assign(TOPIC, { cols, rows, t0: G.t0, density: cars / (cols * rows), etherFrac: ether ? etherCells / (cols * rows) : null, J });
+  TOPIC.gould = P.rule === 90 && P.init === 'one' ? gouldCheck() : null;
+  if (P.pascal) drawPascal(ox, oy, s, cols, rows);
+  if (P.flow) drawFundamental();
+}
+
+// rule 90 from one cell: row t has 2^(number of 1s in t written in binary) black cells (Glaisher / Gould)
+function gouldCheck() {
+  let ok = 0;
+  for (let y = 0; y < G.rows; y++) {
+    const t = G.t0 + y; let n = 0, pc = 0;
+    for (let x = 0; x < G.cols; x++) n += G.grid[y][x];
+    for (let u = t; u > 0; u >>= 1) pc += u & 1;
+    if (n === 2 ** pc) ok++;
+  }
+  return { ok, of: G.rows };
+}
+
+// binomial coefficients C(t, k) written into the light cone of the centre cell (exact while they stay below 2^53)
+function drawPascal(ox, oy, s, cols, rows) {
+  if (P.rule !== 90 || P.init !== 'one' || G.t0 !== 0) return;
+  const cx = cols >> 1;
+  let line = [1];
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let t = 0; t < rows && t <= 56; t++) {
+    for (let k = 0; k <= t; k++) {
+      const x = cx - t + 2 * k;
+      if (x < 0 || x >= cols) continue;
+      const txt = String(line[k]), fs = Math.min(s * 0.5, 13 * dpr, s * 1.5 / txt.length);   // a monospace digit is ~0.6 em wide
+      if (fs < 6 * dpr) continue;
+      ctx.font = `${fs}px ui-monospace, Menlo, monospace`;
+      ctx.fillStyle = line[k] % 2 ? '#0b0f14' : '#7b8794';
+      ctx.fillText(txt, ox + (x + 0.5) * s, oy + (t + 0.5) * s);
+    }
+    const nx = [1]; for (let k = 1; k <= t; k++) nx.push(line[k - 1] + line[k]); nx.push(1); line = nx;
+  }
+}
+
+function drawFundamental() {
+  const pts = fundamental(), w = Math.min(340 * dpr, W * 0.4), h = w * 0.75, x0 = W - w - 14 * dpr, y0 = 14 * dpr;
+  ctx.fillStyle = 'rgba(15,21,28,.93)'; ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = '#33414f'; ctx.lineWidth = dpr; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+  const ml = 34 * dpr, mb = 22 * dpr, mt = 42 * dpr, mr = 12 * dpr;
+  const X = r => x0 + ml + r * (w - ml - mr), Y = j => y0 + h - mb - j / 0.55 * (h - mt - mb);
+  ctx.font = font(12); ctx.fillStyle = '#d6dee6'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('基本图：流量 J 对密度 ρ', x0 + 8 * dpr, y0 + 5 * dpr);
+  ctx.font = font(10, true); ctx.fillStyle = '#8c98a5'; ctx.textAlign = 'center';
+  for (const r of [0, 0.25, 0.5, 0.75, 1]) ctx.fillText(String(r), X(r), y0 + h - mb + 4 * dpr);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const j of [0, 0.25, 0.5]) ctx.fillText(String(j), x0 + ml - 4 * dpr, Y(j));
+  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.beginPath();
+  ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(0.5), Y(0.5)); ctx.lineTo(X(1), Y(0)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#7cd67a';
+  for (const p of pts) { ctx.beginPath(); ctx.arc(X(p.rho), Y(p.J), 3 * dpr, 0, 7); ctx.fill(); }
+  if (P.rule === 184 && P.init === 'rand') {   // the current diagram
+    ctx.strokeStyle = '#ffc457'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.arc(X(TOPIC.density), Y(TOPIC.J), 5.5 * dpr, 0, 7); ctx.stroke();
+  }
+  ctx.font = font(10, true); ctx.fillStyle = '#b3bfcb'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText('虚线 J = min(ρ, 1−ρ) · 点：800 格环实测', x0 + w - 8 * dpr, y0 + 22 * dpr);
+}
+
+// ---------- gallery: all 256 rules ----------
+const GAL = { key: '', imgs: null, layout: null };
+function galLayout() {
+  const pad = 12 * dpr, side = Math.max(160, Math.min(W, H) - 2 * pad), cell = side / 16;
+  return { x0: (W - side) / 2, y0: (H - side) / 2, cell, gap: Math.max(2, Math.round(cell * 0.06)) };
+}
+function buildGallery() {
+  const Lo = galLayout(), inner = Math.max(8, Math.floor(Lo.cell - 2 * Lo.gap - 4 * dpr));
+  const px = Math.max(1, Math.round(dpr)), n = Math.max(4, Math.floor(inner / px)), key = `${P.init}/${P.dens}/${P.seed}/${P.bound}/${n}`;
+  GAL.layout = Lo;
+  if (GAL.key === key) return;
+  GAL.key = key; GAL.n = n; GAL.px = px; GAL.imgs = [];
+  for (let r = 0; r < 256; r++) {
+    const tab = ruleTable(r), c = document.createElement('canvas'); c.width = c.height = n;
+    const cc = c.getContext('2d'), img = cc.createImageData(n, n), d = img.data;
+    let a = initRow(n, P.init, P.dens, P.seed), b = new Uint8Array(n);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) { const o = (y * n + x) * 4, v = a[x] ? ON : BG; d[o] = v[0]; d[o + 1] = v[1]; d[o + 2] = v[2]; d[o + 3] = 255; }
+      stepRow(tab, a, b, n, P.bound === 'ring'); [a, b] = [b, a];
+    }
+    cc.putImageData(img, 0, 0); GAL.imgs.push(c);
+  }
+}
+function drawGallery() {
+  buildGallery();
+  const { x0, y0, cell, gap } = GAL.layout;
+  ctx.imageSmoothingEnabled = false;
+  for (let r = 0; r < 256; r++) {
+    const gx = x0 + (r % 16) * cell, gy = y0 + Math.floor(r / 16) * cell, cls = CLS[r].cls, dim = P.reps && rep(r) !== r;
+    ctx.globalAlpha = dim ? 0.18 : 1;
+    ctx.fillStyle = rgb(CLASS_COL[cls]); ctx.fillRect(gx + gap, gy + gap, cell - 2 * gap, cell - 2 * gap);
+    const sz = GAL.n * GAL.px, ix = gx + (cell - sz) / 2, iy = gy + (cell - sz) / 2;
+    ctx.drawImage(GAL.imgs[r], ix, iy, sz, sz);
+    ctx.globalAlpha = 1;
+    if (r === P.rule || r === hover) { ctx.strokeStyle = r === P.rule ? '#fff' : 'rgba(255,255,255,.6)'; ctx.lineWidth = 2 * dpr; ctx.strokeRect(gx + gap / 2, gy + gap / 2, cell - gap, cell - gap); }
+    if (cell > 34 * dpr && !dim) {
+      ctx.font = font(10, true); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      const t = String(r), tw = ctx.measureText(t).width;
+      ctx.fillStyle = 'rgba(11,15,20,.78)'; ctx.fillRect(ix, iy, tw + 4 * dpr, 13 * dpr);
+      ctx.fillStyle = '#e3e8ee'; ctx.fillText(t, ix + 2 * dpr, iy + dpr);
+    }
+  }
+}
+function galAt(e) {
+  if (P.view !== 'gal' || !GAL.layout) return -1;
+  const r = cv.getBoundingClientRect(), { x0, y0, cell } = GAL.layout;
+  const gx = Math.floor(((e.clientX - r.left) * dpr - x0) / cell), gy = Math.floor(((e.clientY - r.top) * dpr - y0) / cell);
+  return gx >= 0 && gy >= 0 && gx < 16 && gy < 16 ? gy * 16 + gx : -1;
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = rgb(BG); ctx.fillRect(0, 0, W, H);
+  if (P.view === 'gal') drawGallery(); else drawDiagram();
+  dirty = false;
+}
+
+// ---------- read-outs ----------
+const CLASS_NAME = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
+const f3 = x => Number.isFinite(x) ? x.toFixed(3) : '—';
+const bin8 = r => r.toString(2).padStart(8, '0');
+function info() {
+  const r = P.rule, o = orbit(r), C = CLS[r];
+  $('symInfo').textContent = [
+    `镜像 ${mirror(r)} · 黑白互换 ${complement(r)} · 两者都做 ${mirror(complement(r))}`,
+    `等价类 {${o.join(', ')}}，共 ${o.length} 条，代表 ${o[0]}`,
+    `256 条规则按这 4 种操作分成 ${SYM.reps.length} 类（逐条枚举）`,
+    `Burnside：(256 + ${SYM.fix.M} + ${SYM.fix.C} + ${SYM.fix.MC}) / 4 = ${SYM.burnside}`,
+    `类的大小：` + Object.entries(SYM.sizes).map(([s, n]) => `${n} 类各 ${s} 条`).join('，'),
+  ].join('\n');
+
+  const S = CLS.stats, feat = C.cls === 1 ? '最后一行全同' : C.per ? `周期 ${C.per}，每周期平移 ${C.shift} 格` : `不周期 · LZ76 = ${f3(C.lz)} · 扩散宽度 = ${f3(C.spread)}`;
+  $('clsInfo').textContent = [
+    `规则 ${r}：${CLASS_NAME[C.cls]} 类（${feat}）`,
+    `文献（Martínez 2013）：${CLASS_NAME[refClass(r)]} 类`,
+    `256 条：I ${S.count[1]} · II ${S.count[2]} · III ${S.count[3]} · IV ${S.count[4]}`,
+    `88 类：I ${S.countRep[1]} · II ${S.countRep[2]} · III ${S.countRep[3]} · IV ${S.countRep[4]}`,
+    `与文献一致 ${S.agree} / 88，不一致：${S.off.map(x => `${x}（${CLASS_NAME[CLS[x].cls]}/${CLASS_NAME[refClass(x)]}）`).join('、') || '无'}`,
+    `分类耗时 ${S.ms.toFixed(0)} ms`,
+  ].join('\n');
+
+  ensureRng();
+  const T = RNG.test, M = RNG.ref, b64 = Array.from(RNG.bits.slice(0, 64)).join('');
+  const verdict = t => t.p1 > 0.01 && t.pr > 0.01 && t.pc > 0.01 ? '三项都通过（p > 0.01）' : '未通过';
+  $('rngInfo').textContent = [
+    `规则 ${r} 中心列前 64 位：`, b64.slice(0, 32), b64.slice(32),
+    `             规则 ${String(r).padEnd(4)}  mulberry32`,
+    `1 的比例     ${T.frac.toFixed(4).padEnd(10)}  ${M.frac.toFixed(4)}`,
+    `频数 z       ${f3(T.z1).padEnd(10)}  ${f3(M.z1)}`,
+    `游程数       ${String(T.runs).padEnd(10)}  ${M.runs}   （期望 ${T.runsExp.toFixed(0)}）`,
+    `游程 z       ${f3(T.zr).padEnd(10)}  ${f3(M.zr)}`,
+    `4 位块 χ²    ${T.chi.toFixed(2).padEnd(10)}  ${M.chi.toFixed(2)}   （15 自由度）`,
+    `规则 ${r}：${verdict(T)} · 对照：${verdict(M)}`,
+    `计算 ${T.n} 位用了 ${RNG.ms.toFixed(0)} ms`,
+  ].join('\n');
+
+  const lines = [];
+  if (P.view === 'st') {
+    lines.push(`${TOPIC.cols} × ${TOPIC.rows} 格，第 ${TOPIC.t0}–${TOPIC.t0 + TOPIC.rows - 1} 步，黑格占 ${f3(TOPIC.density)}`);
+    if (TOPIC.etherFrac !== null) lines.push(`以太滤波：${(100 * TOPIC.etherFrac).toFixed(1)}% 的格子属于以太（暗色），其余（橙色）是滑翔机和碰撞`);
+    if (TOPIC.gould) lines.push(`规则 90：每行黑格数 = 2^(t 的二进制里 1 的个数)，${TOPIC.gould.ok} / ${TOPIC.gould.of} 行成立`);
+    if (P.rule === 184) lines.push(`规则 184：ρ = ${f3(TOPIC.density)}，实测流量 J = ${f3(TOPIC.J)}，min(ρ, 1−ρ) = ${f3(Math.min(TOPIC.density, 1 - TOPIC.density))}` +
+      (P.flow ? '\n绿色：这一步会前进的车 · 红色：被前车挡住' : ''));
+  }
+  $('topicInfo').textContent = lines.join('\n');
+
+  const hv = hover >= 0 ? hover : -1;
+  $('stat').textContent = P.view === 'gal'
+    ? (hv >= 0 ? `规则 ${hv} · ${bin8(hv)} · ${CLASS_NAME[CLS[hv].cls]} 类（启发式）· 等价类 {${orbit(hv).join(', ')}}` : `256 条规则 · ${INITS[P.init]} · 颜色 = 启发式 Wolfram 分类`)
+    : `规则 ${r} · ${bin8(r)} · ${INITS[P.init]} · ${BOUNDS[P.bound]} · ${CLASS_NAME[C.cls]} 类（启发式）` + (running ? ' · 演化中' : '');
+  window.__ca = { rule: r, view: P.view, init: P.init, bound: P.bound, cls: C.cls, ref: refClass(r), feat: { per: C.per, shift: C.shift, lz: C.lz, spread: C.spread },
+    sym: { classes: SYM.reps.length, burnside: SYM.burnside, fix: SYM.fix, sizes: SYM.sizes, orbit: o },
+    classes: CLS.stats, topic: { ...TOPIC }, rng: { bits: b64, test: T, ref: M, ms: RNG.ms },
+    fd: FD ? FD.map(p => ({ rho: p.rho, J: p.J })) : null };
+}
+
+// ---------- UI ----------
+function buildBits() {
+  const g = $('bits');
+  for (let k = 7; k >= 0; k--) {
+    const t = document.createElement('div'); t.className = 'tile'; t.dataset.k = k; t.title = '单击翻转';
+    const nb = document.createElement('div'); nb.className = 'nb';
+    for (const bit of [k >> 2 & 1, k >> 1 & 1, k & 1]) { const i = document.createElement('i'); if (bit) i.className = 'on'; nb.appendChild(i); }
+    const out = document.createElement('i'); out.className = 'out';
+    const lab = document.createElement('span'); lab.className = 'k'; lab.textContent = String(1 << k);
+    t.append(nb, out, lab);
+    t.onclick = () => setRule(P.rule ^ 1 << k);
+    g.appendChild(t);
+  }
+}
+function syncUI() {
+  $('rule').value = P.rule; $('bin').textContent = bin8(P.rule);
+  document.querySelectorAll('.tile').forEach(t => t.querySelector('.out').classList.toggle('on', !!(P.rule >> +t.dataset.k & 1)));
+  $('Dens').value = P.dens; $('vDens').textContent = P.dens.toFixed(2);
+  $('Seed').value = P.seed; $('vSeed').textContent = P.seed;
+  $('Cs').value = P.cs; $('vCs').textContent = `${P.cs} px`;
+  $('Skip').value = P.skip; $('vSkip').textContent = P.skip;
+  $('Nb').value = P.nb; $('vNb').textContent = (2 ** P.nb).toLocaleString();
+  for (const [id, on] of [['iOne', P.init === 'one'], ['iRand', P.init === 'rand'], ['bRing', P.bound === 'ring'], ['bFixed', P.bound === 'fixed'],
+    ['vSt', P.view === 'st'], ['vGal', P.view === 'gal']]) $(id).classList.toggle('on', on);
+  for (const id of ['center', 'ether', 'pascal', 'flow', 'reps']) $(id).checked = P[id];
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续演化（向上滚动）';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  dirty = true;
+}
+function setRule(r) { P.rule = Math.round(clamp(r, LIM.rule)); P.preset = ''; syncUI(); }
+function applyPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, DEF, { preset: key }, Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'name')));
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key;
+  b.onclick = () => { const keep = P.view === 'gal' && p.view === 'gal' ? P.rule : null; applyPreset(key); if (keep !== null) P.rule = keep; running = false; syncUI(); };
+  $('pre').appendChild(b);
+}
+const edited = () => { P.preset = ''; syncUI(); };
+$('rule').oninput = e => { const x = Number(e.target.value); if (e.target.value.trim() !== '' && Number.isFinite(x)) { P.rule = Math.round(clamp(x, LIM.rule)); P.preset = ''; syncUI(); } };
+$('rule').onchange = () => syncUI();
+$('rDown').onclick = () => setRule((P.rule + 255) % 256);
+$('rUp').onclick = () => setRule((P.rule + 1) % 256);
+$('toM').onclick = () => setRule(mirror(P.rule));
+$('toC').onclick = () => setRule(complement(P.rule));
+$('toMC').onclick = () => setRule(mirror(complement(P.rule)));
+$('iOne').onclick = () => { P.init = 'one'; edited(); };
+$('iRand').onclick = () => { P.init = 'rand'; edited(); };
+$('bRing').onclick = () => { P.bound = 'ring'; edited(); };
+$('bFixed').onclick = () => { P.bound = 'fixed'; edited(); };
+$('vSt').onclick = () => { P.view = 'st'; edited(); };
+$('vGal').onclick = () => { P.view = 'gal'; running = false; edited(); };
+$('Dens').oninput = e => { P.dens = clamp(+e.target.value, LIM.dens); edited(); };
+$('Seed').oninput = e => { P.seed = Math.round(clamp(+e.target.value, LIM.seed)); edited(); };
+$('Cs').oninput = e => { P.cs = Math.round(clamp(+e.target.value, LIM.cs)); edited(); };
+$('Skip').oninput = e => { P.skip = Math.round(clamp(+e.target.value, LIM.skip)); edited(); };
+$('Nb').oninput = e => { P.nb = Math.round(clamp(+e.target.value, LIM.nb)); syncUI(); };
+for (const id of ['center', 'ether', 'pascal', 'flow', 'reps']) $(id).onchange = e => { P[id] = e.target.checked; edited(); };
+$('play').onclick = () => { running = !running; if (running) P.view = 'st'; syncUI(); };
+$('restart').onclick = () => { G.key = ''; syncUI(); };
+
+cv.addEventListener('pointermove', e => { const h = galAt(e); if (h !== hover) { hover = h; dirty = true; } });
+cv.addEventListener('pointerleave', () => { hover = -1; dirty = true; });
+cv.addEventListener('click', e => { const h = galAt(e); if (h >= 0) { P.rule = h; P.view = 'st'; P.preset = ''; hover = -1; syncUI(); } });
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+  dirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=r110  or  ?r=30&init=rand&d=0.3&seed=7&b=fixed&cs=4&skip=100&view=gal&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { const v = q.get(k); if (v !== null && v.trim() !== '') { const x = Number(v); if (Number.isFinite(x)) f(x); } };
+const pick = (k, list, f) => { const v = q.get(k); if (v !== null && Object.hasOwn(list, v)) f(v); };
+pick('p', PRESETS, v => applyPreset(v));
+pick('init', INITS, v => { P.init = v; P.preset = ''; });
+pick('b', BOUNDS, v => { P.bound = v; P.preset = ''; });
+pick('view', VIEWS, v => { P.view = v; P.preset = ''; });
+num('r', x => { P.rule = Math.round(clamp(x, LIM.rule)); P.preset = ''; });
+num('d', x => { P.dens = clamp(x, LIM.dens); P.preset = ''; });
+num('seed', x => { P.seed = Math.round(clamp(x, LIM.seed)); });
+num('cs', x => { P.cs = Math.round(clamp(x, LIM.cs)); P.preset = ''; });
+num('skip', x => { P.skip = Math.round(clamp(x, LIM.skip)); P.preset = ''; });
+num('nb', x => { P.nb = Math.round(clamp(x, LIM.nb)); });
+for (const k of ['center', 'ether', 'pascal', 'flow', 'reps']) { if (q.get(k) === '1') P[k] = true; if (q.get(k) === '0') P[k] = false; }
+if (q.get('run') === '1') running = true;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+buildBits(); classifyAll(); resize(); syncUI();
+
+(function loop() {
+  if (running && P.view === 'st' && G.key) advance(Math.max(1, Math.round(4 / P.cs)));
+  if (dirty) { draw(); info(); window.__ready = true; }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

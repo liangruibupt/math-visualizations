@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Collatz 3n+1 · 冰雹数与珊瑚树</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0e1014; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 340px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(26,29,36,.93); border: 1px solid #353b48; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #e7a98f; border-top: 1px solid #353b48; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8f96a3; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  input[type=text] { width: 100%; box-sizing: border-box; background: #1b1e25; color: #e6e6e6;
+    border: 1px solid #3d4452; border-radius: 4px; padding: 4px 6px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2b303a; color: #e6e6e6; border: 1px solid #3d4452;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #384050; }
+  button.on { background: #7a4a3a; border-color: #b0705a; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #info { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #b4bac6; margin-top: 4px; word-break: break-all; }
+  #info b { color: #fff; }
+  #err { color: #ff8f8f; }
+  #view { position: absolute; left: 364px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(14,16,20,.82); color: #cfd4dc; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #view { left: 0; top: 0; }   /* after @media so ui=0 also wins on small screens */
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Collatz 3n+1 · 冰雹数与珊瑚树</h1>
+  <small>任取正整数 n：偶数就除以 2，奇数就乘 3 加 1。猜想说不管从哪个数出发，最后都会掉进 4 → 2 → 1。没有人能证明，也没有人找到反例。</small>
+
+  <h2>视图</h2>
+  <div class="presets" id="views"></div>
+  <div class="checks"><label><input id="T" type="checkbox"> 奇数步合并成 (3n+1)/2</label></div>
+  <small>3n+1 一定是偶数，下一步必然除以 2。把这两步合成一步 T(n) = (3n+1)/2，步数变少，结构不变。</small>
+
+  <div id="secTraj">
+    <h2>冰雹轨迹</h2>
+    <div class="row">
+      <label>起点 n <b id="vn"></b></label>
+      <input id="nTxt" type="text" spellcheck="false" inputmode="numeric">
+      <input id="nS" type="range" min="0" max="15.954589770191" step="0.001">
+      <div class="presets"><button id="dec">− 1</button><button id="inc">＋ 1</button><button id="dbl">× 2</button></div>
+      <small>1 到 2<sup>53</sup> − 1。轨迹上的值用 BigInt 精确计算，峰值不会溢出</small>
+    </div>
+    <div class="checks"><label><input id="log" type="checkbox"> 纵轴取对数</label></div>
+  </div>
+
+  <div id="secTree">
+    <h2>珊瑚树</h2>
+    <div class="row">
+      <label>画出 n ≤ N 的全部轨迹 <b id="vN"></b></label>
+      <input id="N" type="range" min="1" max="5" step="0.01">
+    </div>
+    <div class="row">
+      <label>偶数步转角 <b id="ve"></b></label>
+      <input id="e" type="range" min="-45" max="45" step="0.05">
+    </div>
+    <div class="row">
+      <label>奇数步转角 <b id="vo"></b></label>
+      <input id="o" type="range" min="-45" max="45" step="0.05">
+      <small>从 1 出发倒着走回每个 n：下一个数是偶数（它来自 ÷2）就转偶数角，是奇数（它来自 ×3+1）就转奇数角。正数为逆时针</small>
+    </div>
+    <div class="checks"><label><input id="once" type="checkbox"> 共享的路径只画一次</label></div>
+    <div class="row" id="rowA">
+      <label>每条轨迹的不透明度 <b id="va"></b></label>
+      <input id="a" type="range" min="0.01" max="1" step="0.01">
+      <small>不勾选时，每条轨迹都从 1 画到 n，重叠越多越亮：一条被 k 条轨迹共用的边，亮度是 1 − (1 − α)<sup>k</sup></small>
+    </div>
+  </div>
+
+  <div id="secScat">
+    <h2>停止时间散点</h2>
+    <div class="row">
+      <label>n 的范围 1 … M <b id="vM"></b></label>
+      <input id="M" type="range" min="2" max="6" step="0.01">
+    </div>
+    <div class="checks">
+      <label><input type="radio" name="y" value="total" id="yTotal"> 总停止时间（到 1 的步数）</label>
+      <label><input type="radio" name="y" value="drop" id="yDrop"> 首次小于 n 的步数</label>
+    </div>
+  </div>
+
+  <h2>当前起点</h2>
+  <div id="info"></div>
+  <small id="err"></small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px" id="hint"></small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+const LIM = {   // every slider range; URL params are clamped to these
+  n: [1, Number.MAX_SAFE_INTEGER], N: [10, 100000], e: [-45, 45], o: [-45, 45], a: [0.01, 1],
+  M: [100, 1000000], z: [0.1, 40], px: [-5000, 5000], py: [-5000, 5000],
+};
+const STEP_CAP = 20000;       // hard cap on the length of any single trajectory (the record below 2^68 is under 3000)
+const NODE_CAP = 3000000;     // hard cap on the number of distinct values in the tree
+const VIEWS = { traj: '冰雹轨迹', tree: '珊瑚树', scatter: '停止时间散点' };
+const YKINDS = { total: 1, drop: 1 };
+const PRESETS = {
+  n27:    { name: 'n = 27', v: 'traj', n: 27 },
+  n97:    { name: 'n = 97', v: 'traj', n: 97 },
+  n871:   { name: 'n = 871（1000 以内最长）', v: 'traj', n: 871 },
+  n77031: { name: 'n = 77031（10⁵ 以内最长）', v: 'traj', n: 77031 },
+  n837799:{ name: 'n = 837799（10⁶ 以内最长）', v: 'traj', n: 837799, log: true },
+  big:    { name: 'n = 2⁵³ − 1', v: 'traj', n: Number.MAX_SAFE_INTEGER, log: true },
+  coral:  { name: '珊瑚', v: 'tree', N: 10000, e: 8.65, o: -16, once: false, a: 0.06, T: false },
+  weed:   { name: '海草', v: 'tree', N: 30000, e: 5, o: -9.5, once: false, a: 0.04, T: false },
+  twig:   { name: '枝条（共享路径只画一次）', v: 'tree', N: 2000, e: 8.65, o: -16, once: true, a: 0.1, T: false },
+  tmap:   { name: 'T 映射的树', v: 'tree', N: 10000, e: 8, o: -8, once: false, a: 0.06, T: true },
+  sc1e4:  { name: '散点 n ≤ 10⁴', v: 'scatter', M: 10000, y: 'total' },
+  sc1e6:  { name: '散点 n ≤ 10⁶', v: 'scatter', M: 1000000, y: 'total' },
+  drop:   { name: '首次下降时间', v: 'scatter', M: 100000, y: 'drop' },
+};
+
+const P = { preset: 'n27', v: 'traj', n: 27, log: false, T: false, N: 10000, e: 8.65, o: -16, once: false, a: 0.06,
+  M: 100000, y: 'total' };
+const view = { x: 0, y: 0, zoom: 1 };   // tree pan/zoom on top of the auto-fit
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+const fmt = x => x >= 1e6 ? +(x / 1e6).toFixed(2) + 'M' : x >= 1e4 ? +(x / 1e3).toFixed(1) + 'k' : String(x);
+
+// ---------- the map ----------
+// Exact trajectory with BigInt: values for n < 2^53 can climb far above 2^53.
+function trajectory(n, T) {
+  let v = BigInt(n);
+  const vals = [v];
+  while (v !== 1n && vals.length <= STEP_CAP) {
+    v = v % 2n === 0n ? v / 2n : T ? (3n * v + 1n) / 2n : 3n * v + 1n;
+    vals.push(v);
+  }
+  return { vals, capped: v !== 1n };
+}
+
+// Fast step with a safe-integer guard: returns -1 instead of a silently wrong value.
+const SAFE3 = (Number.MAX_SAFE_INTEGER - 1) / 3;
+const next = (m, T) => m % 2 === 0 ? m / 2 : m > SAFE3 ? -1 : T ? (3 * m + 1) / 2 : 3 * m + 1;
+
+// ---------- view 3: stopping times for 1..M ----------
+// total[n] = steps to reach 1, memoised: walk until the value drops below n (already known), then add.
+// drop[n]  = steps until the value first goes below n (1 for every even n).
+let scat = null;   // { M, T, total: Uint16Array, drop: Uint16Array, maxTotal, maxDrop, argTotal }
+function stoppingTimes(M, T) {
+  const total = new Uint16Array(M + 1), drop = new Uint16Array(M + 1);
+  let maxTotal = 0, argTotal = 1, maxDrop = 0;
+  for (let n = 2; n <= M; n++) {
+    let m = n, k = 0;
+    while (m >= n && k < STEP_CAP) { m = next(m, T); k++; if (m < 0) break; }
+    let t;
+    if (m < 0 || k >= STEP_CAP) {   // never happens for M ≤ 10^6, but stay exact if it did
+      const tr = trajectory(n, T); t = tr.vals.length - 1;
+      let j = 1; while (j < tr.vals.length && tr.vals[j] >= BigInt(n)) j++; k = j;
+    } else t = k + total[m];
+    total[n] = Math.min(65535, t); drop[n] = k;
+    if (t > maxTotal) { maxTotal = t; argTotal = n; }
+    if (k > maxDrop) maxDrop = k;
+  }
+  return { M, T, total, drop, maxTotal, maxDrop, argTotal };
+}
+
+// ---------- view 2: the tree of all trajectories n ≤ N, grown backwards from 1 ----------
+// One node per distinct value. parent(v) = next(v). The turtle walks from 1 outwards; arriving at a child it
+// turns by e if the child is even (it reached the parent by halving) or by o if it is odd (by 3n+1).
+let tree = null;   // { N, T, e, o, size, x, y, depth, cnt, par, maxDepth, maxCnt, index, bbox, capped }
+function buildTree(N, T, eDeg, oDeg) {
+  const index = new Map([[1, 0]]);
+  let cap = 1 << 16, size = 1, capped = false;
+  let x = new Float64Array(cap), y = new Float64Array(cap), h = new Float64Array(cap);
+  let depth = new Int32Array(cap), par = new Int32Array(cap), cnt = new Uint32Array(cap);
+  h[0] = Math.PI / 2; par[0] = -1;
+  const grow = () => {
+    cap *= 2;
+    const g = (A, C) => { const b = new C(cap); b.set(A); return b; };
+    x = g(x, Float64Array); y = g(y, Float64Array); h = g(h, Float64Array);
+    depth = g(depth, Int32Array); par = g(par, Int32Array); cnt = g(cnt, Uint32Array);
+  };
+  const eR = eDeg * Math.PI / 180, oR = oDeg * Math.PI / 180;
+  const path = [];
+  for (let n = 2; n <= N && !capped; n++) {
+    path.length = 0;
+    let m = n;
+    while (!index.has(m) && path.length < STEP_CAP) { path.push(m); m = next(m, T); if (m < 0) break; }
+    if (m < 0 || path.length >= STEP_CAP) { capped = true; break; }   // guard: unsafe value or runaway
+    // place the new values from the known end outwards
+    let p = index.get(m);
+    for (let i = path.length - 1; i >= 0; i--) {
+      if (size >= NODE_CAP) { capped = true; break; }
+      if (size >= cap) grow();
+      const v = path[i], k = size++;
+      index.set(v, k);
+      const hh = h[p] + (v % 2 === 0 ? eR : oR);
+      h[k] = hh; x[k] = x[p] + Math.cos(hh); y[k] = y[p] + Math.sin(hh);
+      depth[k] = depth[p] + 1; par[k] = p; p = k;
+    }
+  }
+  // cnt[k] = how many starting values ≤ N pass through node k = start marks summed over the subtree.
+  // Children are always created after their parent, so one reverse sweep accumulates every subtree.
+  for (let n = 1; n <= N; n++) { const k = index.get(n); if (k !== undefined) cnt[k]++; }
+  let maxDepth = 0, maxCnt = 1;
+  for (let k = size - 1; k > 0; k--) { cnt[par[k]] += cnt[k]; if (depth[k] > maxDepth) maxDepth = depth[k]; }
+  for (let k = 1; k < size; k++) if (cnt[k] > maxCnt) maxCnt = cnt[k];
+  // turn the whole picture so that its centre of mass sits straight above the root 1
+  let sx = 0, sy = 0;
+  for (let k = 0; k < size; k++) if (cnt[k]) { sx += x[k]; sy += y[k]; }
+  const rot = Math.PI / 2 - Math.atan2(sy, sx), cr = Math.cos(rot), sr = Math.sin(rot);
+  for (let k = 0; k < size; k++) { const u = x[k], v = y[k]; x[k] = u * cr - v * sr; y[k] = u * sr + v * cr; }
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let k = 0; k < size; k++) {
+    if (!cnt[k]) continue;
+    if (x[k] < x0) x0 = x[k]; if (x[k] > x1) x1 = x[k]; if (y[k] < y0) y0 = y[k]; if (y[k] > y1) y1 = y[k];
+  }
+  return { N, T, e: eDeg, o: oDeg, size, x, y, depth, cnt, par, maxDepth, maxCnt, index, bbox: [x0, y0, x1, y1], capped };
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dirty = true, traj = null;
+const BG = '#0e1014';
+
+// coral palette along the depth: deep red at the root to pale pink at the tips
+const CORAL = [[150, 30, 40], [230, 90, 60], [255, 160, 110], [255, 220, 190], [210, 235, 255]];
+function coral(t) {
+  const s = Math.max(0, Math.min(1, t)) * (CORAL.length - 1), j = Math.min(CORAL.length - 2, Math.floor(s)), f = s - j;
+  return CORAL[j].map((v, i) => Math.round(v + (CORAL[j + 1][i] - v) * f));
+}
+
+function axes(L, Wd, Hd, xLabel, yLabel) {
+  const dpr = devicePixelRatio;
+  ctx.strokeStyle = '#4a5160'; ctx.lineWidth = dpr;
+  ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(L.x, L.y + Hd); ctx.lineTo(L.x + Wd, L.y + Hd); ctx.stroke();
+  ctx.fillStyle = '#8f96a3'; ctx.font = `${12 * dpr}px -apple-system, sans-serif`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText(xLabel, L.x + Wd, L.y + Hd + 22 * dpr);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(yLabel, L.x + 6 * dpr, L.y - 6 * dpr);
+}
+function tick(text, x, y, align, base) {
+  ctx.fillStyle = '#8f96a3'; ctx.textAlign = align; ctx.textBaseline = base; ctx.fillText(text, x, y);
+}
+// "nice" tick step for a range
+function niceStep(range, n) {
+  const raw = range / n, p = 10 ** Math.floor(Math.log10(raw)), r = raw / p;
+  return (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * p;
+}
+
+// log10 of a positive BigInt without losing range
+function log10Big(v) {
+  const s = v.toString();
+  if (s.length < 16) return Math.log10(Number(v));
+  return Math.log10(Number(s.slice(0, 15))) + s.length - 15;
+}
+
+function drawTraj() {
+  const dpr = devicePixelRatio, { vals } = traj, n = vals.length - 1;
+  const L = { x: 88 * dpr, y: 66 * dpr }, Wd = W - L.x - 40 * dpr, Hd = H - L.y - 70 * dpr;
+  ctx.font = `${12 * dpr}px -apple-system, sans-serif`;
+  let peak = vals[0], ip = 0;
+  for (let i = 1; i < vals.length; i++) if (vals[i] > peak) { peak = vals[i]; ip = i; }
+  const lp = log10Big(peak), lg = vals.map(log10Big);
+  // y in [0, 1] as a fraction of the axis height
+  const Yf = P.log ? i => lg[i] / Math.max(1e-9, lp) : i => 10 ** (lg[i] - lp);
+  const X = i => L.x + (n ? i / n : 0.5) * Wd, Y = f => L.y + Hd - f * Hd;
+  axes(L, Wd, Hd, '步数 k', P.log ? '值（对数坐标）' : '值');
+  // x ticks
+  const sx = Math.max(1, niceStep(Math.max(1, n), 8));
+  for (let k = 0; k <= n && k / sx <= 50; k += sx) tick(String(k), X(k), L.y + Hd + 6 * dpr, 'center', 'top');
+  // y ticks
+  ctx.strokeStyle = 'rgba(255,255,255,.06)';
+  if (P.log) {
+    const st = Math.max(1, Math.ceil(lp / 8));
+    for (let d = 0; d <= lp + 1e-9 && d <= 400; d += st) {
+      const yy = Y(d / Math.max(1e-9, lp));
+      ctx.beginPath(); ctx.moveTo(L.x, yy); ctx.lineTo(L.x + Wd, yy); ctx.stroke();
+      tick(d <= 3 ? String(10 ** d) : '10' + String(d).replace(/\d/g, c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[c]), L.x - 6 * dpr, yy, 'right', 'middle');
+    }
+  } else {
+    const pk = 10 ** (lp - Math.floor(lp)), ex = Math.floor(lp), st = niceStep(pk, 6);
+    for (let t = 0; t <= pk + 1e-9 && t / st <= 20; t += st) {
+      const yy = Y(t / pk);
+      ctx.beginPath(); ctx.moveTo(L.x, yy); ctx.lineTo(L.x + Wd, yy); ctx.stroke();
+      const val = t * 10 ** ex;
+      const sx = String(ex).replace(/\d/g, c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[c]);
+      tick(t === 0 ? '0' : ex < 12 ? Math.round(val).toLocaleString('en-US') : (+t.toFixed(3)) + '×10' + sx, L.x - 6 * dpr, yy, 'right', 'middle');
+    }
+  }
+  // the path: up-steps (odd → 3n+1) red, down-steps (even → n/2) blue
+  ctx.lineWidth = Math.max(1, Math.min(2.2, 900 / Math.max(1, n))) * dpr; ctx.lineJoin = 'round';
+  const up = new Path2D(), dn = new Path2D();
+  for (let i = 0; i < n; i++) {
+    const p = vals[i] % 2n === 0n ? dn : up;
+    p.moveTo(X(i), Y(Yf(i))); p.lineTo(X(i + 1), Y(Yf(i + 1)));
+  }
+  ctx.strokeStyle = '#6fb3ff'; ctx.stroke(dn);
+  ctx.strokeStyle = '#ff7a5c'; ctx.stroke(up);
+  if (n <= 250) {
+    for (let i = 0; i <= n; i++) {
+      ctx.fillStyle = vals[i] % 2n === 0n ? '#9fcbff' : '#ffb39f';
+      ctx.beginPath(); ctx.arc(X(i), Y(Yf(i)), 2.2 * dpr, 0, 7); ctx.fill();
+    }
+  }
+  // peak marker
+  ctx.fillStyle = '#ffd38a'; ctx.beginPath(); ctx.arc(X(ip), Y(Yf(ip)), 4.5 * dpr, 0, 7); ctx.fill();
+  ctx.font = `bold ${13 * dpr}px -apple-system, sans-serif`;
+  const right = X(ip) > L.x + Wd * 0.7;
+  tick(`峰值 ${peak.toLocaleString('en-US')}（第 ${ip} 步）`, X(ip) + (right ? -10 : 10) * dpr, Y(Yf(ip)) - 4 * dpr, right ? 'right' : 'left', 'bottom');
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText(`n = ${vals[0].toLocaleString('en-US')} · ${n} 步到 1${traj.capped ? `（已停在 ${STEP_CAP} 步）` : ''}`, L.x + Wd, 14 * dpr);
+}
+
+function treeTransform() {
+  const [x0, y0, x1, y1] = tree.bbox, dpr = devicePixelRatio, pad = 30 * dpr;
+  const fit = Math.min((W - 2 * pad) / Math.max(1e-9, x1 - x0), (H - 2 * pad) / Math.max(1e-9, y1 - y0));
+  const sc = fit * view.zoom, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  return { sc, tx: x => W / 2 + (x - cx) * sc + view.x * dpr, ty: y => H / 2 - (y - cy) * sc + view.y * dpr };
+}
+
+function drawTree() {
+  const dpr = devicePixelRatio, t = tree, { sc, tx, ty } = treeTransform();
+  const DB = 16, AB = P.once ? 1 : 16;    // buckets: depth colour × opacity level
+  const paths = Array.from({ length: DB * AB }, () => new Path2D());
+  const lnMax = Math.log(1 + t.maxCnt);
+  for (let k = 1; k < t.size; k++) {
+    const c = t.cnt[k];
+    if (!c) continue;
+    const p = t.par[k];
+    let ab = 0;
+    if (!P.once) {
+      // k trajectories drawn on top of each other with opacity α give 1 − (1 − α)^k
+      const op = 1 - Math.pow(1 - P.a, c);
+      ab = Math.min(AB - 1, Math.floor(op * AB));
+    }
+    const db = Math.min(DB - 1, Math.floor(t.depth[k] / Math.max(1, t.maxDepth) * DB));
+    const path = paths[db * AB + ab];
+    path.moveTo(tx(t.x[p]), ty(t.y[p])); path.lineTo(tx(t.x[k]), ty(t.y[k]));
+  }
+  ctx.lineCap = 'round';
+  const lw = Math.max(0.5 * dpr, Math.min(2.2 * dpr, sc * 0.35));
+  for (let db = 0; db < DB; db++) for (let ab = 0; ab < AB; ab++) {
+    const col = coral((db + 0.5) / DB);
+    ctx.strokeStyle = `rgba(${col},${P.once ? 1 : (ab + 1) / AB})`;
+    ctx.lineWidth = lw;
+    ctx.stroke(paths[db * AB + ab]);
+  }
+  // highlight the current n if it is in the tree
+  const kn = Number.isSafeInteger(P.n) ? t.index.get(P.n) : undefined;
+  if (kn !== undefined && t.cnt[kn]) {
+    ctx.strokeStyle = '#7fe0ff'; ctx.lineWidth = Math.max(1.6 * dpr, lw * 1.6);
+    ctx.beginPath(); ctx.moveTo(tx(t.x[kn]), ty(t.y[kn]));
+    for (let k = kn, i = 0; t.par[k] >= 0 && i < STEP_CAP; k = t.par[k], i++) ctx.lineTo(tx(t.x[t.par[k]]), ty(t.y[t.par[k]]));
+    ctx.stroke();
+    ctx.fillStyle = '#7fe0ff'; ctx.beginPath(); ctx.arc(tx(t.x[kn]), ty(t.y[kn]), 3.5 * dpr, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(tx(0), ty(0), 3 * dpr, 0, 7); ctx.fill();
+}
+
+function drawScatter() {
+  const dpr = devicePixelRatio, s = scat, ys = P.y === 'drop' ? s.drop : s.total;
+  const yMax = Math.max(1, P.y === 'drop' ? s.maxDrop : s.maxTotal);
+  const L = { x: 64 * dpr, y: 40 * dpr }, Wd = Math.max(10, Math.round(W - L.x - 30 * dpr)), Hd = Math.max(10, Math.round(H - L.y - 64 * dpr));
+  ctx.font = `${12 * dpr}px -apple-system, sans-serif`;
+  // density buffer: one cell per pixel, colour by log(1 + hits)
+  const hits = new Uint32Array(Wd * Hd);
+  let mh = 1;
+  for (let n = 1; n <= s.M; n++) {
+    const ix = Math.min(Wd - 1, Math.floor((n - 1) / s.M * Wd));
+    const iy = Math.min(Hd - 1, Math.floor((1 - ys[n] / yMax) * (Hd - 1)));
+    const h = ++hits[iy * Wd + ix]; if (h > mh) mh = h;
+  }
+  const img = ctx.createImageData(Wd, Hd), d = img.data, Lm = Math.log(1 + mh);
+  for (let i = 0, o = 0; i < hits.length; i++, o += 4) {
+    const h = hits[i];
+    if (!h) { d[o] = 14; d[o + 1] = 16; d[o + 2] = 20; d[o + 3] = 255; continue; }
+    const c = coral(0.45 + 0.55 * Math.sqrt(Math.log(1 + h) / Lm));
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  }
+  ctx.putImageData(img, L.x, L.y);
+  // sparse plots (few n per pixel column): draw each point as a small square so single points stay visible
+  const sq = Math.min(4 * dpr, Math.floor(Math.sqrt(Wd * Hd / s.M) / 4));
+  if (sq >= 2) {
+    ctx.fillStyle = 'rgba(255,170,120,.9)';
+    for (let n = 1; n <= s.M; n++)
+      ctx.fillRect(L.x + (n - 1) / s.M * Wd - sq / 2, L.y + (1 - ys[n] / yMax) * (Hd - 1) - sq / 2, sq, sq);
+  }
+  axes(L, Wd, Hd, 'n', P.y === 'drop' ? '首次小于 n 的步数' : '到 1 的步数');
+  const sx = niceStep(s.M, 6);
+  for (let v = 0; v <= s.M && v / sx <= 20; v += sx) tick(v.toLocaleString('en-US'), L.x + v / s.M * Wd, L.y + Hd + 6 * dpr, 'center', 'top');
+  const sy = niceStep(yMax, 6);
+  for (let v = 0; v <= yMax && v / sy <= 40; v += sy) tick(String(v), L.x - 6 * dpr, L.y + (1 - v / yMax) * (Hd - 1), 'right', 'middle');
+  // mark the current n
+  if (P.n <= s.M) {
+    const xx = L.x + (P.n - 1) / s.M * Wd, yy = L.y + (1 - ys[P.n] / yMax) * (Hd - 1);
+    ctx.strokeStyle = '#7fe0ff'; ctx.lineWidth = 1.5 * dpr;
+    ctx.beginPath(); ctx.arc(xx, yy, 6 * dpr, 0, 7); ctx.stroke();
+    ctx.font = `bold ${12 * dpr}px -apple-system, sans-serif`; ctx.fillStyle = '#7fe0ff';
+    const right = xx > L.x + Wd * 0.7;
+    ctx.textAlign = right ? 'right' : 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`n = ${P.n.toLocaleString('en-US')}：${ys[P.n]}`, xx + (right ? -9 : 9) * dpr, yy - 6 * dpr);
+  }
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  if (P.v === 'traj') drawTraj(); else if (P.v === 'tree') drawTree(); else drawScatter();
+  drawStat();
+}
+
+function drawStat() {
+  let s;
+  if (P.v === 'traj') {
+    s = `n = ${P.n.toLocaleString('en-US')} · ${traj.vals.length - 1} 步 · ${P.log ? '对数' : '线性'}纵轴`;
+  } else if (P.v === 'tree') {
+    const t = tree;
+    let edges = 0; for (let k = 1; k < t.size; k++) if (t.cnt[k]) edges++;
+    s = `n ≤ ${t.N.toLocaleString('en-US')} · ${edges.toLocaleString('en-US')} 个不同的数 · 最深 ${t.maxDepth} 步 · 树干上的边被 ${t.maxCnt.toLocaleString('en-US')} 条轨迹共用` +
+      (t.capped ? ' · 已达上限' : '');
+  } else {
+    const sc = scat;
+    s = P.y === 'drop' ? `n ≤ ${sc.M.toLocaleString('en-US')} · 首次下降最多 ${sc.maxDrop} 步`
+      : `n ≤ ${sc.M.toLocaleString('en-US')} · 最长的是 n = ${sc.argTotal.toLocaleString('en-US')}，${sc.maxTotal} 步`;
+  }
+  $('stat').textContent = s;
+}
+
+// panel text for the current n: steps, peak, parity vector and the 3/4 heuristic
+function showInfo() {
+  const el = $('info'); el.textContent = '';
+  const { vals } = traj, n = vals.length - 1;
+  let peak = vals[0], odd = 0, even = 0, bits = '', drop = -1;
+  for (let i = 0; i < n; i++) {
+    if (vals[i] > peak) peak = vals[i];
+    const o = vals[i] % 2n === 1n; o ? odd++ : even++;
+    if (bits.length < 64) bits += o ? '1' : '0';
+    if (drop < 0 && i > 0 && vals[i] < vals[0]) drop = i;
+  }
+  if (vals[n] > peak) peak = vals[n];
+  if (drop < 0 && n > 0 && vals[n] < vals[0]) drop = n;
+  // with T every odd step already contains one halving
+  const halvings = P.T ? even + odd : even;
+  const lines = [
+    ['步数 ', String(n) + (traj.capped ? `（已停在上限 ${STEP_CAP}）` : '')],
+    ['峰值 ', peak.toLocaleString('en-US')],
+    ['峰值 / n ', (10 ** (log10Big(peak) - log10Big(vals[0]))).toPrecision(4)],
+    ['峰值超过 2^53 ', peak > BigInt(Number.MAX_SAFE_INTEGER) ? '是（只有 BigInt 能算对）' : '否'],
+    ['首次小于 n ', drop < 0 ? '—' : `第 ${drop} 步`],
+    ['奇数步 / 偶数步 ', `${odd} / ${even}`],
+    ['奇偶向量 ', bits + (n > 64 ? '…' : '')],
+    ['÷2 的次数 − 奇数步 × log₂3 ', (halvings - odd * Math.log2(3)).toFixed(3)],
+    ['log₂ n ', (log10Big(vals[0]) / Math.log10(2)).toFixed(3)],
+  ];
+  for (const [k, v] of lines) {
+    const row = document.createElement('div'); row.append(k);
+    const b = document.createElement('b'); b.textContent = v; row.append(b); el.append(row);
+  }
+}
+
+// ---------- state changes ----------
+function rebuildTraj() { traj = trajectory(P.n, P.T); showInfo(); dirty = true; }
+function rebuildTree() {
+  if (!tree || tree.N !== P.N || tree.T !== P.T || tree.e !== P.e || tree.o !== P.o) tree = buildTree(P.N, P.T, P.e, P.o);
+  dirty = true;
+}
+function rebuildScatter() { if (!scat || scat.M !== P.M || scat.T !== P.T) scat = stoppingTimes(P.M, P.T); dirty = true; }
+function rebuild() {
+  rebuildTraj();
+  if (P.v === 'tree') rebuildTree();
+  if (P.v === 'scatter') rebuildScatter();
+}
+
+// ---------- UI ----------
+for (const [k, name] of Object.entries(VIEWS)) {
+  const b = document.createElement('button'); b.textContent = name; b.dataset.v = k;
+  b.onclick = () => { P.v = k; custom(); syncUI(); rebuild(); };
+  $('views').appendChild(b);
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button'); b.textContent = p.name; b.dataset.p = key;
+  b.onclick = () => { loadPreset(key); syncUI(); rebuild(); };
+  $('pre').appendChild(b);
+}
+function loadPreset(key) {
+  const p = PRESETS[key];
+  P.preset = key; P.v = p.v;
+  if (p.n !== undefined) { P.n = p.n; P.log = !!p.log; P.T = false; }
+  if (p.N !== undefined) Object.assign(P, { N: p.N, e: p.e, o: p.o, once: p.once, a: p.a, T: p.T });
+  if (p.M !== undefined) Object.assign(P, { M: p.M, y: p.y, T: false });
+  Object.assign(view, { x: 0, y: 0, zoom: 1 });
+}
+function custom() { P.preset = ''; }
+
+function syncUI() {
+  $('nTxt').value = String(P.n); $('nS').value = Math.log10(P.n);
+  $('vn').textContent = P.n.toLocaleString('en-US');
+  $('log').checked = P.log; $('T').checked = P.T;
+  $('N').value = Math.log10(P.N); $('vN').textContent = P.N.toLocaleString('en-US');
+  $('e').value = P.e; $('ve').textContent = P.e.toFixed(2) + '°';
+  $('o').value = P.o; $('vo').textContent = P.o.toFixed(2) + '°';
+  $('once').checked = P.once; $('a').value = P.a; $('va').textContent = P.a.toFixed(2);
+  $('rowA').style.display = P.once ? 'none' : '';
+  $('M').value = Math.log10(P.M); $('vM').textContent = P.M.toLocaleString('en-US');
+  $('yTotal').checked = P.y === 'total'; $('yDrop').checked = P.y === 'drop';
+  $('secTraj').style.display = ''; // n is shared by every view (highlighted in the tree and the scatter)
+  $('secTree').style.display = P.v === 'tree' ? '' : 'none';
+  $('secScat').style.display = P.v === 'scatter' ? '' : 'none';
+  $('hint').textContent = P.v === 'tree' ? '拖动平移 · 滚轮缩放 · 双击复位 · 青色线是当前起点 n 的轨迹' :
+    P.v === 'scatter' ? '青色圆圈是当前起点 n' : '红色是奇数步（×3+1），蓝色是偶数步（÷2）';
+  document.querySelectorAll('[data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === P.v));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+
+const setN = x => { P.n = Math.round(clamp(x, LIM.n)); custom(); syncUI(); rebuildTraj(); };
+$('nTxt').oninput = e => {
+  const s = e.target.value.replace(/[\s,_]/g, '');
+  $('err').textContent = '';
+  if (!/^\d{1,16}$/.test(s)) { $('err').textContent = '请输入 1 到 9007199254740991 之间的整数'; return; }
+  const x = Number(s);
+  if (x < 1 || x > Number.MAX_SAFE_INTEGER) { $('err').textContent = '请输入 1 到 9007199254740991 之间的整数'; return; }
+  P.n = x; custom(); $('nS').value = Math.log10(x); $('vn').textContent = x.toLocaleString('en-US'); rebuildTraj();
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', false));
+};
+$('nS').oninput = e => setN(10 ** +e.target.value);
+$('dec').onclick = () => setN(P.n - 1);
+$('inc').onclick = () => setN(P.n + 1);
+$('dbl').onclick = () => setN(P.n * 2);
+$('log').onchange = e => { P.log = e.target.checked; dirty = true; };
+$('T').onchange = e => { P.T = e.target.checked; custom(); syncUI(); rebuild(); };
+$('N').oninput = e => { P.N = Math.round(10 ** +e.target.value); custom(); syncUI(); rebuildTree(); };
+$('e').oninput = e => { P.e = +e.target.value; custom(); syncUI(); rebuildTree(); };
+$('o').oninput = e => { P.o = +e.target.value; custom(); syncUI(); rebuildTree(); };
+$('once').onchange = e => { P.once = e.target.checked; custom(); syncUI(); dirty = true; };
+$('a').oninput = e => { P.a = +e.target.value; custom(); syncUI(); dirty = true; };
+$('M').oninput = e => { P.M = Math.round(10 ** +e.target.value); custom(); syncUI(); rebuildScatter(); };
+for (const r of document.querySelectorAll('input[name=y]')) r.onchange = e => { P.y = e.target.value; custom(); syncUI(); dirty = true; };
+
+// tree pan / zoom
+let drag = null;
+cv.addEventListener('pointerdown', e => { if (P.v !== 'tree') return; drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  view.x = clamp(view.x + e.clientX - drag[0], LIM.px); view.y = clamp(view.y + e.clientY - drag[1], LIM.py);
+  drag = [e.clientX, e.clientY]; dirty = true;
+});
+cv.addEventListener('pointerup', () => drag = null);
+cv.addEventListener('dblclick', () => { Object.assign(view, { x: 0, y: 0, zoom: 1 }); dirty = true; });
+cv.addEventListener('wheel', e => {
+  if (P.v !== 'tree') return;
+  e.preventDefault();
+  const r = cv.getBoundingClientRect();
+  const f = clamp(view.zoom * Math.exp(-e.deltaY * 0.0015), LIM.z) / view.zoom;
+  const mx = e.clientX - r.left - r.width / 2, my = e.clientY - r.top - r.height / 2;
+  view.x = clamp(mx - (mx - view.x) * f, LIM.px); view.y = clamp(my - (my - view.y) * f, LIM.py);   // zoom about the cursor
+  view.zoom *= f; dirty = true;
+}, { passive: false });
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = cv.width = Math.max(1, Math.round(r.width * devicePixelRatio));
+  H = cv.height = Math.max(1, Math.round(r.height * devicePixelRatio));
+  dirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?v=traj&n=27&log=1  or  ?p=coral  or  ?v=tree&N=20000&e=8.65&o=-16&once=0&a=0.05&T=1&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const pick = (k, table, f) => { const v = q.get(k); if (v !== null && Object.hasOwn(table, v)) f(v); };
+pick('p', PRESETS, loadPreset);
+const urlKeys = { n: 'n', N: 'N', e: 'e', o: 'o', a: 'a', M: 'M' };
+for (const [k, key] of Object.entries(urlKeys)) num(k, x => { P[key] = clamp(x, LIM[key]); custom(); });
+P.n = Math.round(P.n); P.N = Math.round(P.N); P.M = Math.round(P.M);
+pick('v', VIEWS, v => { P.v = v; });
+pick('y', YKINDS, v => { P.y = v; custom(); });
+const flag = (k, f) => { const v = q.get(k); if (v === '0' || v === '1') f(v === '1'); };
+flag('log', b => P.log = b); flag('T', b => { P.T = b; custom(); }); flag('once', b => { P.once = b; custom(); });
+num('z', x => view.zoom = clamp(x, LIM.z)); num('px', x => view.x = clamp(x, LIM.px)); num('py', x => view.y = clamp(x, LIM.py));
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI(); rebuild();
+(function loop() {
+  if (dirty) { dirty = false; draw(); window.__ready = true; }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Penrose 镶嵌 · 永不重复的铺砖</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0e0f16; color: #e4e5ee;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(24,26,38,.93); border: 1px solid #353a52; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #aab4e0; border-top: 1px solid #353a52; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8e92a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2a2e44; color: #e4e5ee; border: 1px solid #40466a;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #363b58; }
+  button.on { background: #4b4f8f; border-color: #7076c0; }
+  button:disabled { opacity: .45; cursor: default; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  select { background: #22253a; color: #e4e5ee; border: 1px solid #40466a; border-radius: 4px; font-size: 12px; }
+  #ratio { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #c4c7da; margin-top: 4px; white-space: pre; overflow-x: auto; }
+  #ratio b { color: #ffd38a; font-weight: normal; }
+  #chart { width: 100%; height: 110px; display: block; margin-top: 4px;
+    background: #15172a; border: 1px solid #353a52; border-radius: 4px; }
+  #sym { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; margin-top: 4px; min-height: 18px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 3px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(14,15,22,.82); color: #d4d6e4; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #stat b { color: #fff; }
+  body.noui #panel, body.noui #stat { display: none; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Penrose 镶嵌 · 永不重复的铺砖</h1>
+  <small>只用两种菱形（72° 的粗菱形和 36° 的细菱形）就能铺满整个平面，但铺法永远不会周期重复。做法是“收缩替换”：把每块砖切成更小的砖，一代一代切下去。</small>
+
+  <h2>铺法</h2>
+  <div class="presets" id="sysBtns"></div>
+  <div class="row" id="seedRow">
+    <label>起始图形 <select id="seed"></select></label>
+  </div>
+
+  <h2 id="genH">代数（收缩替换）</h2>
+  <div id="genBox">
+    <div class="row">
+      <label>第 g 代 <b id="vG"></b></label>
+      <input id="G" type="range" min="0" max="10" step="1">
+    </div>
+    <div class="presets"><button id="prev">◀ 上一代</button><button id="next">下一代 ▶</button><button id="play">▶ 播放</button></div>
+    <small>每代把每块砖切成更小的砖，边长缩小到 1/φ ≈ 0.618 倍。最多 10 代（约 18 万个半三角形）。</small>
+  </div>
+  <div id="gridBox">
+    <div class="row">
+      <label>每族网格线 2N+1 条，N <b id="vN"></b></label>
+      <input id="N" type="range" min="3" max="14" step="1">
+    </div>
+    <div class="row">
+      <label>相位子偏移 t <b id="vT"></b></label>
+      <input id="T" type="range" min="-0.4" max="0.4" step="0.005">
+      <small>五族平行线的位移 γ<sub>j</sub> = 0.2 + t·cos(4πj/5)，Σγ<sub>j</sub> = 1 不变。拖动 t，砖块只在局部翻转，整体仍是 Penrose 镶嵌；t = 0 时五重对称。</small>
+    </div>
+  </div>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label id="arcsL"><input id="arcs" type="checkbox"> 匹配弧线</label>
+    <label id="superL"><input id="super" type="checkbox"> 上一代（超级砖块）</label>
+    <label id="fixL"><input id="fix" type="checkbox"> 固定砖块大小</label>
+    <label><input id="axes" type="checkbox"> 五条镜面轴</label>
+    <label id="linesL"><input id="lines" type="checkbox"> 叠加五重网格</label>
+  </div>
+  <small id="showHelp"></small>
+
+  <h2>粗细之比 → φ</h2>
+  <div id="ratio"></div>
+  <canvas id="chart"></canvas>
+  <small id="chartHelp">点：每一代两种半三角形的个数之比；金色虚线是 φ = 1.6180340。比值依次是相邻 Fibonacci 数之比，从两侧交替逼近 φ。</small>
+
+  <h2>五重对称与晶体学限制</h2>
+  <div class="presets"><button data-r="72">旋转 72° 对比</button><button data-r="36">旋转 36° 对比</button><button data-r="90">旋转 90° 对比</button><button data-r="0">停止</button></div>
+  <div id="sym"></div>
+  <small>白线是转过去的那一份铺砖的边：转对了，白线正好盖住下面的砖缝。重合度 = 中心区域里转过去后仍落在同类砖块上的砖块比例。<br>
+  周期铺砖（晶格）只能有 2、3、4、6 重旋转对称：转 θ 把格点映到格点，在格点基下旋转矩阵是整数矩阵，迹 2cos θ 必须是整数。2cos 72° = 1/φ ≈ 0.618 不是整数，所以五重对称和周期性不可兼得。</small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">拖动平移 · 滚轮缩放 · 双击复位 · 按 h 隐藏面板</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+const PHI = (1 + Math.sqrt(5)) / 2, IPHI = 1 / PHI, IPHI2 = IPHI * IPHI;
+const MAXG = 10, TRI_MAX = 400000;
+
+// ---------- data: a tiling is a list of Robinson half-tiles ----------
+// Float64Array, stride 7: [type, Ax, Ay, Bx, By, Cx, Cy].  Every tile is two mirror-image triangles glued
+// along their edge BC, so the drawn outline is C→A→B and BC is the hidden diagonal / axis.
+//   P3: type 0 = half thin rhomb (apex A = 36°),  type 1 = half thick rhomb (apex A = 108°)
+//   P2: type 0 = half kite (apex B = 36°),        type 1 = half dart (apex B = 108°)
+const S = 7;
+const lerp = (ax, ay, bx, by, f) => [ax + (bx - ax) * f, ay + (by - ay) * f];
+
+// deflation rules: each half-tile -> smaller half-tiles, edge length × 1/φ  (Robinson 1975; Preshing's labelling)
+function deflateP3(src) {
+  const n = src.length / S, out = []; let o = 0;
+  for (let i = 0; i < n; i++) {
+    const k = src[i * S], ax = src[i * S + 1], ay = src[i * S + 2], bx = src[i * S + 3], by = src[i * S + 4], cx = src[i * S + 5], cy = src[i * S + 6];
+    if (k === 0) {   // thin -> 1 thin + 1 thick
+      const [px, py] = lerp(ax, ay, bx, by, IPHI);
+      out.push(0, cx, cy, px, py, bx, by, 1, px, py, cx, cy, ax, ay);
+    } else {         // thick -> 2 thick + 1 thin
+      const [qx, qy] = lerp(bx, by, ax, ay, IPHI), [rx, ry] = lerp(bx, by, cx, cy, IPHI);
+      out.push(1, rx, ry, cx, cy, ax, ay, 1, qx, qy, rx, ry, bx, by, 0, rx, ry, qx, qy, ax, ay);
+    }
+  }
+  return Float64Array.from(out);
+}
+function deflateP2(src) {
+  const n = src.length / S, out = [];
+  for (let i = 0; i < n; i++) {
+    const k = src[i * S], ax = src[i * S + 1], ay = src[i * S + 2], bx = src[i * S + 3], by = src[i * S + 4], cx = src[i * S + 5], cy = src[i * S + 6];
+    if (k === 0) {   // half kite -> 2 half kites + 1 half dart
+      const [qx, qy] = lerp(ax, ay, bx, by, IPHI), [rx, ry] = lerp(bx, by, cx, cy, IPHI);
+      out.push(1, rx, ry, qx, qy, bx, by, 0, qx, qy, ax, ay, rx, ry, 0, cx, cy, ax, ay, rx, ry);
+    } else {         // half dart -> 1 half kite + 1 half dart
+      const [px, py] = lerp(cx, cy, ax, ay, IPHI);
+      out.push(1, bx, by, px, py, ax, ay, 0, px, py, cx, cy, bx, by);
+    }
+  }
+  return Float64Array.from(out);
+}
+
+// starting patches, all centred on the origin with radius about 1
+function wheel(p2) {   // 10 half-tiles around the origin, every second one mirrored: a "sun"
+  const t = [];
+  for (let i = 0; i < 10; i++) {
+    let b = [Math.cos((2 * i - 1) * Math.PI / 10), Math.sin((2 * i - 1) * Math.PI / 10)];
+    let c = [Math.cos((2 * i + 1) * Math.PI / 10), Math.sin((2 * i + 1) * Math.PI / 10)];
+    if (i % 2 === 0) [b, c] = [c, b];
+    if (p2) t.push(0, ...b, 0, 0, ...c); else t.push(0, 0, 0, ...b, ...c);
+  }
+  return Float64Array.from(t);
+}
+function pair(k, a, b, c, a2) { return Float64Array.from([k, ...a, ...b, ...c, k, ...a2, ...b, ...c]); }
+const deg = d => d * Math.PI / 180;
+const SYS = {
+  p3: { name: 'P3 粗细菱形', deflate: deflateP3, names: ['细菱形', '粗菱形'], fill: ['#3f93a8', '#e0a64a'],
+    // arc decorations [vertex (2 = B, 3 = C), radius as a fraction of |AB|, colour]: checked to join across every edge
+    arcs: [[[2, IPHI2, 0], [3, IPHI2, 1]], [[2, IPHI, 0], [3, IPHI2, 1]]],
+    seeds: {
+      sun: { name: '太阳（10 个细菱形的一半）', make: () => wheel(false), axes: true },
+      thick: { name: '一块粗菱形', make: () => { const w = PHI / 2, h = Math.sqrt(1 - w * w), s = 1 / w; return pair(1, [0, h * s], [-1, 0], [1, 0], [0, -h * s]); } },
+      thin: { name: '一块细菱形', make: () => { const w = IPHI / 2, h = Math.sqrt(1 - w * w), s = 1 / h; return pair(0, [0, 1], [-w * s, 0], [w * s, 0], [0, -1]); } },
+    } },
+  p2: { name: 'P2 风筝与飞镖', deflate: deflateP2, names: ['风筝', '飞镖'], fill: ['#c8714e', '#4f72b8'],
+    arcs: [[[2, IPHI, 0], [3, IPHI2, 1]], [[3, IPHI, 0], [2, IPHI2, 1]]],
+    seeds: {
+      sun: { name: '太阳（5 只风筝）', make: () => wheel(true), axes: true },
+      // B = the 36° tip, C = the head on the axis, |BA| = |BC| = φ
+      kite: { name: '一只风筝', make: () => { const a = deg(36); return pair(0, [-PHI / 2 + PHI * Math.cos(a), PHI * Math.sin(a)], [-PHI / 2, 0], [PHI / 2, 0], [-PHI / 2 + PHI * Math.cos(a), -PHI * Math.sin(a)]); } },
+      // B = the 216° reflex vertex, C = the tip on the axis, |BA| = |BC| = 1
+      dart: { name: '一只飞镖', make: () => { const a = deg(108); return pair(1, [-0.2 + Math.cos(a), Math.sin(a)], [-0.2, 0], [0.8, 0], [-0.2 + Math.cos(a), -Math.sin(a)]); } },
+    } },
+  grid: { name: 'de Bruijn 五重网格', names: ['细菱形', '粗菱形'], fill: ['#3f93a8', '#e0a64a'], seeds: { grid: { name: '五重网格的对偶', axes: true } } },
+};
+
+// ---------- de Bruijn pentagrid: five families of parallel lines x·e_j + γ_j = k ----------
+// every crossing of a j = r line with a j = s line becomes a rhomb with edges e_r, e_s (de Bruijn 1981)
+const E = [0, 1, 2, 3, 4].map(j => [Math.cos(2 * Math.PI * j / 5), Math.sin(2 * Math.PI * j / 5)]);
+const gammas = t => E.map((_, j) => 0.2 + t * Math.cos(4 * Math.PI * j / 5));
+function pentagrid(N, t) {
+  const g = gammas(t), out = [];
+  for (let r = 0; r < 5; r++) for (let s = r + 1; s < 5; s++) {
+    const [a, b] = E[r], [c, d] = E[s], det = a * d - b * c;
+    const thick = (s - r === 1 || s - r === 4) ? 1 : 0;   // angle between e_r, e_s: 72° thick, 144° thin
+    for (let kr = -N; kr <= N; kr++) for (let ks = -N; ks <= N; ks++) {
+      const u = kr - g[r], v = ks - g[s], x = (u * d - b * v) / det, y = (a * v - u * c) / det;
+      if (Math.hypot(x, y) > N - 1.5) continue;   // outside this disc some families have run out of lines
+      let vx = 0, vy = 0;
+      for (let j = 0; j < 5; j++) {
+        const K = j === r ? kr : j === s ? ks : Math.ceil(x * E[j][0] + y * E[j][1] + g[j]);
+        vx += K * E[j][0]; vy += K * E[j][1];
+      }
+      const v1 = [vx + E[r][0], vy + E[r][1]], v2 = [v1[0] + E[s][0], v1[1] + E[s][1]], v3 = [vx + E[s][0], vy + E[s][1]];
+      out.push(thick, ...v1, vx, vy, ...v2, thick, ...v3, vx, vy, ...v2);
+    }
+  }
+  return Float64Array.from(out);
+}
+
+// ---------- state ----------
+const P = { preset: 'sun', sys: 'p3', seed: 'sun', g: 5, N: 9, t: 0.05, arcs: false, super: false, fix: false, axes: false, lines: false };
+const LIM = { g: [0, MAXG], N: [3, 14], t: [-0.4, 0.4], z: [0.3, 400], c: [-30, 30] };
+const clamp = (x, [lo, hi]) => Math.max(lo, Math.min(hi, x));
+const view = { cx: 0, cy: 0, zoom: 1 };
+let gens = [], gensKey = '', rot = null, playing = null;
+
+function tiling(g) {   // generation g of the current system and seed (cached)
+  if (P.sys === 'grid') {
+    const key = 'grid' + P.N + ',' + P.t;
+    if (gensKey !== key) { gensKey = key; gens = [pentagrid(P.N, P.t)]; }
+    return gens[0];
+  }
+  const key = P.sys + P.seed;
+  if (gensKey !== key) { gensKey = key; gens = [SYS[P.sys].seeds[P.seed].make()]; }
+  for (let i = gens.length; i <= g; i++) {
+    if (gens[i - 1].length / S * 3 > TRI_MAX) break;
+    gens.push(SYS[P.sys].deflate(gens[i - 1]));
+  }
+  return gens[Math.min(g, gens.length - 1)];
+}
+
+// tiles are counted by the midpoint of their hidden edge BC: two halves share it, a boundary half is alone
+const keyOf = (x, y) => Math.round(x * 1e7) + ',' + Math.round(y * 1e7);
+const censusCache = new WeakMap();
+function census(t) {
+  if (censusCache.has(t)) return censusCache.get(t);
+  const n = t.length / S, seen = new Map(), tri = [0, 0], tiles = [0, 0], halves = [0, 0];
+  for (let i = 0; i < n; i++) {
+    const k = t[i * S], key = keyOf((t[i * S + 3] + t[i * S + 5]) / 2, (t[i * S + 4] + t[i * S + 6]) / 2) + '|' + k;
+    tri[k]++;
+    seen.set(key, (seen.get(key) || 0) + 1);
+  }
+  for (const [key, c] of seen) { const k = +key.slice(-1); tiles[k]++; if (c === 1) halves[k]++; }
+  const res = { tri, tiles, halves, seen };
+  censusCache.set(t, res);
+  return res;
+}
+
+// fraction of inner tiles that land on a tile of the same type after rotating by θ about the origin.
+// Tile centres (midpoints of BC) are bucketed on a grid of 1/4 edge length; a match is within 1/50 edge.
+function symmetryMatch(t, theta) {
+  const n = t.length / S, cs = Math.cos(theta), sn = Math.sin(theta), h = edgeLen(t) / 4, tol = edgeLen(t) / 50;
+  const cell = (x, y) => Math.floor(x / h) + ',' + Math.floor(y / h), buckets = new Map(), centres = [];
+  let R = 0;
+  for (let i = 0; i < n; i++) {
+    const o = i * S, x = (t[o + 3] + t[o + 5]) / 2, y = (t[o + 4] + t[o + 6]) / 2, key = cell(x, y);
+    R = Math.max(R, Math.hypot(t[o + 1], t[o + 2]));
+    let b = buckets.get(key); if (!b) buckets.set(key, b = []);
+    if (!b.some(c => c[2] === t[o] && Math.hypot(c[0] - x, c[1] - y) < tol)) { const c = [x, y, t[o]]; b.push(c); centres.push(c); }
+  }
+  let hit = 0, tot = 0;
+  for (const [x, y, k] of centres) {
+    if (Math.hypot(x, y) > 0.55 * R) continue;
+    tot++;
+    const X = x * cs - y * sn, Y = x * sn + y * cs, gx = Math.floor(X / h), gy = Math.floor(Y / h);
+    search: for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++)
+      for (const c of buckets.get((gx + i) + ',' + (gy + j)) || [])
+        if (c[2] === k && Math.hypot(c[0] - X, c[1] - Y) < tol) { hit++; break search; }
+  }
+  return { hit, tot };
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+function $(id) { return document.getElementById(id); }
+let W = 1, H = 1, dirty = true, paths = null, pathsFor = null;
+const ARC_COL = ['#ff5a6e', '#7ee0ff'];
+
+function edgeLen(t) { return Math.hypot(t[1] - t[3], t[2] - t[4]); }
+// Chrome builds one huge Path2D in super-linear time, so paths are kept in chunks of CHUNK half-tiles
+const CHUNK = 1500;
+function chunked() {
+  const list = [];
+  return { list, cur: i => { if (i % CHUNK === 0) list.push(new Path2D()); return list[list.length - 1]; } };
+}
+function buildPaths(t) {
+  const n = t.length / S, fill = [chunked(), chunked()], edge = chunked(), arc = [chunked(), chunked()];
+  const { seen } = census(t), dec = P.arcs && SYS[P.sys].arcs, cnt = [0, 0];
+  for (let i = 0; i < n; i++) {
+    const o = i * S, k = t[o], ax = t[o + 1], ay = t[o + 2], bx = t[o + 3], by = t[o + 4], cx = t[o + 5], cy = t[o + 6];
+    const f = fill[k].cur(cnt[k]++); f.moveTo(ax, ay); f.lineTo(bx, by); f.lineTo(cx, cy); f.closePath();
+    const e = edge.cur(i); e.moveTo(cx, cy); e.lineTo(ax, ay); e.lineTo(bx, by);
+    // a half-tile alone on the patch boundary: draw its cut edge too
+    if (seen.get(keyOf((bx + cx) / 2, (by + cy) / 2) + '|' + k) === 1) { e.moveTo(bx, by); e.lineTo(cx, cy); }
+    if (dec) for (const [vi, fr, col] of dec[k]) {
+      const vx = t[o + vi * 2 - 1], vy = t[o + vi * 2], [u, w] = [1, 2, 3].filter(j => j !== vi);
+      const ux = t[o + u * 2 - 1] - vx, uy = t[o + u * 2] - vy, wx = t[o + w * 2 - 1] - vx, wy = t[o + w * 2] - vy;
+      const r = fr * Math.hypot(ax - bx, ay - by), a0 = Math.atan2(uy, ux), a1 = Math.atan2(wy, wx);
+      const p = arc[col].cur(i); p.moveTo(vx + r * Math.cos(a0), vy + r * Math.sin(a0));
+      p.arc(vx, vy, r, a0, a1, ux * wy - uy * wx < 0);
+    }
+  }
+  return { fill: fill.map(c => c.list), edge: edge.list, arc: arc.map(c => c.list), len: edgeLen(t) };
+}
+function edgesOnly(t) {
+  const n = t.length / S, p = chunked();
+  for (let i = 0; i < n; i++) { const o = i * S, e = p.cur(i); e.moveTo(t[o + 5], t[o + 6]); e.lineTo(t[o + 1], t[o + 2]); e.lineTo(t[o + 3], t[o + 4]); }
+  return p.list;
+}
+let superPaths = null, superFor = null;
+
+function scale() {
+  const t = tiling(0);
+  let R = 0; for (let i = 0; i < t.length / S; i++) for (const j of [1, 3, 5]) R = Math.max(R, Math.hypot(t[i * S + j], t[i * S + j + 1]));
+  const fit = 0.46 * Math.min(W, H) / Math.max(1e-9, R);
+  return fit * view.zoom * (P.fix && P.sys !== 'grid' ? PHI ** (P.g - 5) : 1);
+}
+
+function draw() {
+  const dpr = devicePixelRatio, t = tiling(P.g), sc = scale();
+  const want = gensKey + '|' + P.g + '|' + P.arcs;
+  if (pathsFor !== want) { paths = buildPaths(t); pathsFor = want; }
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0e0f16'; ctx.fillRect(0, 0, W, H);
+  const px = paths.len * sc;   // tile edge in device pixels
+  const toModel = th => { ctx.setTransform(sc, 0, 0, -sc, W / 2 - view.cx * sc, H / 2 + view.cy * sc); if (th) ctx.rotate(th); };
+  const layer = th => {
+    toModel(th);
+    for (const k of [0, 1]) { ctx.fillStyle = SYS[P.sys].fill[k]; paths.fill[k].forEach(p => ctx.fill(p)); }
+    if (px > 1.5) {
+      ctx.strokeStyle = '#101119'; ctx.lineWidth = Math.min(1.6 * dpr, 0.07 * px) / sc; ctx.lineJoin = 'round';
+      paths.edge.forEach(p => ctx.stroke(p));
+    }
+  };
+  layer(0);
+  if (rot) {   // the rotated copy as white edges: where it fits, they sit exactly on the tile edges below
+    toModel(rot.cur);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1.2 * dpr, Math.min(2.4 * dpr, 0.1 * px)) / sc;
+    paths.edge.forEach(p => ctx.stroke(p));
+  }
+  if (P.arcs && SYS[P.sys].arcs) {
+    toModel(0);
+    ctx.lineWidth = Math.max(0.8 * dpr, Math.min(3 * dpr, 0.09 * px)) / sc;
+    for (const c of [0, 1]) { ctx.strokeStyle = ARC_COL[c]; paths.arc[c].forEach(p => ctx.stroke(p)); }
+  }
+  if (P.super && P.sys !== 'grid' && P.g > 0) {
+    toModel(0);
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = Math.max(1.5 * dpr, Math.min(4 * dpr, 0.12 * px * PHI)) / sc;
+    const sk = gensKey + '|' + (P.g - 1);
+    if (superFor !== sk) { superPaths = edgesOnly(tiling(P.g - 1)); superFor = sk; }
+    superPaths.forEach(p => ctx.stroke(p));
+  }
+  if (P.lines && P.sys === 'grid') {   // the grid lives in x-space; tile vertices V ≈ (5/2)x, so draw it scaled by 5/2
+    toModel(0);
+    const g = gammas(P.t), L = 2.5 * (P.N + 1), cols = ['#ff6b6b', '#ffd166', '#06d6a0', '#4cc9f0', '#c77dff'];
+    ctx.lineWidth = 1.2 * dpr / sc;
+    E.forEach((e, j) => {
+      ctx.strokeStyle = cols[j]; ctx.beginPath();
+      for (let k = -P.N; k <= P.N; k++) {
+        const d = 2.5 * (k - g[j]), x0 = e[0] * d, y0 = e[1] * d;
+        ctx.moveTo(x0 - e[1] * L, y0 + e[0] * L); ctx.lineTo(x0 + e[1] * L, y0 - e[0] * L);
+      }
+      ctx.stroke();
+    });
+  }
+  if (P.axes) {   // the five mirror lines of the sun, at 18° + k·36°
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.3 * dpr; ctx.setLineDash([7 * dpr, 5 * dpr]);
+    const ox = W / 2 - view.cx * sc, oy = H / 2 + view.cy * sc, L = 2 * Math.hypot(W, H);
+    const base = P.sys === 'grid' ? 0 : 18;
+    for (let k = 0; k < 5; k++) {
+      const a = deg(base + 36 * k);
+      ctx.beginPath(); ctx.moveTo(ox - L * Math.cos(a), oy + L * Math.sin(a)); ctx.lineTo(ox + L * Math.cos(a), oy - L * Math.sin(a)); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+}
+
+// ---------- ratio chart ----------
+const ch = $('chart'), cctx = ch.getContext('2d');
+function ratioSeries() {
+  const out = [];
+  for (let g = 0; g <= Math.max(P.g, 1) && g <= MAXG; g++) { const c = census(tiling(g)); out.push(c.tri); }
+  return out;
+}
+function drawChart(series) {
+  const dpr = devicePixelRatio, w = ch.clientWidth * dpr, h = ch.clientHeight * dpr;
+  if (ch.width !== w || ch.height !== h) { ch.width = w; ch.height = h; }
+  cctx.clearRect(0, 0, w, h);
+  if (!series) return;
+  const lo = 0.9, hi = 2.1, pad = 12 * dpr, X = g => pad + g / MAXG * (w - 2 * pad), Y = v => h - pad - (clamp(v, [lo, hi]) - lo) / (hi - lo) * (h - 2 * pad);
+  cctx.strokeStyle = '#ffd38a'; cctx.setLineDash([4 * dpr, 3 * dpr]); cctx.lineWidth = dpr;
+  cctx.beginPath(); cctx.moveTo(0, Y(PHI)); cctx.lineTo(w, Y(PHI)); cctx.stroke(); cctx.setLineDash([]);
+  cctx.fillStyle = '#8e92a8'; cctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; cctx.textBaseline = 'top';
+  cctx.textAlign = 'right'; cctx.fillText('φ', w - 3 * dpr, Y(PHI) + 2 * dpr);
+  cctx.fillText('1', w - 3 * dpr, Y(1) - 12 * dpr); cctx.fillText('2', w - 3 * dpr, Y(2) + 1 * dpr);
+  cctx.textAlign = 'center';
+  for (let g = 0; g <= MAXG; g++) cctx.fillText(String(g), X(g), h - 11 * dpr);
+  cctx.strokeStyle = '#aab4e0'; cctx.lineWidth = 1.2 * dpr; cctx.beginPath();
+  const pts = series.map((c, g) => [g, c[0] ? c[1] / c[0] : NaN]).filter(p => p[1] > 0);
+  pts.forEach(([g, r], i) => i ? cctx.lineTo(X(g), Y(r)) : cctx.moveTo(X(g), Y(r))); cctx.stroke();
+  for (const [g, r] of pts) { cctx.fillStyle = g === P.g ? '#fff' : '#aab4e0'; cctx.beginPath(); cctx.arc(X(g), Y(r), (g === P.g ? 3.5 : 2.5) * dpr, 0, 7); cctx.fill(); }
+}
+
+// ---------- panel text (internal numbers only; nothing from the URL is written as HTML) ----------
+function span(text, cls) { const s = document.createElement(cls === 'b' ? 'b' : 'span'); s.textContent = text; return s; }
+function describe() {
+  const sys = SYS[P.sys], t = tiling(P.g), c = census(t), box = $('ratio');
+  box.textContent = '';
+  const big = P.sys === 'p2' ? 0 : 1, small = 1 - big;   // ratio is always (more common) / (less common)
+  if (P.sys === 'grid') {
+    box.append(`${sys.names[1]} ${c.tiles[1]} 块 · ${sys.names[0]} ${c.tiles[0]} 块\n粗 / 细 = `, span(c.tiles[0] ? (c.tiles[1] / c.tiles[0]).toFixed(5) : '—', 'b'), `\nφ = ${PHI.toFixed(5)}`);
+    drawChart(null);
+  } else {
+    const series = ratioSeries();
+    box.append(`代  ${sys.names[small]}（半块）  ${sys.names[big]}（半块）  比值\n`);
+    series.forEach((tr, g) => {
+      const line = `${String(g).padStart(2)}  ${String(tr[small]).padStart(8)}  ${String(tr[big]).padStart(8)}  ${tr[small] ? (tr[big] / tr[small]).toFixed(6) : '   —'}\n`;
+      box.append(g === P.g ? span(line, 'b') : line);
+    });
+    if (P.g >= gens.length) box.append('（达到半三角形上限）\n');
+    drawChart(series.map(tr => [tr[small], tr[big]]));
+  }
+  const st = $('stat'); st.textContent = '';
+  st.append(sys.name, ' · ', P.sys === 'grid' ? `N = ${P.N}, t = ${P.t.toFixed(3)}` : `第 ${Math.min(P.g, gens.length - 1)} 代`, ' · ',
+    span(String(c.tiles[1]), 'b'), ` 块${sys.names[1]} · `, span(String(c.tiles[0]), 'b'), ` 块${sys.names[0]}`);
+  const hv = c.halves[0] + c.halves[1];
+  if (hv) st.append(`（其中边界上的半块 ${hv}）`);
+  const b2 = P.sys === 'p2' ? 0 : 1;
+  st.append(' · 比值 ', span(c.tiles[1 - b2] ? (c.tiles[b2] / c.tiles[1 - b2]).toFixed(4) : '—', 'b'));
+  if (rot && rot.done) st.append(' · 旋转 ', span(rot.target + '°', 'b'), ' 后重合 ', span(rot.pct, 'b'));
+}
+
+// ---------- UI ----------
+function syncUI() {
+  const grid = P.sys === 'grid', sys = SYS[P.sys];
+  document.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === P.sys));
+  const sel = $('seed');
+  if (sel.dataset.for !== P.sys) {
+    sel.textContent = '';
+    for (const [k, s] of Object.entries(sys.seeds)) { const o = document.createElement('option'); o.value = k; o.textContent = s.name; sel.appendChild(o); }
+    sel.dataset.for = P.sys;
+  }
+  sel.value = P.seed; $('seedRow').style.display = grid ? 'none' : '';
+  $('genBox').style.display = grid ? 'none' : ''; $('genH').textContent = grid ? '五重网格' : '代数（收缩替换）'; $('gridBox').style.display = grid ? '' : 'none';
+  $('G').value = P.g; $('vG').textContent = P.g;
+  $('N').value = P.N; $('vN').textContent = P.N; $('T').value = P.t; $('vT').textContent = P.t.toFixed(3);
+  for (const k of ['arcs', 'super', 'fix', 'axes', 'lines']) $(k).checked = P[k];
+  $('arcsL').style.display = $('superL').style.display = $('fixL').style.display = grid ? 'none' : '';
+  $('linesL').style.display = grid ? '' : 'none';
+  $('chart').style.display = $('chartHelp').style.display = grid ? 'none' : '';
+  $('showHelp').textContent = grid
+    ? '五族平行线（彩色）每两条相交处对应一块菱形，菱形的两条边垂直于这两条线。网格按 5/2 倍画在砖块上。'
+    : '匹配弧线：每块砖上画两段圆弧，规定相邻砖块的弧必须接成连续的曲线，就逼出了非周期铺法。上一代：白线是上一代的砖块（超级砖块），每块都被切成本代的几块。';
+  $('play').textContent = playing ? '⏸ 停止' : '▶ 播放';
+  $('prev').disabled = P.g <= 0; $('next').disabled = P.g >= MAXG;
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+function changed(keepPreset) { if (!keepPreset) P.preset = ''; rot = null; $('sym').textContent = ''; syncUI(); dirty = true; }
+function setGen(g) { if (Number.isFinite(g)) { P.g = clamp(Math.round(g), LIM.g); changed(); } }
+
+for (const [k, s] of Object.entries(SYS)) {
+  const b = document.createElement('button'); b.textContent = s.name; b.dataset.s = k;
+  b.onclick = () => { P.sys = k; P.seed = Object.keys(s.seeds)[0]; Object.assign(view, { cx: 0, cy: 0, zoom: 1 }); changed(); };
+  $('sysBtns').appendChild(b);
+}
+$('seed').onchange = e => { if (Object.hasOwn(SYS[P.sys].seeds, e.target.value)) { P.seed = e.target.value; Object.assign(view, { cx: 0, cy: 0, zoom: 1 }); changed(); } };
+$('G').oninput = e => setGen(+e.target.value);
+$('prev').onclick = () => setGen(P.g - 1);
+$('next').onclick = () => setGen(P.g + 1);
+$('play').onclick = () => {
+  if (playing) { clearInterval(playing); playing = null; }
+  else playing = setInterval(() => { P.g = P.g >= 8 ? 0 : P.g + 1; changed(); }, 900);
+  syncUI();
+};
+$('N').oninput = e => { P.N = clamp(Math.round(+e.target.value), LIM.N); changed(); };
+$('T').oninput = e => { const x = +e.target.value; if (Number.isFinite(x)) { P.t = clamp(x, LIM.t); changed(); } };
+for (const k of ['arcs', 'super', 'fix', 'axes', 'lines']) $(k).onchange = e => { P[k] = e.target.checked; changed(true); };
+document.querySelectorAll('[data-r]').forEach(b => b.onclick = () => startRot(+b.dataset.r));
+
+function startRot(d) {
+  if (!d) { rot = null; $('sym').textContent = ''; dirty = true; describe(); return; }
+  const m = symmetryMatch(tiling(P.g), deg(d));
+  rot = { target: d, cur: 0, t0: performance.now(), done: false, pct: (100 * m.hit / Math.max(1, m.tot)).toFixed(1) + '%' };
+  $('sym').textContent = `旋转 ${d}°：中心 ${m.tot} 块里有 ${m.hit} 块落回同类砖块上，重合度 ${rot.pct}`;
+  dirty = true;
+}
+
+const PRESETS = {
+  sun: { name: 'P3 太阳 · 第 5 代', sys: 'p3', seed: 'sun', g: 5 },
+  arcs: { name: 'P3 匹配弧线', sys: 'p3', seed: 'sun', g: 6, arcs: true, z: 2.2 },
+  super: { name: 'P3 超级砖块', sys: 'p3', seed: 'sun', g: 6, super: true, z: 1.8 },
+  thick: { name: '一块粗菱形收缩 4 代', sys: 'p3', seed: 'thick', g: 4, super: true },
+  deep: { name: 'P3 第 10 代', sys: 'p3', seed: 'sun', g: 10 },
+  kite: { name: 'P2 风筝飞镖', sys: 'p2', seed: 'sun', g: 5 },
+  kitearcs: { name: 'P2 匹配弧线', sys: 'p2', seed: 'sun', g: 6, arcs: true, z: 2.2 },
+  grid: { name: '五重网格对偶', sys: 'grid', N: 9, t: 0.05, lines: true, z: 2.6 },
+  gridsym: { name: '五重网格 · t = 0', sys: 'grid', N: 12, t: 0, axes: true },
+};
+function loadPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, sys: p.sys, seed: p.seed || Object.keys(SYS[p.sys].seeds)[0], g: p.g ?? 5, N: p.N || 9, t: p.t ?? 0.05,
+    arcs: !!p.arcs, super: !!p.super, fix: false, axes: !!p.axes, lines: !!p.lines });
+  Object.assign(view, { cx: 0, cy: 0, zoom: p.z || 1 });
+  changed(true);
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button'); b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+
+// pan / zoom
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const sc = scale(), dpr = devicePixelRatio;
+  view.cx = clamp(view.cx - (e.clientX - drag[0]) * dpr / sc, LIM.c); view.cy = clamp(view.cy + (e.clientY - drag[1]) * dpr / sc, LIM.c);
+  drag = [e.clientX, e.clientY]; dirty = true;
+});
+cv.addEventListener('pointerup', () => drag = null);
+cv.addEventListener('dblclick', () => { Object.assign(view, { cx: 0, cy: 0, zoom: 1 }); dirty = true; });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), dpr = devicePixelRatio, sc = scale();
+  const mx = (e.clientX - r.left) * dpr - W / 2, my = (e.clientY - r.top) * dpr - H / 2;
+  const ax = view.cx + mx / sc, ay = view.cy - my / sc;   // keep the point under the cursor fixed
+  view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0015), LIM.z);
+  const s2 = scale(); view.cx = clamp(ax - mx / s2, LIM.c); view.cy = clamp(ay + my / s2, LIM.c);
+  dirty = true;
+}, { passive: false });
+addEventListener('keydown', e => { if (e.key === 'h' && e.target === document.body) { document.body.classList.toggle('noui'); resize(); } });
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * devicePixelRatio)); H = Math.max(1, Math.round(r.height * devicePixelRatio));
+  cv.width = W; cv.height = H; dirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=arcs  or  ?sys=p2&seed=kite&g=6&arcs=1  or  ?sys=grid&N=12&t=0&lines=1&ui=0
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+if (Object.hasOwn(PRESETS, q.get('p'))) loadPreset(q.get('p'));
+if (Object.hasOwn(SYS, q.get('sys'))) { P.sys = q.get('sys'); P.seed = Object.keys(SYS[P.sys].seeds)[0]; P.preset = ''; }
+if (Object.hasOwn(SYS[P.sys].seeds, q.get('seed'))) { P.seed = q.get('seed'); P.preset = ''; }
+num('g', x => P.g = clamp(Math.round(x), LIM.g));
+num('N', x => P.N = clamp(Math.round(x), LIM.N));
+num('t', x => P.t = clamp(x, LIM.t));
+num('z', x => view.zoom = clamp(x, LIM.z));
+num('cx', x => view.cx = clamp(x, LIM.c));
+num('cy', x => view.cy = clamp(x, LIM.c));
+for (const k of ['arcs', 'super', 'fix', 'axes', 'lines']) if (q.has(k)) P[k] = q.get(k) === '1';
+if (q.get('ui') === '0') document.body.classList.add('noui');
+const rot0 = q.get('rot');
+
+syncUI(); resize();
+if (rot0 === '72' || rot0 === '36' || rot0 === '90') startRot(+rot0);
+
+(function loop() {
+  if (rot && !rot.done) {
+    const f = Math.min(1, (performance.now() - rot.t0) / 1400);
+    rot.cur = deg(rot.target) * (f * f * (3 - 2 * f));
+    if (f >= 1) rot.done = true;
+    dirty = true;
+  }
+  if (dirty) {
+    dirty = false;
+    draw(); describe();
+    window.__ready = true;
+    window.__done = !(rot && !rot.done);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

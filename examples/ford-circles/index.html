@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ford 圆与 Farey 数列 · 分数之间的相切</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0f17; color: #e4e6ef;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(22,26,38,.93); border: 1px solid #323a52; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a9b8e6; border-top: 1px solid #323a52; padding-top: 8px; }
+  #panel a { color: #9fb4d0; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8e93a8; display: block; }
+  input[type=range] { width: 100%; }
+  input[type=text] { width: 150px; background: #1a1e2e; color: #e4e6ef; border: 1px solid #3e4566; border-radius: 4px;
+    padding: 2px 5px; font: 12px ui-monospace, Menlo, Consolas, monospace; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #282d44; color: #e4e6ef; border: 1px solid #3e4566;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #343a58; }
+  button.on { background: #4a5190; border-color: #6f78c4; }
+  button:disabled { opacity: .45; cursor: default; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #c4c8da; margin-top: 4px; white-space: pre-wrap; }
+  .info b { color: #ffd38a; font-weight: normal; }
+  .info i { color: #7fe0d0; font-style: normal; }
+  #chart { width: 100%; height: 96px; display: block; margin-top: 4px;
+    background: #141828; border: 1px solid #323a52; border-radius: 4px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; left: 0; width: 100%; display: block; }
+  #c { top: 0; height: 64%; cursor: crosshair; }
+  #t { top: 64%; height: 36%; background: #0a0d14; cursor: pointer; }
+  body.notree #c { height: 100%; }
+  body.notree #t { display: none; }
+  #stat { position: absolute; left: 10px; top: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(12,15,23,.82); color: #d4d7e4; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #stat b { color: #fff; }
+  body.noui #panel, body.noui #stat { display: none; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Ford 圆与 Farey 数列</h1>
+  <small>在每个既约分数 p/q 处放一个与 x 轴相切、半径 1/(2q²) 的圆。任意两个圆要么相切、要么分开，从不交叠；相切当且仅当 |ps − qr| = 1。</small>
+
+  <h2>选中的圆</h2>
+  <div id="sel" class="info"></div>
+  <small>单击一个圆选中它，Shift + 单击选第二个圆来比较。青色是它在 F<sub>q</sub> 里的左右邻居（与它相切的两个最大的圆），紫色虚线是两个空隙里的中位分数，也就是空隙里最大的下一个圆；白点是它和视野里其他圆的切点。</small>
+  <div class="presets"><button id="clearSel">取消选择</button></div>
+
+  <h2>Farey 数列 F<sub>n</sub></h2>
+  <div class="row">
+    <label>阶数 n <b id="vN"></b></label>
+    <input id="N" type="range" min="1" max="1000" step="1">
+  </div>
+  <div class="checks"><label><input id="fn" type="checkbox"> 只亮 F<sub>n</sub> 的圆，标出相邻两项的切点</label></div>
+  <div id="farey" class="info"></div>
+  <canvas id="chart"></canvas>
+  <small>曲线是 |F<sub>m</sub>| ÷ (3m²/π²)，m = 1…1000（横轴取对数），虚线是 1。</small>
+
+  <h2>无理数的逼近</h2>
+  <div class="presets" id="irr"></div>
+  <div class="row"><label>自定义 x <input id="xv" type="text" spellcheck="false" placeholder="例如 0.7071"></label></div>
+  <div class="presets"><button id="kPrev">◀ 上一个渐近分数</button><button id="kNext">下一个 ▶</button><button id="lineOff">隐藏竖线</button></div>
+  <div id="conv" class="info"></div>
+  <small>竖线 x = α 穿过 p/q 的圆，当且仅当 |α − p/q| &lt; 1/(2q²)，也就是表中 2q²|α − p/q| &lt; 1。Legendre 定理：这样的 p/q 一定是 α 的渐近分数；相邻两个渐近分数里至少有一个满足它，所以竖线穿过无穷多个圆。连分数的讲解见 <a href="../phyllotaxis/README.md">向日葵叶序</a>。</small>
+
+  <h2>显示</h2>
+  <div class="row">
+    <label>最小半径（像素） <b id="vR"></b></label>
+    <input id="R" type="range" min="-1.3" max="1" step="0.01">
+    <small>只画半径不小于这个值的圆，所以分母 q ≤ √(放大倍数 / 2r)，循环有上限。</small>
+  </div>
+  <div class="checks">
+    <label><input id="lab" type="checkbox"> 分数标签</label>
+    <label><input id="tree" type="checkbox"> Stern–Brocot 树</label>
+  </div>
+  <small>下方的树和上面共用横轴：每个分数正好画在它的圆的下面，第 d 行是树的第 d 层。树的路径上金色是竖线 α 的路径（大点是渐近分数），白色是选中分数的路径。</small>
+  <div id="pair" class="info"></div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">拖动平移 · 滚轮缩放 · 双击复位 · 按 h 隐藏面板</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><canvas id="t"></canvas><div id="stat"></div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+const LIM = { n: [1, 1000], r: [0.05, 10], z: [0.3, 1e11], cx: [-1, 5], x: [-1, 5], q: [1, 1e6] };
+const SC_MAX = 1e14;               // device px per unit: p/q − cx keeps sub-pixel precision up to here
+const QMAX = 4e6, CMAX = 40000;    // denominator and circle-count caps for one frame
+const CONV_QMAX = 1e6;             // convergents listed while 2q²|α − p/q| is still accurate in doubles
+const ROW = 22;                    // css px per tree row
+const SUB = '₀₁₂₃₄₅₆₇₈₉', SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+const sub = n => String(n).replace(/\d/g, d => SUB[d]);
+const sup = n => n === 1 ? '' : String(n).replace(/\d/g, d => SUP[d]);
+const frac = (p, q) => q === 1 ? String(p) : p + '/' + q;
+
+// ---------- exact integer number theory (all values stay far below 2^53) ----------
+function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); for (let i = 0; b && i < 200; i++) [a, b] = [b, a % b]; return a; }
+function modInv(a, m) {   // a·x ≡ 1 (mod m), extended Euclid
+  let r0 = a, r1 = m, s0 = 1, s1 = 0;
+  for (let i = 0; r1 && i < 200; i++) { const t = Math.floor(r0 / r1); [r0, r1] = [r1, r0 - t * r1]; [s0, s1] = [s1, s0 - t * s1]; }
+  return ((s0 % m) + m) % m;
+}
+function cfRational(p, q) {   // [a0; a1, …, ak] of p/q
+  const a = [];
+  for (let i = 0; q && i < 200; i++) { const r = ((p % q) + q) % q; a.push((p - r) / q); [p, q] = [q, r]; }
+  return a;
+}
+// left and right neighbours of p/q in F_q: a/b < p/q < c/d with pb − qa = 1 and cq − pd = 1
+function neighbours(p, q) {
+  if (q === 1) return [[p - 1, 1], [p + 1, 1]];
+  const b = modInv(((p % q) + q) % q, q), d = q - b;
+  return [[(p * b - 1) / q, b], [(p * d + 1) / q, d]];
+}
+// depth in the Stern–Brocot tree of its unit interval (integers 0, n + 1/2 is 1) and the L/R path from n + 1/2
+function sbInfo(p, q) {
+  const cf = cfRational(p, q);
+  if (cf.length === 1) return { depth: 0, path: '', cf };
+  const runs = cf.slice(1); runs[0] -= 1; runs[runs.length - 1] -= 1;
+  let path = '';
+  runs.forEach((k, i) => { if (k > 0) path += (i % 2 ? 'R' : 'L') + sup(k); });
+  return { depth: cf.slice(1).reduce((s, a) => s + a, 0) - 1, path: path || '（根）', cf };
+}
+const cfStr = cf => '[' + cf[0] + (cf.length > 1 ? '; ' + cf.slice(1).join(', ') : '') + ']';
+
+// ---------- irrational targets ----------
+const IRR = {
+  phi: { name: 'φ', v: (1 + Math.sqrt(5)) / 2, cf: Array(45).fill(1) },
+  pi: { name: 'π', v: Math.PI, cf: [3, 7, 15, 1, 292, 1, 1, 1, 2, 1, 3, 1, 14, 2, 1, 1, 2, 2, 2, 2, 1, 84, 2, 1, 1, 15, 3, 13] },
+  sqrt2: { name: '√2', v: Math.SQRT2, cf: [1, ...Array(30).fill(2)] },
+  e: { name: 'e', v: Math.E, cf: [2, 1, 2, 1, 1, 4, 1, 1, 6, 1, 1, 8, 1, 1, 10, 1, 1, 12, 1, 1, 14, 1, 1, 16] },
+};
+function cfFloat(x) {   // continued fraction of a double, stopped once a convergent equals x to double precision
+  const a = []; let y = x, p0 = 0, q0 = 1, p1 = 1, q1 = 0;   // (p₋₂, q₋₂) = (0, 1), (p₋₁, q₋₁) = (1, 0)
+  for (let i = 0; i < 40; i++) {
+    const f = Math.floor(y); a.push(f);
+    [p0, q0, p1, q1] = [p1, q1, f * p1 + p0, f * q1 + q0];
+    const r = y - f;
+    if (r < 1e-12 || q1 > CONV_QMAX || Math.abs(x - p1 / q1) <= 4e-16 * Math.max(1, Math.abs(x))) break;
+    y = 1 / r;
+  }
+  return a;
+}
+function convergents(cf) {
+  const out = []; let p0 = 1, q0 = 0, p1 = cf[0], q1 = 1;
+  out.push([p1, q1, cf[0]]);
+  for (let i = 1; i < cf.length; i++) {
+    const p = cf[i] * p1 + p0, q = cf[i] * q1 + q0;
+    if (q > CONV_QMAX) break;
+    out.push([p, q, cf[i]]); p0 = p1; q0 = q1; p1 = p; q1 = q;
+  }
+  return out;
+}
+
+// ---------- state ----------
+const P = { preset: 'overview', n: 7, fn: false, r: 0.35, lab: true, tree: true, irr: '', x: NaN, k: -1 };
+const view = { cx: 0.5, zoom: 1 };
+let A = null, B = null, conv = [], convSet = new Set(), tween = null;
+
+function setTarget(key, v) {   // key from IRR, or '' with a custom value v; NaN hides the line
+  P.irr = key; P.x = key ? IRR[key].v : v; P.k = -1;
+  conv = Number.isFinite(P.x) ? convergents(key ? IRR[key].cf : cfFloat(P.x)) : [];
+  convSet = new Set(conv.map(([p, q]) => p + '/' + q));
+}
+function setSel(f, second) {
+  if (!f) { A = B = null; return; }
+  let [p, q] = f; const g = gcd(p, q) || 1; p /= g; q /= g;
+  if (second) B = [p, q]; else A = [p, q];
+}
+
+// ---------- canvases and the shared x mapping ----------
+const cv = $('c'), ctx = cv.getContext('2d'), tv = $('t'), tctx = tv.getContext('2d');
+let W = 1, H = 1, TH = 1, dirty = true, vis = [], treeNodes = [];
+function geom() {
+  // zoom 1: [0, 1] fills the width (the two unit circles run off the top) or the height, whichever is larger
+  const dpr = devicePixelRatio, base = H - 24 * dpr, sc0 = Math.max((base - 8 * dpr) / 1.06, W / 1.16);
+  const sc = Math.min(SC_MAX, sc0 * view.zoom);
+  return { dpr, base, sc0, sc, x0: view.cx - W / 2 / sc, x1: view.cx + W / 2 / sc };
+}
+const hue = q => (205 + 48 * Math.log2(q)) % 360;   // q = 1 blue, 2 indigo, 4 magenta, 8 rose, 16 gold, …
+
+// every reduced p/q whose circle can reach the window and is at least P.r css px in radius
+function enumerate(g) {
+  const rmin = P.r * g.dpr / g.sc, Qwant = Math.floor(Math.sqrt(0.5 / rmin)), Q = Math.min(QMAX, Qwant), out = [];
+  for (let q = 1; q <= Q && out.length < 2 * CMAX; q++) {
+    const r = 0.5 / (q * q), lo = Math.ceil((g.x0 - r) * q), hi = Math.floor((g.x1 + r) * q);
+    for (let p = lo; p <= hi && out.length < 2 * CMAX; p++) if (gcd(p, q) === 1) out.push(p, q);
+  }
+  return { list: out, Q, capped: Qwant > QMAX || out.length >= 2 * CMAX };
+}
+// height of a circle's lower arc above the axis at horizontal offset dx (stable for huge radii)
+const arcH = (R, dx) => dx * dx / (R + Math.sqrt(Math.max(0, R * R - dx * dx)));
+function circlePath(c, X, R, g) {
+  if (R < 3e4) { c.moveTo(X + R, g.base - R); c.arc(X, g.base - R, R, 0, 2 * Math.PI); return; }
+  // a huge circle: its lower arc across the screen, closed above the top edge
+  const a = Math.max(-R, -X - 4), b = Math.min(R, W - X + 4), N = 96;
+  if (a >= b) return;
+  for (let i = 0; i <= N; i++) { const dx = a + (b - a) * i / N, y = g.base - arcH(R, dx); i ? c.lineTo(X + dx, y) : c.moveTo(X + dx, y); }
+  c.lineTo(X + b, -20); c.lineTo(X + a, -20); c.closePath();
+}
+const sx = (v, g) => W / 2 + (v - view.cx) * g.sc;
+
+function draw() {
+  const g = geom(), dpr = g.dpr, { list, Q, capped } = enumerate(g);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0c0f17'; ctx.fillRect(0, 0, W, H);
+  vis = [];
+  const hasX = Number.isFinite(P.x), hits = [], fsMin = 13 * dpr;
+  const labels = [];
+  for (let i = 0; i < list.length; i += 2) {
+    const p = list[i], q = list[i + 1], r = 0.5 / (q * q), X = sx(p / q, g), R = r * g.sc;
+    const near = clamp(0, -X, W - X);
+    if (Math.abs(near) > R || arcH(R, near) > g.base + 2) continue;   // nothing of it on screen
+    vis.push(p, q);
+    const dim = P.fn && q > P.n, h = hue(q);
+    ctx.beginPath(); circlePath(ctx, X, R, g);
+    // big circles get a thin wash so their outlines carry the picture; pixel-size ones are solid
+    const alpha = R < 2 * dpr ? 0.9 : clamp(0.62 - 0.07 * Math.log2(R / dpr), 0.14, 0.45);
+    ctx.fillStyle = dim ? 'rgba(42,47,62,.55)' : `hsla(${h},68%,56%,${alpha})`; ctx.fill();
+    if (R >= 2 * dpr) { ctx.strokeStyle = dim ? 'rgba(70,76,96,.8)' : `hsla(${h},80%,72%,.95)`; ctx.lineWidth = Math.min(1.4, 0.3 + R / 40) * dpr; ctx.stroke(); }
+    const hit = hasX && 2 * q * Math.abs(q * P.x - p) < 1;
+    if (hit) hits.push([p, q]);
+    if (P.lab && R >= 14 * dpr) labels.push([p, q, X, R, dim]);
+  }
+  // the vertical line x = α and the circles it passes through
+  if (hasX) {
+    const X = sx(P.x, g);
+    for (const [p, q] of hits) ring(g, p, q, '#ffd38a', 2.4);
+    ctx.strokeStyle = 'rgba(255,211,138,.85)'; ctx.lineWidth = 1.3 * dpr; ctx.setLineDash([6 * dpr, 4 * dpr]);
+    ctx.beginPath(); ctx.moveTo(X, 0); ctx.lineTo(X, g.base); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // Farey sequence F_n: consecutive terms inside the window touch; mark the touching points
+  let fPairs = 0, fOK = 0;
+  if (P.fn) {
+    const fs = [];
+    for (let i = 0; i < vis.length; i += 2) { const v = vis[i] / vis[i + 1]; if (vis[i + 1] <= P.n && v >= g.x0 && v <= g.x1) fs.push([vis[i], vis[i + 1], v]); }
+    fs.sort((a, b) => a[2] - b[2]);
+    for (let i = 1; i < fs.length && P.n <= Q; i++) {
+      const [p, q] = fs[i - 1], [r, s] = fs[i]; fPairs++;
+      if (Math.abs(p * s - q * r) === 1) { fOK++; touch(g, p, q, r, s, '#fff'); }
+    }
+  }
+  // selection: its F_q neighbours, the two mediants in the gaps, and every visible circle tangent to it
+  let tangentA = 0;
+  if (A) {
+    const [p, q] = A, [[a, b], [c, d]] = neighbours(p, q);
+    ring(g, a, b, '#62e3d4', 2.2); ring(g, c, d, '#62e3d4', 2.2);
+    ring(g, a + p, b + q, '#d59bff', 1.8, true); ring(g, p + c, q + d, '#d59bff', 1.8, true);
+    for (let i = 0; i < vis.length; i += 2) if (Math.abs(p * vis[i + 1] - q * vis[i]) === 1) { tangentA++; touch(g, p, q, vis[i], vis[i + 1], '#fff'); }
+    ring(g, p, q, '#ffffff', 3);
+  }
+  if (B) ring(g, B[0], B[1], '#ff9e5e', 3);
+  // labels on top of everything
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const [p, q, X, R, dim] of labels) {
+    const fs = Math.min(0.42 * R, 22 * dpr);
+    let lx = X, ly = g.base - R;
+    if (R >= 3e4 || ly < fs) {   // centre is off screen: put the label just under the top edge, if that is inside the circle
+      lx = clamp(X, 3 * fs, W - 3 * fs); ly = fs + 8 * dpr;
+      if (arcH(R, lx - X) > g.base - ly - fs || Math.abs(lx - X) > R) continue;
+    }
+    if (lx < -fs || lx > W + fs) continue;
+    ctx.font = `${Math.max(fsMin, fs)}px ui-monospace, Menlo, monospace`;
+    ctx.fillStyle = dim ? '#5c6480' : '#f4f1e6'; ctx.fillText(frac(p, q), lx, ly);
+  }
+  drawAxis(g);
+  if (P.tree) drawTree(g, Q);
+  describe(g, { Q, capped, hits, fPairs, fOK, tangentA });
+}
+
+function ring(g, p, q, col, w, dash) {
+  const R = 0.5 / (q * q) * g.sc, X = sx(p / q, g);
+  if (X + R < 0 || X - R > W) return;
+  ctx.beginPath(); circlePath(ctx, X, R, g);
+  ctx.strokeStyle = col; ctx.lineWidth = w * g.dpr; if (dash) ctx.setLineDash([5 * g.dpr, 4 * g.dpr]);
+  ctx.stroke(); ctx.setLineDash([]);
+}
+function touch(g, p, q, r, s, col) {   // the point where two tangent circles meet: it divides the centre line r1 : r2
+  const r1 = 0.5 / (q * q), r2 = 0.5 / (s * s), f = r1 / (r1 + r2);
+  const x = p / q + (r / s - p / q) * f, y = 2 * r1 * r2 / (r1 + r2), X = sx(x, g), Y = g.base - y * g.sc;
+  if (X < -5 || X > W + 5 || Y < -5) return;
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X, Y, 2.6 * g.dpr, 0, 7); ctx.fill();
+}
+
+function niceStep(w) { const e = 10 ** Math.floor(Math.log10(w)), m = w / e; return (m < 2 ? 1 : m < 5 ? 2 : 5) * e; }
+function drawAxis(g) {
+  const dpr = g.dpr;
+  ctx.fillStyle = '#0c0f17'; ctx.fillRect(0, g.base, W, H - g.base);
+  ctx.strokeStyle = '#59627f'; ctx.lineWidth = dpr; ctx.beginPath(); ctx.moveTo(0, g.base + 0.5); ctx.lineTo(W, g.base + 0.5); ctx.stroke();
+  // deep zooms need long labels like 3.1415926536: widen the step until the labels fit side by side
+  let st = niceStep((g.x1 - g.x0) / 7), dig = 0;
+  for (let i = 0; i < 4; i++) {
+    dig = Math.max(0, Math.ceil(-Math.log10(st) - 1e-9));
+    const wLab = (String(Math.trunc(Math.abs(view.cx))).length + dig + 3) * 6.8 * dpr + 14 * dpr;
+    if (st * g.sc >= wLab) break;
+    const need = wLab / g.sc, e = 10 ** Math.floor(Math.log10(need)), m = need / e;   // round the step up to 1, 2, 5 × 10ᵏ
+    st = (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e;
+  }
+  ctx.fillStyle = '#8e93a8'; ctx.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let k = Math.ceil(g.x0 / st), i = 0; k * st <= g.x1 && i < 40; k++, i++) {
+    const X = sx(k * st, g);
+    ctx.fillRect(X, g.base, dpr, 4 * dpr); ctx.fillText((k * st).toFixed(Math.min(dig, 14)), X, g.base + 6 * dpr);
+  }
+}
+
+// ---------- Stern–Brocot tree on the same x axis ----------
+// the shallowest fraction in [x0, x1]: walk down from (n, n+1), taking whole runs of L or R moves at once
+function treeLayout(g, Q) {
+  const { x0, x1 } = g, rows = Math.max(2, Math.floor((TH / g.dpr - 12) / ROW)), nodes = [], stack = [];
+  const nlo = Math.floor(x0), nhi = Math.floor(x1);
+  let d0 = 0;
+  if (nhi > nlo || nlo === x0) {
+    for (let n = Math.ceil(x0); n <= nhi; n++) nodes.push({ p: n, q: 1, d: 0, lo: [n - 1, 1], hi: [n + 1, 1], par: [] });
+    for (let n = nlo; n <= nhi; n++) stack.push([n, 1, n + 1, 1, 1]);
+  } else {
+    let a = nlo, b = 1, c = nlo + 1, d = 1, dep = 1;
+    for (let i = 0; i < 400; i++) {
+      const m = (a + c) / (b + d);
+      if (m < x0) {         // the next K mediants all lie left of the window: L ← L + K·R
+        const lt = j => a + j * c < x0 * (b + j * d);
+        let K = Math.max(1, Math.ceil((x0 * b - a) / (c - x0 * d)) - 1);
+        for (let t = 0; t < 4 && K > 1 && !lt(K); t++) K--;
+        for (let t = 0; t < 4 && lt(K + 1); t++) K++;
+        a += K * c; b += K * d; dep += K;
+      } else if (m > x1) {  // R ← R + K·L
+        const gt = j => c + j * a > x1 * (d + j * b);
+        let K = Math.max(1, Math.ceil((c - x1 * d) / (x1 * b - a)) - 1);
+        for (let t = 0; t < 4 && K > 1 && !gt(K); t++) K--;
+        for (let t = 0; t < 4 && gt(K + 1); t++) K++;
+        c += K * a; d += K * b; dep += K;
+      } else break;
+    }
+    d0 = dep; stack.push([a, b, c, d, dep]);
+  }
+  const dmax = d0 + rows - 1, pad = 0.02 * (x1 - x0);
+  for (let it = 0; stack.length && it < 20000; it++) {
+    const [a, b, c, d, dep] = stack.pop();
+    if (dep > dmax || b + d > Q || c / d <= x0 - pad || a / b >= x1 + pad) continue;   // only fractions whose circle is drawn
+    const p = a + c, q = b + d, v = p / q;
+    if (v >= x0 - pad && v <= x1 + pad) nodes.push({ p, q, d: dep, lo: [a, b], hi: [c, d], par: b === d ? [[a, b], [c, d]] : [b > d ? [a, b] : [c, d]] });
+    stack.push([a, b, p, q, dep + 1], [p, q, c, d, dep + 1]);
+  }
+  return { nodes, d0, rows };
+}
+const onPathFrac = (n, f) => f && ((n.p === f[0] && n.q === f[1]) || (n.lo[0] * f[1] < f[0] * n.lo[1] && f[0] * n.hi[1] < n.hi[0] * f[1]));
+const onPathX = n => Number.isFinite(P.x) && n.lo[0] / n.lo[1] < P.x && P.x < n.hi[0] / n.hi[1];
+
+function drawTree(g, Q) {
+  const dpr = g.dpr, L = treeLayout(g, Q), Y = d => (8 + (d - L.d0) * ROW + ROW / 2) * dpr;
+  tctx.setTransform(1, 0, 0, 1, 0, 0); tctx.fillStyle = '#0a0d14'; tctx.fillRect(0, 0, W, TH);
+  tctx.fillStyle = '#2a3148'; tctx.fillRect(0, 0, W, dpr);
+  tctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; tctx.textBaseline = 'middle'; tctx.textAlign = 'left';
+  tctx.fillStyle = '#4c5470';
+  for (let d = L.d0; d < L.d0 + L.rows; d++) tctx.fillText('d=' + d, 4 * dpr, Y(d));
+  treeNodes = [];
+  for (const n of L.nodes) {
+    n.X = sx(n.p / n.q, g); n.Y = Y(n.d); n.onA = onPathFrac(n, A); n.onX = onPathX(n);
+    treeNodes.push(n);
+  }
+  // edges to the parent (the neighbour with the larger denominator; both for n + 1/2)
+  for (const n of treeNodes) for (const [pp, pq] of n.par) {
+    const pd = pq === 1 ? 0 : sbInfo(pp, pq).depth, X2 = sx(pp / pq, g), Y2 = pd < L.d0 ? -2 : Y(pd);
+    tctx.strokeStyle = n.onX ? '#ffd38a' : n.onA ? '#ffffff' : 'rgba(110,120,155,.55)';   // a path node's parent is on the path too
+    tctx.lineWidth = (n.onX || n.onA ? 1.8 : 1) * dpr;
+    tctx.beginPath(); tctx.moveTo(n.X, n.Y); tctx.lineTo(X2, Y2); tctx.stroke();
+  }
+  tctx.textAlign = 'center'; tctx.textBaseline = 'top';
+  for (const n of treeNodes) {
+    const isConv = n.onX && convSet.has(n.p + '/' + n.q), isA = A && n.p === A[0] && n.q === A[1];
+    const rad = (isConv || isA ? 4.5 : 3) * dpr;
+    tctx.fillStyle = isA ? '#fff' : n.onX ? '#ffd38a' : P.fn && n.q > P.n ? '#353b4e' : `hsl(${hue(n.q)},62%,60%)`;
+    tctx.beginPath(); tctx.arc(n.X, n.Y, rad, 0, 7); tctx.fill();
+    if (isConv) { tctx.strokeStyle = '#0a0d14'; tctx.lineWidth = 1.2 * dpr; tctx.stroke(); }
+    const room = Math.min(n.p / n.q - n.lo[0] / n.lo[1], n.hi[0] / n.hi[1] - n.p / n.q) * g.sc;
+    const txt = frac(n.p, n.q);
+    if (room > txt.length * 3.4 * dpr || isA || isConv) {
+      tctx.fillStyle = isA ? '#fff' : n.onX ? '#ffd38a' : '#9aa1b8'; tctx.fillText(txt, n.X, n.Y + rad + 1 * dpr);
+    }
+  }
+}
+
+// ---------- panel text (internal numbers only, written with textContent) ----------
+function put(el, parts) {   // parts: strings, or [text, 'b' | 'i'] for highlighted spans
+  el.textContent = '';
+  for (const s of parts) {
+    if (typeof s === 'string') el.append(s);
+    else { const e = document.createElement(s[1]); e.textContent = s[0]; el.append(e); }
+  }
+}
+const fmtE = x => x === 0 ? '0' : Math.abs(x) >= 1e-3 && Math.abs(x) < 1e4 ? x.toPrecision(4) : x.toExponential(2);
+
+// Farey counts by brute force over 0 ≤ p ≤ q ≤ n, and 1 + Σφ(k) by a sieve
+const PHI = new Array(1001).fill(0).map((_, i) => i);
+for (let i = 2; i <= 1000; i++) if (PHI[i] === i) for (let j = i; j <= 1000; j += i) PHI[j] -= PHI[j] / i;
+const FCOUNT = [1]; for (let m = 1; m <= 1000; m++) FCOUNT.push(FCOUNT[m - 1] + PHI[m]);   // |F_m| = 1 + Σφ(k)
+let bruteFor = -1, brute = 0;
+function bruteCount(n) {
+  if (bruteFor === n) return brute;
+  let c = 0; for (let q = 1; q <= n; q++) for (let p = 0; p <= q; p++) if (gcd(p, q) === 1) c++;
+  bruteFor = n; return brute = c;
+}
+function fareyHead(n, k) {   // first k terms of F_n from the next-term rule
+  const out = [[0, 1]]; let a = 0, b = 1, c = 1, d = n;
+  for (let i = 0; i < k - 1 && a < b; i++) { out.push([c, d]); const t = Math.floor((n + b) / d); [a, b, c, d] = [c, d, t * c - a, t * d - b]; }
+  return out;
+}
+
+function describe(g, s) {
+  // selection
+  const sel = $('sel');
+  if (!A) put(sel, ['（未选中）单击上方的任意一个圆']);
+  else {
+    const [p, q] = A, [[a, b], [c, d]] = neighbours(p, q), info = sbInfo(p, q);
+    const parts = [['p/q = ' + frac(p, q), 'b'], ` ≈ ${(p / q).toPrecision(10)}\n半径 1/(2q²) = ${fmtE(0.5 / (q * q))}\n连分数 ${cfStr(info.cf)}\nStern–Brocot 第 ${info.depth} 层，从 ${Math.floor(p / q)}+1/2 起的路径 ${info.path}\n`,
+      `F${sub(q)} 里的邻居 `, [frac(a, b), 'i'], ' 与 ', [frac(c, d), 'i'], `：p·${b} − q·${a} = ${p * b - q * a}，${c}·q − ${d}·p = ${c * q - d * p}\n`,
+      '空隙里的中位分数 ', [frac(a + p, b + q), 'b'], ' 与 ', [frac(p + c, q + d), 'b'], '\n',
+      `视野中与它相切的圆 ${s.tangentA} 个`];
+    if (B) {
+      const [r, t] = B, D = p * t - q * r, r1 = 0.5 / (q * q), r2 = 0.5 / (t * t);
+      const geo = (p / q - r / t) ** 2 * q * q * t * t - 1;   // (d² − (r₁+r₂)²)·q²s²: should equal Δ² − 1
+      const dist = Math.hypot(p / q - r / t, r1 - r2), gap = (D * D - 1) / (q * q * t * t) / (dist + r1 + r2);
+      parts.push(`\n\n第二个圆 `, [frac(r, t), 'b'], `：Δ = ps − qr = ${D}\n(d² − (r₁+r₂)²)·q²s² = ${geo.toFixed(6)}，Δ² − 1 = ${D * D - 1}\n`,
+        [D === 0 ? '同一个圆' : Math.abs(D) === 1 ? '相切' : `相离，两圆之间的空隙 ${fmtE(gap)}`, 'b']);
+    }
+    put(sel, parts);
+  }
+  // Farey
+  const n = P.n, cnt = bruteCount(n), est = 3 * n * n / Math.PI ** 2;
+  const head = n <= 9 ? fareyHead(n, FCOUNT[n]) : fareyHead(n, 6);
+  const list = n <= 9 ? head.map(f => frac(...f)).join(' ')
+    : head.map(f => frac(...f)).join(' ') + ' … ' + head.slice(0, 6).reverse().map(([a, b]) => frac(b - a, b)).join(' ');
+  const fparts = ['|F' + sub(n) + '| = ', [String(cnt), 'b'], `（逐个数 0 ≤ p ≤ q ≤ n 且 gcd = 1）\n1 + φ(1) + … + φ(${n}) = ${FCOUNT[n]}\n3n²/π² = ${est.toFixed(2)}，比值 ${(cnt / est).toFixed(4)}\nF${sub(n)} = ${list}`];
+  if (P.fn && n > s.Q) fparts.push(`\n（n 大于视野里画出的最大分母 ${s.Q}，放大才能看到切点）`);
+  else if (P.fn) fparts.push(`\n视野内相邻两项 ${s.fPairs} 对，其中 |ps − qr| = 1 的 `, [String(s.fOK), 'b'], ' 对');
+  put($('farey'), fparts);
+  drawChart();
+  // convergents
+  const cbox = $('conv');
+  if (!Number.isFinite(P.x)) put(cbox, ['（竖线已隐藏）选一个无理数或输入 x']);
+  else {
+    const name = P.irr ? IRR[P.irr].name : 'x';
+    const parts = [`α = ${name} = ${P.x.toPrecision(12)}\n连分数 ${cfStr((P.irr ? IRR[P.irr].cf : cfFloat(P.x)).slice(0, 14))}${(P.irr ? IRR[P.irr].cf : cfFloat(P.x)).length > 14 ? '…' : ''}\n\n k  a_k  p_k/q_k           2q²|α−p/q|  圆\n`];
+    conv.forEach(([p, q, a], k) => {
+      const m = 2 * q * Math.abs(q * P.x - p);
+      const line = `${String(k).padStart(2)}  ${String(a).padStart(3)}  ${frac(p, q).padEnd(18)} ${m.toFixed(4).padStart(9)}  ${m < 1 ? '穿过' : '不穿过'}\n`;
+      parts.push(k === P.k ? [line, 'b'] : line);
+    });
+    const inConv = s.hits.filter(([p, q]) => convSet.has(p + '/' + q)).length, big = s.hits.filter(([, q]) => q > CONV_QMAX).length;
+    parts.push(`\n视野中竖线穿过 `, [String(s.hits.length), 'b'], ' 个圆，其中是渐近分数的 ', [String(inConv), 'b'], ' 个' + (big ? `（${big} 个分母超出表格）` : ''));
+    put(cbox, parts);
+  }
+  $('kPrev').disabled = !conv.length || P.k <= 0; $('kNext').disabled = !conv.length || P.k >= conv.length - 1;
+  // pairwise check of the largest visible circles: tangent, disjoint, or (never) overlapping
+  const M = Math.min(vis.length / 2, 800);
+  let tan = 0, dis = 0, ovl = 0, agree = 0;
+  for (let i = 0; i < M; i++) for (let j = i + 1; j < M; j++) {
+    const p = vis[2 * i], q = vis[2 * i + 1], r = vis[2 * j], t = vis[2 * j + 1];
+    const G = (p / q - r / t) ** 2 * q * q * t * t - 1, D = Math.abs(p * t - q * r);
+    if (Math.abs(G) < 0.5) { tan++; if (D === 1) agree++; } else if (G > 0) dis++; else ovl++;
+  }
+  put($('pair'), [`视野里最大的 ${M} 个圆两两检验（共 ${M * (M - 1) / 2} 对，按坐标算距离）：\n相切 `, [String(tan), 'b'], ' 对（全部 |ps − qr| = 1：', [String(agree), 'b'], ' 对）· 相离 ', [String(dis), 'b'], ' 对 · 交叠 ', [String(ovl), 'b'], ' 对']);
+  // status line
+  put($('stat'), [[String(vis.length / 2), 'b'], ` 个圆 · 分母 q ≤ ${s.Q}${s.capped ? '（到上限）' : ''} · 视野宽 ${fmtE(g.x1 - g.x0)} · 放大 ×${fmtE(g.sc / g.sc0)}`]);
+}
+
+const ch = $('chart'), cctx = ch.getContext('2d');
+function drawChart() {
+  const dpr = devicePixelRatio, w = ch.clientWidth * dpr, h = ch.clientHeight * dpr;
+  if (!w || !h) return;
+  if (ch.width !== w || ch.height !== h) { ch.width = w; ch.height = h; }
+  cctx.clearRect(0, 0, w, h);
+  const lo = 0.95, hi = 1.35, pad = 10 * dpr, X = m => pad + Math.log(m) / Math.log(1000) * (w - 2 * pad);
+  const Yv = v => h - pad - (clamp(v, lo, hi) - lo) / (hi - lo) * (h - 2 * pad);
+  cctx.strokeStyle = '#ffd38a'; cctx.setLineDash([4 * dpr, 3 * dpr]); cctx.lineWidth = dpr;
+  cctx.beginPath(); cctx.moveTo(0, Yv(1)); cctx.lineTo(w, Yv(1)); cctx.stroke(); cctx.setLineDash([]);
+  cctx.fillStyle = '#8e93a8'; cctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; cctx.textBaseline = 'top'; cctx.textAlign = 'center';
+  for (const m of [1, 10, 100, 1000]) cctx.fillText(String(m), clamp(X(m), 10 * dpr, w - 14 * dpr), h - 11 * dpr);
+  cctx.textAlign = 'right'; cctx.fillText('1', w - 3 * dpr, Yv(1) + 2 * dpr); cctx.fillText('1.3', w - 3 * dpr, Yv(1.3) - 4 * dpr);
+  cctx.strokeStyle = '#a9b8e6'; cctx.lineWidth = 1.2 * dpr; cctx.beginPath();
+  for (let m = 1; m <= 1000; m++) { const x = X(m), y = Yv(FCOUNT[m] / (3 * m * m / Math.PI ** 2)); m > 1 ? cctx.lineTo(x, y) : cctx.moveTo(x, y); }
+  cctx.stroke();
+  const r = FCOUNT[P.n] / (3 * P.n * P.n / Math.PI ** 2);
+  cctx.fillStyle = '#fff'; cctx.beginPath(); cctx.arc(X(P.n), Yv(r), 3.5 * dpr, 0, 7); cctx.fill();
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('N').value = P.n; $('vN').textContent = P.n;
+  $('R').value = Math.log10(P.r); $('vR').textContent = P.r.toFixed(2);
+  $('fn').checked = P.fn; $('lab').checked = P.lab; $('tree').checked = P.tree;
+  document.body.classList.toggle('notree', !P.tree);
+  document.querySelectorAll('[data-x]').forEach(b => b.classList.toggle('on', b.dataset.x === P.irr && Number.isFinite(P.x)));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+function changed(keepPreset) { if (!keepPreset) P.preset = ''; syncUI(); dirty = true; }
+function setZoom(z) { const g = geom(); view.zoom = clamp(z, LIM.z[0], Math.min(LIM.z[1], SC_MAX / g.sc0)); }
+
+// zoom so that the k-th convergent's circle is about half the height of the view, centred on α
+function goConv(k, animate) {
+  if (!conv.length) return;
+  P.k = clamp(k, 0, conv.length - 1);
+  const [p, q] = conv[P.k], g = geom();
+  A = [p, q]; B = null;
+  const z = clamp(0.5 * g.base * q * q / g.sc0, LIM.z[0], Math.min(LIM.z[1], SC_MAX / g.sc0));
+  if (animate) tween = { c0: view.cx, c1: P.x, z0: Math.log(view.zoom), z1: Math.log(z), t0: performance.now() };
+  else { view.cx = P.x; view.zoom = z; }
+  changed(true);
+}
+
+for (const [k, t] of Object.entries(IRR)) {
+  const b = document.createElement('button'); b.textContent = t.name; b.dataset.x = k;
+  b.onclick = () => { setTarget(k); goConv(2, true); P.preset = ''; syncUI(); };
+  $('irr').appendChild(b);
+}
+$('xv').onchange = e => {
+  const v = Number(e.target.value.trim().replace(/[−–]/g, '-'));
+  if (!Number.isFinite(v)) return;
+  setTarget('', clamp(v, ...LIM.x)); e.target.value = String(P.x); goConv(Math.min(2, conv.length - 1), true); P.preset = ''; syncUI();
+};
+$('kPrev').onclick = () => goConv(P.k - 1, true);
+$('kNext').onclick = () => goConv(P.k + 1, true);
+$('lineOff').onclick = () => { setTarget('', NaN); changed(); };
+$('clearSel').onclick = () => { A = B = null; changed(); };
+$('N').oninput = e => { P.n = clamp(Math.round(+e.target.value), ...LIM.n); changed(); };
+$('R').oninput = e => { P.r = clamp(10 ** +e.target.value, ...LIM.r); changed(); };
+for (const k of ['fn', 'lab']) $(k).onchange = e => { P[k] = e.target.checked; changed(); };
+$('tree').onchange = e => { P.tree = e.target.checked; syncUI(); resize(); };
+
+const PRESETS = {
+  overview: { name: '全景 [0, 1]', cx: 0.5, z: 1 },
+  f5: { name: 'F₅ 的相切链', cx: 0.5, z: 1, n: 5, fn: true },
+  half: { name: '1/2 的邻居与中位数', cx: 0.5, z: 3.2, a: [1, 2] },
+  pair: { name: '相离：1/3 与 3/7', cx: 0.39, z: 9, a: [1, 3], b: [3, 7] },
+  phi: { name: 'φ 与 Fibonacci 分数', x: 'phi', k: 6 },
+  pi: { name: 'π 与 355/113', x: 'pi', k: 3 },
+  pi333: { name: 'π：333/106 没被穿过', x: 'pi', k: 2 },
+  sqrt2: { name: '√2 与 99/70', x: 'sqrt2', k: 5 },
+  e: { name: 'e 与 193/71', x: 'e', k: 7 },
+};
+function loadPreset(key) {
+  const p = PRESETS[key];
+  tween = null;
+  Object.assign(P, { preset: key, n: p.n || P.n, fn: !!p.fn });
+  A = B = null; if (p.a) setSel(p.a); if (p.b) setSel(p.b, true);
+  setTarget(p.x || '', NaN);
+  if (p.x) goConv(p.k, false); else { view.cx = p.cx; setZoom(p.z); }
+  changed(true);
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button'); b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+
+// ---------- pointer: pan, zoom, click to select (both canvases share the x axis) ----------
+let drag = null;
+function pick(e, canvas) {
+  const r = canvas.getBoundingClientRect(), dpr = devicePixelRatio, X = (e.clientX - r.left) * dpr, Yp = (e.clientY - r.top) * dpr, g = geom();
+  if (canvas === tv) {
+    let best = null, bd = 10 * dpr;
+    for (const n of treeNodes) { const d = Math.hypot(n.X - X, n.Y - Yp); if (d < bd) { bd = d; best = [n.p, n.q]; } }
+    return best;
+  }
+  const wx = view.cx + (X - W / 2) / g.sc, wy = (g.base - Yp) / g.sc;
+  let best = null, bd = 6 * dpr / g.sc;
+  for (let i = 0; i < vis.length; i += 2) {
+    const p = vis[i], q = vis[i + 1], rr = 0.5 / (q * q), d = Math.hypot(wx - p / q, wy - rr) - rr;
+    if (d < bd) { bd = d; best = [p, q]; }
+  }
+  return best;
+}
+for (const el of [cv, tv]) {
+  el.addEventListener('pointerdown', e => { drag = { x: e.clientX, x0: e.clientX, y0: e.clientY }; el.setPointerCapture(e.pointerId); });
+  el.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const g = geom();
+    view.cx = clamp(view.cx - (e.clientX - drag.x) * g.dpr / g.sc, ...LIM.cx); drag.x = e.clientX; tween = null; dirty = true;
+  });
+  el.addEventListener('pointerup', e => {
+    if (drag && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 4) {
+      const f = pick(e, el);
+      if (f) { setSel(f, e.shiftKey && A); if (!e.shiftKey) B = null; P.k = conv.findIndex(([p, q]) => p === A[0] && q === A[1]); changed(); }
+    }
+    drag = null;
+  });
+  el.addEventListener('dblclick', () => { tween = null; view.cx = 0.5; setZoom(1); dirty = true; });
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = el.getBoundingClientRect(), g = geom(), mx = (e.clientX - r.left) * g.dpr - W / 2, ax = view.cx + mx / g.sc;
+    tween = null; setZoom(view.zoom * Math.exp(-e.deltaY * 0.0015));
+    view.cx = clamp(ax - mx / geom().sc, ...LIM.cx); dirty = true;
+  }, { passive: false });
+}
+addEventListener('keydown', e => { if (e.key === 'h' && e.target === document.body) { document.body.classList.toggle('noui'); resize(); } });
+
+function resize() {
+  const dpr = devicePixelRatio, r = cv.getBoundingClientRect(), rt = tv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * dpr)); H = Math.max(1, Math.round(r.height * dpr)); TH = Math.max(1, Math.round(rt.height * dpr));
+  cv.width = W; cv.height = H; tv.width = W; tv.height = TH; dirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=pi  or  ?x=phi&k=5  or  ?xv=0.7071&n=8&fn=1  or  ?ap=2&aq=5&bp=3&bq=7&z=12&cx=0.41  or  ?ui=0&tree=0
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const int = (k, lo, hi) => { const x = Number(q.get(k)); return q.has(k) && Number.isFinite(x) ? clamp(Math.round(x), lo, hi) : null; };
+if (q.get('ui') === '0') document.body.classList.add('noui');
+if (q.get('tree') === '0') P.tree = false;
+syncUI(); resize();
+setTarget('', NaN);
+if (Object.hasOwn(PRESETS, q.get('p'))) loadPreset(q.get('p'));
+if (Object.hasOwn(IRR, q.get('x'))) { setTarget(q.get('x')); P.preset = ''; }
+num('xv', x => { setTarget('', clamp(x, ...LIM.x)); P.preset = ''; });
+num('n', x => { P.n = clamp(Math.round(x), ...LIM.n); });
+num('r', x => { P.r = clamp(x, ...LIM.r); });
+for (const k of ['fn', 'lab']) if (q.has(k)) P[k] = q.get(k) === '1';
+const kq = int('k', 0, 60); if (kq !== null && conv.length) goConv(kq, false);
+num('z', x => setZoom(x));
+num('cx', x => { view.cx = clamp(x, ...LIM.cx); });
+for (const s of ['a', 'b']) {
+  const qq = int(s + 'q', ...LIM.q), pp = qq && int(s + 'p', LIM.cx[0] * qq - 1, LIM.cx[1] * qq + 1);
+  if (qq && pp !== null) setSel([pp, qq], s === 'b' && A);
+}
+if (['z', 'cx', 'n', 'fn', 'ap', 'bp', 'xv', 'x', 'r'].some(k => q.has(k))) P.preset = '';
+syncUI();
+
+(function loop() {
+  if (tween) {
+    const f = Math.min(1, (performance.now() - tween.t0) / 800), s = f * f * (3 - 2 * f);
+    view.zoom = Math.exp(tween.z0 + (tween.z1 - tween.z0) * s); view.cx = tween.c0 + (tween.c1 - tween.c0) * s;
+    if (f >= 1) tween = null;
+    dirty = true;
+  }
+  if (dirty) {
+    dirty = false;
+    draw();
+    window.__ready = true;
+    window.__done = !tween;
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

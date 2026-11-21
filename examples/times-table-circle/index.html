@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>圆上的乘法表 · 心形线</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d16; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(26,26,42,.93); border: 1px solid #3a3756; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #c0b4e6; border-top: 1px solid #3a3756; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #9590a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2c2b44; color: #e6e6e6; border: 1px solid #45425f;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #3a3858; }
+  button.on { background: #5a4a8a; border-color: #8270bf; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #b4aec8; margin-top: 4px; white-space: pre-wrap; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
+  #stat { position: absolute; left: 10px; top: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(11,13,22,.8); color: #d4d0e6; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #view { left: 0; top: 0; }   /* after @media so ui=0 also wins on small screens */
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>圆上的乘法表 · 心形线</h1>
+  <small>圆上等距放 N 个点，编号 0 … N−1。对每个 i，从点 i 连一条弦到点 <span class="mono">k·i mod N</span>。k = 2 时这些弦围出一个心形线，k = 3 是肾形线，一般的 k 是有 k − 1 个尖点的外摆线。</small>
+
+  <h2>乘法表</h2>
+  <div class="row">
+    <label>点数 N <b id="vN"></b></label>
+    <input id="N" type="range" min="2" max="1000" step="1">
+  </div>
+  <div class="row">
+    <label>乘数 k <b id="vK"></b></label>
+    <input id="K" type="range" min="0" max="100" step="0.01">
+    <small>k 可以不是整数：弦 i → k·i 的终点在角度 2π·k·i/N 处，k 连续变化时图形连续变形。</small>
+  </div>
+  <div class="row">
+    <label>动画速度 <b id="vV"></b></label>
+    <input id="V" type="range" min="0.01" max="2" step="0.01">
+  </div>
+  <div class="presets"><button id="play">▶ 让 k 动起来</button><button id="snap">取整 k</button><button id="km">k − 1</button><button id="kp">k + 1</button></div>
+  <div class="row">
+    <label>弦的亮度 <b id="vA"></b></label>
+    <input id="A" type="range" min="0.05" max="1" step="0.01">
+  </div>
+
+  <h2>着色</h2>
+  <div class="presets" id="cols"></div>
+  <small>“按环”只在 k 为整数时有意义：同一个环（以及流进这个环的点）的弦用同一种颜色。k 不是整数时自动改用“按位置”。</small>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="env" type="checkbox"> 包络线（外摆线）</label>
+    <label><input id="roll" type="checkbox"> 滚圆</label>
+    <label><input id="mb" type="checkbox"> 叠加 Mandelbrot 集</label>
+    <label><input id="light" type="checkbox"> 光线（入射 + 反射）</label>
+    <label><input id="half" type="checkbox"> 只画一半的点</label>
+    <label><input id="lab" type="checkbox"> 点的编号</label>
+  </div>
+  <div class="info" id="envInfo"></div>
+
+  <h2>模 N 的乘法结构</h2>
+  <div class="info" id="modInfo"></div>
+  <small>单击圆上的一个点，高亮它的轨道 i → k·i → k²·i → …（再点空白处取消）。</small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+const TAU = 2 * Math.PI;
+const RANGE = { n: [2, 1000], k: [0, 100], v: [0.01, 2], a: [0.05, 1], t: [0, 1] };
+const ENV_S = 2400;          // samples of the envelope curve
+const MB_MAX_SIDE = 640;     // most pixels on the long side of the Mandelbrot overlay
+const MB_ITER = 80;
+const MB_KMAX = 10;          // the overlay draws z^k + c for integer k in 2 … MB_KMAX
+const LABEL_MAX_N = 72;      // point numbers are drawn only up to this many points
+const ALIAS = 0.1;           // above k/N = ALIAS the chords are too sparse to trace the envelope
+const COLS = { cycle: '按环', hue: '按位置', len: '按弦长', mono: '单色' };
+const NAMES = { 0: '所有弦都指向点 0', 1: '每条弦退化成一个点', 2: '心形线（1 个尖点）', 3: '肾形线（2 个尖点）' };
+
+const PRESETS = {
+  cardioid: { name: '心形线 k=2', n: 200, k: 2, col: 'hue' },
+  nephroid: { name: '肾形线 k=3', n: 200, k: 3, col: 'hue' },
+  k4: { name: 'k=4（3 尖点）', n: 300, k: 4, col: 'hue' },
+  k9: { name: 'k=9（8 尖点）', n: 400, k: 9, col: 'hue' },
+  k51: { name: 'k=51, N=100', n: 100, k: 51, col: 'len' },
+  k34: { name: 'k=34, N=100', n: 100, k: 34, col: 'len' },
+  k99: { name: 'k=99, N=200', n: 200, k: 99, col: 'len' },
+  cyc31: { name: '环：N=31, k=2', n: 31, k: 2, col: 'cycle', lab: true },
+  cyc24: { name: '尾巴：N=24, k=2', n: 24, k: 2, col: 'cycle', lab: true },
+  cyc97: { name: '单环：N=97, k=10', n: 97, k: 10, col: 'cycle' },
+  mand: { name: 'Mandelbrot 主心形', n: 300, k: 2, col: 'hue', mb: true, env: true },
+  mand3: { name: 'z³+c 主分量', n: 300, k: 3, col: 'hue', mb: true, env: true },
+  roll: { name: '滚圆与切线', n: 160, k: 2, col: 'hue', env: true, roll: true },
+  cup: { name: '咖啡杯：点光源 k=2', n: 240, k: 2, col: 'mono', light: true },
+  sun: { name: '咖啡杯：平行光 k=3', n: 400, k: 3, col: 'mono', light: true, half: true },
+};
+const DEF = { n: 200, k: 2, col: 'hue', env: false, roll: false, mb: false, light: false, half: false, lab: false };
+const P = { preset: 'cardioid', v: 0.2, a: 0.55, ...DEF };
+let running = false, rollT = 0.18, sel = -1;
+
+const $ = id => document.getElementById(id);
+const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a; };
+const isInt = k => Math.abs(k - Math.round(k)) < 1e-9;
+
+// ---------- modular structure of i → k·i mod N (integer k) ----------
+// f is a function on {0 … N−1}; every orbit ends in a cycle. comp[i] = id of the cycle that i flows into.
+let mod = null;
+function buildMod() {
+  if (!isInt(P.k)) { mod = null; return; }
+  const N = P.n, km = ((Math.round(P.k) % N) + N) % N, f = i => (km * i) % N;
+  const comp = new Int32Array(N).fill(-1), onCycle = new Uint8Array(N), state = new Uint8Array(N); // 0 new, 1 on stack, 2 done
+  const cycles = [];
+  for (let s = 0; s < N; s++) {
+    if (state[s]) continue;
+    const path = [];
+    let x = s;
+    while (state[x] === 0) { state[x] = 1; path.push(x); x = f(x); }   // at most N steps in total over all s
+    let id;
+    if (state[x] === 1) {               // found a new cycle: the part of the path from x on
+      const at = path.indexOf(x), cyc = path.slice(at);
+      id = cycles.length; cycles.push(cyc);
+      for (const y of cyc) { onCycle[y] = 1; comp[y] = id; }
+    } else id = comp[x];
+    for (const y of path) { state[y] = 2; if (comp[y] < 0) comp[y] = id; }
+  }
+  const g = gcd(km, N);
+  let ord = 0;
+  if (g === 1 && N > 1) { let p = km % N; for (let m = 1; m <= N; m++) { if (p === 1 % N) { ord = m; break; } p = (p * km) % N; } }
+  if (N === 1) ord = 1;
+  const nOn = onCycle.reduce((s, v) => s + v, 0);
+  mod = { N, km, g, ord, comp, cycles, nOn, f };
+}
+function orbitOf(i) {
+  if (!mod) return [];
+  const seen = new Set(), out = [];
+  let x = i;
+  for (let s = 0; s <= mod.N && !seen.has(x); s++) { seen.add(x); out.push(x); x = mod.f(x); }
+  out.push(x);                          // the first repeated point closes the loop
+  return out;
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1;
+// world coordinates are the complex plane with the circle |w| = 1; the screen is rotated by π so point 0 sits on the left
+const layout = () => ({ U: Math.min(W, H) * 0.44, ox: W / 2, oy: H / 2 });
+let L = layout();
+const X = wx => L.ox - L.U * wx, Y = wy => L.oy + L.U * wy;
+const ang = i => TAU * i / P.n;
+
+function hsl(h, s, l, a) { return `hsla(${(h * 360).toFixed(1)},${s}%,${l}%,${a})`; }
+function chordColor(i, x0, y0, x1, y1) {
+  const a = P.a;
+  if (P.light) return `rgba(255,214,140,${a})`;
+  switch (effCol()) {
+    case 'cycle': return hsl((mod.comp[i] * 0.6180339887 + 0.08) % 1, 85, 62, a);
+    case 'len': return hsl(0.62 - 0.55 * Math.hypot(x1 - x0, y1 - y0) / 2, 80, 62, a);
+    case 'mono': return `rgba(220,215,255,${a})`;
+    default: return hsl(i / P.n, 80, 62, a);
+  }
+}
+const effCol = () => (P.col === 'cycle' && !mod) ? 'hue' : P.col;
+
+// ---------- Mandelbrot / Multibrot overlay ----------
+// The main component of z^k + c is bounded by c = s·e^{iπ/(k−1)}·w, w on the times-k envelope, s = (k+1)/k · k^{−1/(k−1)}.
+const mbCanvas = document.createElement('canvas'), mbCtx = mbCanvas.getContext('2d');
+let mbKey = '';
+const mbK = () => (P.mb && isInt(P.k) && Math.round(P.k) >= 2 && Math.round(P.k) <= MB_KMAX) ? Math.round(P.k) : 0;
+function mbMap(k) {
+  const s = (k + 1) / k * Math.pow(k, -1 / (k - 1)), r = Math.PI / (k - 1);
+  return { a: s * Math.cos(r), b: s * Math.sin(r) };
+}
+function buildMB(k) {
+  // one overlay pixel covers sc × sc screen pixels, so the long side stays within MB_MAX_SIDE
+  const sc = Math.max(1, Math.max(W, H) / MB_MAX_SIDE), mw = Math.ceil(W / sc), mh = Math.ceil(H / sc);
+  const key = `${k}|${W}|${H}`;
+  if (key === mbKey) return;
+  mbKey = key; mbCanvas.width = mw; mbCanvas.height = mh;
+  const img = mbCtx.createImageData(mw, mh), d = img.data, { a, b } = mbMap(k);
+  for (let py = 0; py < mh; py++) for (let px = 0; px < mw; px++) {
+    const wx = (L.ox - (px + 0.5) * sc) / L.U, wy = ((py + 0.5) * sc - L.oy) / L.U;   // inverse of X(), Y()
+    const cr = a * wx - b * wy, ci = a * wy + b * wx;
+    let zr = 0, zi = 0, it = 0;
+    for (; it < MB_ITER; it++) {
+      let pr = zr, pi = zi;                       // z^k by repeated multiplication
+      for (let j = 1; j < k; j++) { const t = pr * zr - pi * zi; pi = pr * zi + pi * zr; pr = t; }
+      zr = pr + cr; zi = pi + ci;
+      if (zr * zr + zi * zi > 4) break;
+    }
+    const o = 4 * (py * mw + px);
+    if (it === MB_ITER) { d[o] = 60; d[o + 1] = 100; d[o + 2] = 200; d[o + 3] = 150; }
+    else { d[o] = 70; d[o + 1] = 100; d[o + 2] = 190; d[o + 3] = Math.round(90 * (it / MB_ITER) ** 0.7); }
+  }
+  mbCtx.putImageData(img, 0, 0);
+}
+
+function draw() {
+  const dpr = devicePixelRatio, N = P.n, k = P.k;
+  L = layout();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#0b0d16'; ctx.fillRect(0, 0, W, H);
+  ctx.lineCap = ctx.lineJoin = 'round';
+
+  if (P.light) {   // the inside of a cup
+    const g = ctx.createRadialGradient(L.ox, L.oy, 0, L.ox, L.oy, L.U);
+    g.addColorStop(0, '#2a1a10'); g.addColorStop(1, '#170e08');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(L.ox, L.oy, L.U, 0, TAU); ctx.fill();
+  }
+  const mk = mbK();
+  if (mk) {
+    buildMB(mk);
+    ctx.imageSmoothingEnabled = true;
+    const sc = Math.max(1, Math.max(W, H) / MB_MAX_SIDE);
+    ctx.drawImage(mbCanvas, 0, 0, mbCanvas.width * sc, mbCanvas.height * sc);
+  }
+  ctx.strokeStyle = P.light ? '#8a6a4a' : '#4a4766'; ctx.lineWidth = (P.light ? 3 : 1.2) * dpr;
+  ctx.beginPath(); ctx.arc(L.ox, L.oy, L.U, 0, TAU); ctx.stroke();
+
+  const use = i => !P.half || Math.sin(ang(i)) > 1e-12;
+  // incident rays: the chord into point i that reflects into the chord i → k·i comes from angle (2 − k)·θ_i
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = (N <= 60 ? 1.6 : 1) * dpr;
+  if (P.light) {
+    ctx.strokeStyle = `rgba(150,180,255,${0.3 * P.a})`; ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      if (!use(i)) continue;
+      const t = ang(i), s = (2 - k) * t;
+      ctx.moveTo(X(Math.cos(s)), Y(Math.sin(s))); ctx.lineTo(X(Math.cos(t)), Y(Math.sin(t)));
+    }
+    ctx.stroke();
+  }
+  // the chords i → k·i
+  const one = P.light || effCol() === 'mono';
+  if (one) { ctx.strokeStyle = chordColor(0, 0, 0, 0, 0); ctx.beginPath(); }
+  for (let i = 0; i < N; i++) {
+    if (!use(i)) continue;
+    const t = ang(i), x0 = Math.cos(t), y0 = Math.sin(t), x1 = Math.cos(k * t), y1 = Math.sin(k * t);
+    if (!one) { ctx.strokeStyle = chordColor(i, x0, y0, x1, y1); ctx.beginPath(); }
+    ctx.moveTo(X(x0), Y(y0)); ctx.lineTo(X(x1), Y(y1));
+    if (!one) ctx.stroke();
+  }
+  if (one) ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+
+  // points
+  if (N <= 400) {
+    ctx.fillStyle = '#d8d4ee';
+    const r = (N <= 60 ? 2.6 : 1.5) * dpr;
+    for (let i = 0; i < N; i++) { ctx.beginPath(); ctx.arc(X(Math.cos(ang(i))), Y(Math.sin(ang(i))), r, 0, TAU); ctx.fill(); }
+  }
+  if (P.lab && N <= LABEL_MAX_N) {
+    ctx.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#9d98b8';
+    for (let i = 0; i < N; i++) { const t = ang(i); ctx.fillText(String(i), X(1.075 * Math.cos(t)), Y(1.075 * Math.sin(t))); }
+  }
+
+  // envelope: E(θ) = (k·e^{iθ} + e^{ikθ}) / (k + 1)
+  if (P.env) {
+    ctx.strokeStyle = '#ff6b8b'; ctx.lineWidth = 2 * dpr; ctx.beginPath();
+    for (let s = 0; s <= ENV_S; s++) {
+      const t = TAU * s / ENV_S, ex = (k * Math.cos(t) + Math.cos(k * t)) / (k + 1), ey = (k * Math.sin(t) + Math.sin(k * t)) / (k + 1);
+      s ? ctx.lineTo(X(ex), Y(ey)) : ctx.moveTo(X(ex), Y(ey));
+    }
+    ctx.stroke();
+  }
+  // rolling circle: radius 1/(k+1) rolling on the fixed circle of radius (k−1)/(k+1)
+  if (P.roll) {
+    const t = TAU * rollT, r = 1 / (k + 1), R = (k - 1) / (k + 1);
+    const cx = k / (k + 1) * Math.cos(t), cy = k / (k + 1) * Math.sin(t);
+    const px = cx + r * Math.cos(k * t), py = cy + r * Math.sin(k * t);
+    ctx.lineWidth = 1.5 * dpr;
+    if (R > 0) { ctx.strokeStyle = 'rgba(140,200,255,.8)'; ctx.beginPath(); ctx.arc(L.ox, L.oy, R * L.U, 0, TAU); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(140,255,190,.9)'; ctx.beginPath(); ctx.arc(X(cx), Y(cy), r * L.U, 0, TAU); ctx.stroke();
+    // the tangent chord e^{it} → e^{ikt}, which passes through the tracing point
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr; ctx.beginPath();
+    ctx.moveTo(X(Math.cos(t)), Y(Math.sin(t))); ctx.lineTo(X(Math.cos(k * t)), Y(Math.sin(k * t))); ctx.stroke();
+    ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.strokeStyle = 'rgba(140,255,190,.9)'; ctx.lineWidth = 1 * dpr; ctx.beginPath();
+    ctx.moveTo(X(R * Math.cos(t)), Y(R * Math.sin(t))); ctx.lineTo(X(Math.cos(t)), Y(Math.sin(t))); ctx.stroke(); ctx.setLineDash([]);
+    const dot = (x, y, c, rr) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(X(x), Y(y), rr * dpr, 0, TAU); ctx.fill(); };
+    dot(R * Math.cos(t), R * Math.sin(t), '#8cc8ff', 3.5);    // contact point
+    dot(Math.cos(t), Math.sin(t), '#ffffff', 3.5);            // antipode of the contact point = e^{it}
+    dot(px, py, '#ff6b8b', 5);                                // tracing point = tangent point
+  }
+
+  // orbit of the selected point
+  if (sel >= 0 && mod) {
+    const orb = orbitOf(sel);
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5 * dpr; ctx.beginPath();
+    orb.forEach((j, s) => { const x = X(Math.cos(ang(j))), y = Y(Math.sin(ang(j))); s ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for (const j of orb) { ctx.beginPath(); ctx.arc(X(Math.cos(ang(j))), Y(Math.sin(ang(j))), 4.5 * dpr, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#ff6b8b'; ctx.beginPath(); ctx.arc(X(Math.cos(ang(sel))), Y(Math.sin(ang(sel))), 6 * dpr, 0, TAU); ctx.fill();
+  }
+}
+
+// ---------- text ----------
+const fmtK = k => isInt(k) ? String(Math.round(k)) : k.toFixed(2);
+function curveName(k) {
+  if (!isInt(k)) return `k = ${k.toFixed(2)} 不是整数：外摆线不闭合`;
+  const m = Math.round(k);
+  if (m >= ALIAS * P.n) return `k/N = ${(m / P.n).toFixed(2)}：弦太稀，看到的是混叠图案`;
+  return NAMES[m] || `外摆线（${m - 1} 个尖点）`;
+}
+function cycleSummary(m) {
+  const cnt = new Map();
+  for (const c of m.cycles) cnt.set(c.length, (cnt.get(c.length) || 0) + 1);
+  return [...cnt.entries()].sort((a, b) => b[0] - a[0]).map(([len, c]) => `长度 ${len} × ${c}`).join('，');
+}
+function showList(a, max) { return a.length > max ? a.slice(0, max).join(' → ') + ' → …' : a.join(' → '); }
+function drawInfo() {
+  const k = P.k, N = P.n;
+  const R = (k - 1) / (k + 1), r = 1 / (k + 1);
+  $('envInfo').textContent = `包络 E(θ) = (k·e^{iθ} + e^{ikθ}) / (k + 1)\n固定圆半径 (k−1)/(k+1) = ${R.toFixed(4)}，滚圆半径 1/(k+1) = ${r.toFixed(4)}\n` +
+    (k >= ALIAS * N ? `注意 k/N ≥ ${ALIAS}：相邻两条弦的终点相差 ${(360 * k / N % 360).toFixed(0)}°，弦已不再贴着包络线\n` : '') +
+    (P.mb ? (mbK() ? `Mandelbrot：z^${mbK()} + c，点 w 处画的是 c = (${mbMap(mbK()).a.toFixed(4)} ${mbMap(mbK()).b < 0 ? '−' : '+'} ${Math.abs(mbMap(mbK()).b).toFixed(4)}i)·w` : `Mandelbrot 叠加只在 k 为 2–${MB_KMAX} 的整数时显示`) : '');
+  let t;
+  if (!mod) t = `k = ${k.toFixed(2)} 不是整数：弦的终点不落在点上，没有模 N 的结构。`;
+  else {
+    t = `k = ${Math.round(k)} ≡ ${mod.km} (mod ${N})，gcd(k, N) = ${mod.g}\n`;
+    if (mod.g === 1) {
+      t += `i → k·i 是 {0…${N - 1}} 的一个置换\nk 的乘法阶 ord_N(k) = ${mod.ord}：k^${mod.ord} ≡ 1 (mod ${N})\n`;
+    } else {
+      t += `k 与 N 不互素，i → k·i 不是置换\n${mod.nOn} 个点在环上，${N - mod.nOn} 个点在流向环的“尾巴”上\n`;
+    }
+    t += `共 ${mod.cycles.length} 个环：${cycleSummary(mod)}`;
+    if (sel >= 0) { const o = orbitOf(sel); t += `\n点 ${sel} 的轨道：${showList(o, 16)}（${o.length - 1} 步回到已到过的点）`; }
+  }
+  $('modInfo').textContent = t;
+  $('stat').textContent = `N = ${N} · k = ${fmtK(k)} · ${curveName(k)}` + (running ? ' · k 在变' : '');
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('N').value = P.n; $('vN').textContent = P.n;
+  $('K').value = P.k; $('vK').textContent = P.k.toFixed(2);
+  $('V').value = P.v; $('vV').textContent = P.v.toFixed(2) + ' / 秒';
+  $('A').value = P.a; $('vA').textContent = P.a.toFixed(2);
+  for (const id of ['env', 'roll', 'mb', 'light', 'half', 'lab']) $(id).checked = P[id];
+  $('play').textContent = running ? '⏸ 停住 k' : '▶ 让 k 动起来';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  document.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === P.col));
+}
+function changed() { buildMod(); if (sel >= P.n) sel = -1; syncUI(); drawInfo(); }
+function applyPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, DEF, { n: p.n, k: p.k, col: p.col }, p); delete P.name;
+  P.preset = key; sel = -1; running = false;
+}
+function button(parent, text, attr, val, fn) {
+  const b = document.createElement('button');
+  b.textContent = text; b.dataset[attr] = val; b.onclick = fn; $(parent).appendChild(b);
+}
+for (const [key, p] of Object.entries(PRESETS)) button('pre', p.name, 'p', key, () => { applyPreset(key); changed(); });
+for (const [key, name] of Object.entries(COLS)) button('cols', name, 'c', key, () => { P.col = key; changed(); });
+
+const setK = k => { P.k = Math.min(RANGE.k[1], Math.max(RANGE.k[0], Math.round(k * 100) / 100)); P.preset = ''; changed(); };
+$('N').oninput = e => { P.n = Math.round(+e.target.value); P.preset = ''; changed(); };
+$('K').oninput = e => setK(+e.target.value);
+$('V').oninput = e => { P.v = +e.target.value; syncUI(); };
+$('A').oninput = e => { P.a = +e.target.value; syncUI(); };
+$('play').onclick = () => { running = !running; P.preset = ''; changed(); };
+$('snap').onclick = () => { running = false; setK(Math.round(P.k)); };
+$('km').onclick = () => { running = false; setK(Math.round(P.k) - 1); };
+$('kp').onclick = () => { running = false; setK(Math.round(P.k) + 1); };
+for (const id of ['env', 'roll', 'mb', 'light', 'half', 'lab']) $(id).onchange = e => { P[id] = e.target.checked; changed(); };
+
+// click a point on the circle to follow its orbit
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect(), dpr = devicePixelRatio;
+  const sx = (e.clientX - r.left) * dpr, sy = (e.clientY - r.top) * dpr;
+  const wx = (L.ox - sx) / L.U, wy = (sy - L.oy) / L.U;
+  let best = -1, bd = 14 * dpr;
+  if (mod) for (let i = 0; i < P.n; i++) {
+    const d = Math.hypot(Math.cos(ang(i)) - wx, Math.sin(ang(i)) - wy) * L.U;
+    if (d < bd) { bd = d; best = i; }
+  }
+  sel = best; drawInfo();
+});
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * devicePixelRatio)); H = Math.max(1, Math.round(r.height * devicePixelRatio));
+  cv.width = W; cv.height = H; L = layout();
+}
+addEventListener('resize', resize);
+addEventListener('keydown', e => { if (e.key === 'h' && e.target === document.body) { document.body.classList.toggle('noui'); resize(); } });
+
+// URL params, e.g. ?p=cyc31 or ?n=200&k=2&mb=1&env=1. Numbers are clamped to the slider ranges; names must be in the tables.
+const q = new URLSearchParams(location.search);
+const num = (key, lo, hi, f) => { if (q.has(key) && q.get(key).trim() !== '') { const x = Number(q.get(key)); if (Number.isFinite(x)) f(Math.min(hi, Math.max(lo, x))); } };
+const flag = (key, f) => num(key, 0, 1, x => f(Math.round(x) === 1));
+const pick = (key, table, f) => { const v = q.get(key); if (v !== null && Object.hasOwn(table, v)) f(v); };
+applyPreset('cardioid');
+pick('p', PRESETS, applyPreset);
+if (q.has('n') || q.has('k')) P.preset = '';
+num('n', ...RANGE.n, x => P.n = Math.round(x));
+num('k', ...RANGE.k, x => P.k = Math.round(x * 100) / 100);
+num('v', ...RANGE.v, x => P.v = x);
+num('a', ...RANGE.a, x => P.a = x);
+num('t', ...RANGE.t, x => rollT = x);
+pick('col', COLS, v => P.col = v);
+for (const id of ['env', 'roll', 'mb', 'light', 'half', 'lab']) flag(id, v => P[id] = v);
+flag('run', v => running = v);
+if (q.get('ui') === '0') document.body.classList.add('noui');
+buildMod();
+num('sel', 0, P.n - 1, x => sel = mod ? Math.round(x) : -1);
+resize(); syncUI(); drawInfo();
+
+// test hook: read-only views of the state
+window.__tt = { P, mod: () => mod && { N: mod.N, km: mod.km, g: mod.g, ord: mod.ord, nOn: mod.nOn, cycles: mod.cycles.map(c => c.slice()) },
+  orbit: i => orbitOf(i), sel: () => sel, running: () => running, mbMap,
+  envelope: t => [(P.k * Math.cos(t) + Math.cos(P.k * t)) / (P.k + 1), (P.k * Math.sin(t) + Math.sin(P.k * t)) / (P.k + 1)] };
+
+let last = performance.now(), lastInfo = 0;
+(function loop(now) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  if (running) {
+    P.k += P.v * dt;
+    if (P.k > RANGE.k[1]) P.k = RANGE.k[0];
+    if (mod) buildMod();
+    if (now - lastInfo > 100) { lastInfo = now; syncUI(); drawInfo(); }
+  }
+  if (P.roll) rollT = (rollT + dt / 12) % 1;
+  draw(); window.__ready = true;
+  requestAnimationFrame(loop);
+})(last);
+</script>
+</body>
+</html>

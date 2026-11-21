@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>渗流 · 概率的临界点</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0f14; color: #e3e8ee;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(21,28,37,.93); border: 1px solid #33414f; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #9cc3d9; border-top: 1px solid #33414f; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8c98a5; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #26313d; color: #e3e8ee; border: 1px solid #3a4858;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #31404f; }
+  button.on { background: #2f5f7a; border-color: #4f8aab; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #b3bfcb; margin-top: 4px; white-space: pre-wrap; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(11,15,20,.8); color: #cdd6df; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; top: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>渗流 · 概率的临界点</h1>
+  <small>L×L 的方格里，每个格点以概率 p 打开。相邻的开格点连成团簇。p 越过临界值 <span class="mono">p_c ≈ 0.5927</span> 的那一刻，会突然出现一个从上边连到下边的团簇：水能渗过咖啡粉，火能烧穿森林。</small>
+
+  <h2>模型</h2>
+  <div class="presets"><button id="mSite">格点渗流（开格点）</button><button id="mBond">键渗流（开边）</button></div>
+  <small id="modeNote"></small>
+  <div class="row">
+    <label>概率 p <b id="vProb"></b></label>
+    <input id="Prob" type="range" min="0" max="1" step="any">
+    <small>每个格点（或边）有一个固定的随机数 u，u &lt; p 就打开。拖动 p 只是移动门槛，同一组随机数连续地长出团簇。</small>
+  </div>
+  <div class="presets"><button id="toPc">p = p_c</button><button id="pDown">p − 0.01</button><button id="pUp">p + 0.01</button></div>
+  <div class="row">
+    <label>边长 L <b id="vL"></b></label>
+    <input id="Lsl" type="range" min="3" max="10" step="0.01">
+  </div>
+  <div class="row">
+    <label>种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+    <small>同一个种子、同样的参数，画面和测量结果完全相同</small>
+  </div>
+
+  <h2>显示</h2>
+  <div class="presets" id="colors"></div>
+  <div class="checks">
+    <label><input id="plots" type="checkbox"> 测量曲线</label>
+    <label><input id="box" type="checkbox"> 分形维数（盒计数）</label>
+    <label id="dualRow"><input id="dual" type="checkbox"> 对偶格</label>
+  </div>
+  <div class="info" id="info"></div>
+  <small id="dualNote">对偶格：每条关闭的边，画一条和它垂直相交的红色对偶边。上下连不通，当且仅当红边从左连到右（亮红色）。L ≤ 80 左右、格子画得够大时才显示。</small>
+  <small>金色是跨越团簇（同时碰到上边和下边）。“平均团簇大小”是随机挑一个不在最大团簇里的开格点，它所在团簇的平均格点数。</small>
+
+  <h2>测量：L = 16, 32, 64, 128, 256</h2>
+  <div class="row">
+    <label>每个 L 的样本数 <b id="vT"></b></label>
+    <input id="T" type="range" min="1.69897" max="3.69897" step="0.01">
+  </div>
+  <div class="presets"><button id="mPlay">⏸ 暂停</button><button id="mRestart">↺ 重新测量</button></div>
+  <div class="info" id="mInfo"></div>
+  <small>每个样本按随机数从小到大逐个打开格点（Newman–Ziff 算法），一遍扫过就得到所有 p 上的结果。</small>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">鼠标停在格点上可以看它所在团簇的大小</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+const LIM = { L: [8, 1024], prob: [0, 1], seed: [1, 999], T: [50, 5000] };   // slider ranges; URL params are clamped to these
+const PC = { site: 0.59274605, bond: 0.5 };   // site: Jacobsen 2015; bond: Kesten 1980 (exact)
+const SIZES = [16, 32, 64, 128, 256];          // lattice sizes of the measurement
+const SCOL = ['#6fb3ff', '#4dd0e1', '#7cd67a', '#ffd166', '#ff7a6b'];
+const D_EXACT = 91 / 48;
+const MODES = { site: '格点渗流', bond: '键渗流' };
+const COLORS = { all: '按团簇着色', span: '只看跨越团簇', big: '只看最大团簇' };
+const PRESETS = {
+  pc: { name: '临界点 p = p_c', mode: 'site', L: 256, prob: PC.site, color: 'all' },
+  low: { name: 'p = 0.50 · 小团簇', mode: 'site', L: 256, prob: 0.5, color: 'all' },
+  high: { name: 'p = 0.65 · 连成一片', mode: 'site', L: 256, prob: 0.65, color: 'all' },
+  small: { name: '小格子 L = 24', mode: 'site', L: 24, prob: 0.6, color: 'all' },
+  span: { name: '只看跨越团簇 L = 512', mode: 'site', L: 512, prob: PC.site, color: 'span' },
+  fractal: { name: '分形 L = 1024', mode: 'site', L: 1024, prob: PC.site, color: 'big', box: true },
+  bond: { name: '键渗流 p = 1/2', mode: 'bond', L: 32, prob: 0.5, color: 'all' },
+  dual: { name: '对偶格：被一条红路挡住', mode: 'bond', L: 40, prob: 0.5, color: 'span', dual: true },
+  bondBig: { name: '键渗流 L = 512', mode: 'bond', L: 512, prob: 0.5, color: 'span' },
+};
+
+const P = { preset: 'pc', mode: 'site', L: 256, prob: PC.site, seed: 12, color: 'all', plots: true, box: false, dual: false, T: 400 };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+
+function rng(seed) {   // mulberry32: same seed, same lattice
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+
+// sfc32 (128-bit state) for the measurement: one run draws up to ~10⁹ numbers per size, too many for a 32-bit state
+function sfc32(seed) {
+  const m = rng(seed); let a = m() * 4294967296 | 0, b = m() * 4294967296 | 0, c = m() * 4294967296 | 0, d = 1;
+  const next = () => { const t = (a + b | 0) + d | 0; d = d + 1 | 0; a = b ^ b >>> 9; b = c + (c << 3) | 0;
+    c = c << 21 | c >>> 11; c = c + t | 0; return (t >>> 0) / 4294967296; };
+  for (let i = 0; i < 15; i++) next();
+  return next;
+}
+
+// ---------- union–find (union by size, path halving: depth ≤ log₂ N) ----------
+function find(par, i) {
+  while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; }
+  return i;
+}
+// merges the clusters of a and b; fl holds bit 1 = touches the top row, bit 2 = touches the bottom row
+function union(par, sz, fl, a, b) {
+  let ra = find(par, a), rb = find(par, b);
+  if (ra === rb) return ra;
+  if (sz[ra] < sz[rb]) { const t = ra; ra = rb; rb = t; }
+  par[rb] = ra; sz[ra] += sz[rb]; fl[ra] |= fl[rb];
+  return ra;
+}
+
+// ---------- the displayed lattice ----------
+// Site mode: u[i] for every site. Bond mode: uh[i] for the edge (x,y)–(x+1,y), uv[i] for (x,y)–(x,y+1).
+const Lat = { key: '', L: 0, u: null, uh: null, uv: null, par: null, sz: null, fl: null, open: null, root: null, bonds: null };
+function ensureLattice() {
+  const key = `${P.mode}/${P.L}/${P.seed}`;
+  if (Lat.key === key) return;
+  const L = P.L, N = L * L, r = rng(P.seed);
+  Lat.key = key; Lat.L = L;
+  if (P.mode === 'site') { Lat.u = new Float32Array(N); for (let i = 0; i < N; i++) Lat.u[i] = r(); Lat.uh = Lat.uv = null; }
+  else {
+    Lat.uh = new Float32Array(N); Lat.uv = new Float32Array(N); Lat.u = null;
+    for (let i = 0; i < N; i++) { Lat.uh[i] = r(); Lat.uv[i] = r(); }
+  }
+  Lat.par = new Int32Array(N); Lat.sz = new Int32Array(N); Lat.fl = new Uint8Array(N);
+  Lat.open = new Uint8Array(N); Lat.root = new Int32Array(N); Lat.bonds = new Uint8Array(N);
+}
+
+const S = {};   // statistics of the displayed lattice
+function compute() {
+  ensureLattice();
+  const L = P.L, N = L * L, p = P.prob, { par, sz, fl, open, root, bonds } = Lat;
+  for (let i = 0; i < N; i++) { par[i] = i; sz[i] = 1; fl[i] = (i < L ? 1 : 0) | (i >= N - L ? 2 : 0); }
+  if (P.mode === 'site') {
+    const u = Lat.u;
+    for (let i = 0; i < N; i++) open[i] = u[i] < p ? 1 : 0;
+    for (let y = 0, i = 0; y < L; y++) for (let x = 0; x < L; x++, i++) {
+      if (!open[i]) continue;
+      if (x + 1 < L && open[i + 1]) union(par, sz, fl, i, i + 1);
+      if (y + 1 < L && open[i + L]) union(par, sz, fl, i, i + L);
+    }
+  } else {
+    open.fill(1);
+    for (let y = 0, i = 0; y < L; y++) for (let x = 0; x < L; x++, i++) {
+      let b = 0;
+      if (x + 1 < L && Lat.uh[i] < p) { b |= 1; union(par, sz, fl, i, i + 1); }
+      if (y + 1 < L && Lat.uv[i] < p) { b |= 2; union(par, sz, fl, i, i + L); }
+      bonds[i] = b;
+    }
+  }
+  let nOpen = 0, clusters = 0, big = -1, span = -1, nSpan = 0, Q = 0, nBonds = 0;
+  for (let i = 0; i < N; i++) {
+    root[i] = open[i] ? find(par, i) : -1;
+    if (!open[i]) continue;
+    nOpen++;
+    if (P.mode === 'bond') nBonds += (bonds[i] & 1) + (bonds[i] >> 1);
+    if (root[i] !== i) continue;
+    clusters++; Q += sz[i] * sz[i];
+    if (big < 0 || sz[i] > sz[big]) big = i;
+    if (fl[i] === 3) { nSpan++; if (span < 0 || sz[i] > sz[span]) span = i; }
+  }
+  const sBig = big < 0 ? 0 : sz[big];
+  Object.assign(S, { N, nOpen, nBonds, clusters, big, sBig, span, nSpan, sSpan: span < 0 ? 0 : sz[span],
+    mean: nOpen > sBig ? (Q - sBig * sBig) / (nOpen - sBig) : 0,
+    bigCut: Math.max(4, Math.round(N / 2000)) });   // clusters below this size are drawn muted
+  S.box = P.box ? boxCount(span >= 0 ? span : big) : null;
+  S.dual = P.mode === 'bond' ? dualCrossing() : null;
+  dirtyImg = true;
+}
+
+// Dual lattice of the bond model: dual site (dx, dy), dx = 0…L, dy = 0…L−2, sits at (dx − ½, dy + ½).
+// A dual edge is open exactly when the primal edge it crosses is closed. Columns dx = 0 and dx = L are the
+// left and right walls; the top and bottom primal rows are walls too, so their horizontal edges have no partner.
+function dualCrossing() {
+  const L = P.L, W1 = L + 1, n = W1 * (L - 1), b = Lat.bonds;
+  if (L < 2) return null;
+  const par = new Int32Array(n), sz = new Int32Array(n), fl = new Uint8Array(n), edges = [];
+  for (let i = 0; i < n; i++) { par[i] = i; sz[i] = 1; const dx = i % W1; fl[i] = (dx === 0 ? 1 : 0) | (dx === L ? 2 : 0); }
+  for (let dy = 0; dy < L - 1; dy++) for (let dx = 0; dx < L; dx++)          // crosses the vertical edge (dx, dy)–(dx, dy+1)
+    if (!(b[dy * L + dx] & 2)) { const a = dy * W1 + dx; union(par, sz, fl, a, a + 1); edges.push(a, a + 1); }
+  for (let dy = 0; dy < L - 2; dy++) for (let dx = 1; dx < L; dx++)          // crosses the horizontal edge (dx−1, dy+1)–(dx, dy+1)
+    if (!(b[(dy + 1) * L + dx - 1] & 1)) { const a = dy * W1 + dx; union(par, sz, fl, a, a + W1); edges.push(a, a + W1); }
+  let cross = -1;
+  for (let i = 0; i < n; i++) if (par[i] === i && fl[i] === 3 && (cross < 0 || sz[i] > sz[cross])) cross = i;
+  return { W1, edges, cross, par, crossing: cross >= 0 };
+}
+
+// box counting on one cluster: N(ε) = number of ε×ε boxes that contain one of its sites, ε = 1, 2, 4, …
+function boxCount(rt) {
+  if (rt < 0) return null;
+  let s = P.L, m = new Uint8Array(s * s), eps = 1;
+  for (let i = 0; i < m.length; i++) m[i] = Lat.root[i] === rt ? 1 : 0;
+  const pts = [];
+  for (let lev = 0; lev <= 11; lev++) {
+    let n = 0; for (let i = 0; i < m.length; i++) n += m[i];
+    pts.push({ eps, r: P.L / eps, n });
+    if (s === 1) break;
+    const ns = Math.ceil(s / 2), nm = new Uint8Array(ns * ns);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) if (m[y * s + x]) nm[(y >> 1) * ns + (x >> 1)] = 1;
+    m = nm; s = ns; eps *= 2;
+  }
+  // fit over 4 ≤ ε ≤ L/8: at ε = 1, 2 a box sees single sites (local slope 1.3, 1.75), at ε > L/8 only a few boxes remain
+  const fit = pts.filter(q => q.eps >= 4 && q.eps <= P.L / 8);
+  return { pts, fit, D: fit.length >= 3 ? slope(fit.map(q => Math.log(q.r)), fit.map(q => Math.log(q.n))) : NaN };
+}
+function slope(xs, ys) {
+  const n = xs.length, mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0; for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+  return sxy / sxx;
+}
+
+// ---------- measurement: Newman–Ziff sweeps ----------
+// One sample = one random order of the N sites (or 2L(L−1) bonds) plus N sorted uniforms u₁ < u₂ < … .
+// Opening them one by one gives the configuration {u < p} for every p on the grid in a single pass.
+const GRID = (() => { const g = []; for (let i = 0; i <= 400; i++) g.push(i / 400); return g; })();
+const Mz = { key: '', grid: null, iPc: 0, per: [], running: true, done: false };
+function measReset() {
+  const pc = PC[P.mode], g = GRID.slice();
+  if (!g.includes(pc)) { g.push(pc); g.sort((a, b) => a - b); }
+  Mz.key = `${P.mode}/${P.seed}`; Mz.grid = Float64Array.from(g); Mz.iPc = g.indexOf(pc); Mz.done = false;
+  Mz.per = SIZES.map((L, k) => {
+    const N = L * L, M = P.mode === 'site' ? N : 2 * L * (L - 1), G = g.length;
+    return { L, N, M, n: 0, rand: sfc32(P.seed * 7919 + k * 104729 + (P.mode === 'bond' ? 1 : 0)),
+      span: new Float64Array(G), pmax: new Float64Array(G), smean: new Float64Array(G),
+      par: new Int32Array(N), sz: new Int32Array(N), fl: new Uint8Array(N), occ: new Uint8Array(N),
+      perm: new Int32Array(M), us: new Float64Array(M + 1) };
+  });
+  window.__done = false;
+}
+function sample(T) {
+  const { L, N, M, rand, par, sz, fl, occ, perm, us } = T, grid = Mz.grid, G = grid.length, site = P.mode === 'site';
+  for (let i = 0; i < M; i++) perm[i] = i;
+  for (let i = M - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)), t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
+  // sorted uniforms from exponential spacings: u_k = (E₀ + … + E_k) / (E₀ + … + E_M)
+  let c = 0; for (let i = 0; i <= M; i++) { c -= Math.log(1 - rand()); us[i] = c; }
+  const inv = 1 / c;
+  let Q, smax, nOcc, spanning = false, j = 0;
+  for (let i = 0; i < N; i++) { par[i] = i; sz[i] = 1; fl[i] = (i < L ? 1 : 0) | (i >= N - L ? 2 : 0); }
+  if (site) { occ.fill(0); Q = 0; smax = 0; nOcc = 0; } else { Q = N; smax = 1; nOcc = N; }
+  const record = () => {
+    T.span[j] += spanning ? 1 : 0; T.pmax[j] += smax / N;
+    T.smean[j] += nOcc > smax ? (Q - smax * smax) / (nOcc - smax) : 0; j++;
+  };
+  const join = (a, b) => {
+    const ra = find(par, a), rb = find(par, b);
+    if (ra === rb) return;
+    Q += 2 * sz[ra] * sz[rb];
+    const r = union(par, sz, fl, ra, rb);
+    if (sz[r] > smax) smax = sz[r];
+    if (fl[r] === 3) spanning = true;
+  };
+  for (let k = 0; k < M; k++) {
+    const uk = us[k] * inv;
+    while (j < G && grid[j] <= uk) record();
+    const e = perm[k];
+    if (site) {
+      occ[e] = 1; nOcc++; Q += 1; if (smax < 1) smax = 1;
+      if (fl[e] === 3) spanning = true;
+      const x = e % L;
+      if (x > 0 && occ[e - 1]) join(e, e - 1);
+      if (x < L - 1 && occ[e + 1]) join(e, e + 1);
+      if (e >= L && occ[e - L]) join(e, e - L);
+      if (e < N - L && occ[e + L]) join(e, e + L);
+    } else if (e < L * (L - 1)) { const y = Math.floor(e / (L - 1)), a = y * L + e % (L - 1); join(a, a + 1); }
+    else { const a = e - L * (L - 1); join(a, a + L); }
+  }
+  while (j < G) record();
+  T.n++;
+}
+function measStep() {
+  if (!Mz.running || Mz.done) return;
+  const t0 = performance.now();
+  for (let guard = 0; guard < 100000; guard++) {
+    let T = null;   // the size with the fewest samples goes next, so all curves fill in together
+    for (const t of Mz.per) if (t.n < P.T && (!T || t.n < T.n)) T = t;
+    if (!T) { Mz.done = true; window.__done = true; break; }
+    sample(T);
+    if (performance.now() - t0 > 12) break;
+  }
+}
+
+// estimates from the measured curves
+function levelCross(R, c) {   // p where the increasing curve R first reaches c (linear interpolation)
+  const g = Mz.grid;
+  for (let j = 1; j < g.length; j++) if (R[j] >= c && R[j - 1] < c) return g[j - 1] + (c - R[j - 1]) / (R[j] - R[j - 1]) * (g[j] - g[j - 1]);
+  return NaN;
+}
+function estimates() {
+  const g = Mz.grid, pc = PC[P.mode], ok = Mz.per.filter(t => t.n > 0);
+  const curves = ok.map(t => ({ L: t.L, n: t.n, R: Array.from(t.span, v => v / t.n), Pm: Array.from(t.pmax, v => v / t.n),
+    Sm: Array.from(t.smean, v => v / t.n) }));
+  for (const c of curves) {
+    c.p50 = levelCross(c.R, 0.5); c.w = levelCross(c.R, 0.9) - levelCross(c.R, 0.1); c.Rpc = c.R[Mz.iPc];
+    let jm = 0; for (let j = 1; j < g.length; j++) if (c.Sm[j] > c.Sm[jm]) jm = j;
+    c.peak = g[jm]; c.Speak = c.Sm[jm]; c.Mpc = c.Pm[Mz.iPc] * c.L * c.L;
+  }
+  const cross = [];   // where R_L and R_2L meet: the sign change of R_L − R_2L nearest to p_c
+  for (let k = 0; k + 1 < curves.length; k++) {
+    const a = curves[k].R, b = curves[k + 1].R; let best = NaN;
+    for (let j = 1; j < g.length; j++) {
+      const d0 = a[j - 1] - b[j - 1], d1 = a[j] - b[j];
+      if (d0 > 0 && d1 <= 0 && Math.abs(g[j] - pc) < 0.1) {
+        const x = g[j - 1] + d0 / (d0 - d1) * (g[j] - g[j - 1]);
+        if (!Number.isFinite(best) || Math.abs(x - pc) < Math.abs(best - pc)) best = x;
+      }
+    }
+    cross.push({ L1: curves[k].L, L2: curves[k + 1].L, p: best });
+  }
+  const full = curves.length >= 3 && curves.every(c => Number.isFinite(c.w) && c.w > 0 && c.Mpc > 0);
+  const lx = curves.map(c => Math.log(c.L));
+  return { curves, cross, invNu: full ? -slope(lx, curves.map(c => Math.log(c.w))) : NaN,
+    Dmass: full ? slope(lx, curves.map(c => Math.log(c.Mpc))) : NaN };
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d'), lc = document.createElement('canvas'), lctx = lc.getContext('2d');
+let W = 1, H = 1, dpr = 1, dirtyImg = true;
+const BG = '#0b0f14', CLOSED = [18, 24, 31], DIM = [52, 68, 84], ISO = [36, 47, 58], GOLD = [255, 196, 87];
+const PAL = Array.from({ length: 64 }, (_, k) => {   // cool hues for ordinary clusters, so gold stays unique
+  const h = (175 + (k * 37) % 150) / 360, s = 0.45 + 0.25 * ((k * 7) % 5) / 4, l = 0.38 + 0.22 * ((k * 11) % 7) / 6;
+  const f = n => { const a = s * Math.min(l, 1 - l), t = (n + h * 12) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(t - 3, 9 - t, 1)))); };
+  return [f(0), f(8), f(4)];
+});
+const PAL_DIM = PAL.map(c => c.map((v, i) => Math.round(CLOSED[i] + (v - CLOSED[i]) * 0.38)));   // small clusters
+const font = (px, mono) => `${px * dpr}px ${mono ? 'ui-monospace, Menlo, monospace' : '-apple-system, "PingFang SC", sans-serif'}`;
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+// colour of the cluster with root rt (−1 = closed site)
+function colourOf(rt) {
+  if (rt < 0) return CLOSED;
+  const hi = P.color === 'big' ? rt === S.big : Lat.fl[rt] === 3;
+  if (hi) return GOLD;
+  if (P.color !== 'all') return DIM;
+  if (Lat.sz[rt] === 1 && P.mode === 'bond') return ISO;
+  const h = Math.imul(rt, 0x9E3779B1) >>> 26;
+  return Lat.sz[rt] >= S.bigCut ? PAL[h] : PAL_DIM[h];
+}
+
+function layout() {
+  const pad = 16 * dpr;
+  if (!P.plots) { const side = Math.max(10, Math.min(W, H) - 2 * pad); return { lx: (W - side) / 2, ly: (H - side) / 2, side }; }
+  const pw = clamp(W * 0.44, [300 * dpr, 560 * dpr]);
+  const side = Math.max(10, Math.min(H - 2 * pad, W - pw - 3 * pad));
+  return { lx: pad + Math.max(0, (W - pw - 3 * pad - side) / 2), ly: (H - side) / 2, side, px: W - pw - pad, pw };
+}
+
+// the lattice as an image: L×L pixels for sites, (2L−1)² for bonds (odd pixels are the edges)
+function renderImage() {
+  const L = P.L, site = P.mode === 'site', n = site ? L : 2 * L - 1;
+  if (lc.width !== n) { lc.width = n; lc.height = n; }
+  const img = lctx.createImageData(n, n), d = img.data, root = Lat.root;
+  const put = (x, y, c) => { const o = (y * n + x) * 4; d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255; };
+  if (site) for (let i = 0; i < L * L; i++) put(i % L, (i / L) | 0, colourOf(root[i]));
+  else {
+    for (let i = 0; i < n * n * 4; i += 4) { d[i] = CLOSED[0]; d[i + 1] = CLOSED[1]; d[i + 2] = CLOSED[2]; d[i + 3] = 255; }
+    for (let y = 0, i = 0; y < L; y++) for (let x = 0; x < L; x++, i++) {
+      const c = colourOf(root[i]); put(2 * x, 2 * y, c);
+      if (Lat.bonds[i] & 1) put(2 * x + 1, 2 * y, c);
+      if (Lat.bonds[i] & 2) put(2 * x, 2 * y + 1, c);
+    }
+  }
+  lctx.putImageData(img, 0, 0);
+}
+
+function drawLattice(Lo) {
+  const { lx, ly, side } = Lo, L = P.L, cell = side / L, root = Lat.root;
+  if (P.mode === 'site' && cell >= 6 * dpr) {   // big cells: draw squares with a gap so single sites are visible
+    ctx.fillStyle = rgb(CLOSED); ctx.fillRect(lx, ly, side, side);
+    const gap = Math.max(1, cell * 0.08);
+    for (let i = 0; i < L * L; i++) {
+      if (root[i] < 0) continue;
+      ctx.fillStyle = rgb(colourOf(root[i]));
+      ctx.fillRect(lx + (i % L) * cell + gap / 2, ly + ((i / L) | 0) * cell + gap / 2, cell - gap, cell - gap);
+    }
+  } else if (P.mode === 'bond' && cell >= 8 * dpr) {   // big cells: edges as lines, sites as dots
+    ctx.fillStyle = rgb(CLOSED); ctx.fillRect(lx, ly, side, side);
+    const X = x => lx + (x + 0.5) * cell, Y = y => ly + (y + 0.5) * cell;
+    ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1.5 * dpr, cell * 0.22);
+    for (let i = 0; i < L * L; i++) {
+      const b = Lat.bonds[i]; if (!b) continue;
+      const x = i % L, y = (i / L) | 0; ctx.strokeStyle = rgb(colourOf(root[i])); ctx.beginPath();
+      if (b & 1) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x + 1), Y(y)); }
+      if (b & 2) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x), Y(y + 1)); }
+      ctx.stroke();
+    }
+    const r = Math.max(1.5 * dpr, cell * 0.17);
+    for (let i = 0; i < L * L; i++) {
+      ctx.fillStyle = rgb(colourOf(root[i])); ctx.beginPath(); ctx.arc(X(i % L), Y((i / L) | 0), r, 0, 7); ctx.fill();
+    }
+    if (P.dual && S.dual) drawDual(X, Y, cell);
+  } else {
+    if (dirtyImg) renderImage();
+    // shrinking: average neighbouring pixels; enlarging: keep the cells sharp
+    ctx.imageSmoothingEnabled = lc.width > side; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(lc, lx, ly, side, side);
+  }
+  dirtyImg = false;
+  // top and bottom edges: a spanning cluster touches both
+  ctx.fillStyle = S.nSpan ? rgb(GOLD) : '#3a4858';
+  ctx.fillRect(lx, ly - 4 * dpr, side, 2 * dpr); ctx.fillRect(lx, ly + side + 2 * dpr, side, 2 * dpr);
+  if (S.box) drawBoxGrid(Lo);
+}
+
+function drawDual(X, Y, cell) {
+  const { W1, edges, cross, par } = S.dual, DX = i => X(i % W1 - 0.5), DY = i => Y(((i / W1) | 0) + 0.5);
+  for (const hot of [false, true]) {   // ordinary closed-edge duals first, the left–right dual crossing on top
+    ctx.strokeStyle = hot ? '#ff4d6d' : 'rgba(255,107,107,.38)'; ctx.lineWidth = (hot ? 0.2 : 0.09) * cell; ctx.beginPath();
+    for (let k = 0; k < edges.length; k += 2) {
+      if ((cross >= 0 && find(par, edges[k]) === cross) !== hot) continue;
+      ctx.moveTo(DX(edges[k]), DY(edges[k])); ctx.lineTo(DX(edges[k + 1]), DY(edges[k + 1]));
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,107,107,.5)';   // the two dual walls
+  ctx.fillRect(X(-0.5) - 1.5 * dpr, Y(0.5), 3 * dpr, Y(P.L - 1.5) - Y(0.5));
+  ctx.fillRect(X(P.L - 0.5) - 1.5 * dpr, Y(0.5), 3 * dpr, Y(P.L - 1.5) - Y(0.5));
+}
+
+// the ε grid used by box counting (ε = L/16), shaded where a box meets the cluster
+function drawBoxGrid({ lx, ly, side }) {
+  const L = P.L, e = Math.max(1, Math.round(L / 16)), k = Math.ceil(L / e), cell = side / L, rt = S.span >= 0 ? S.span : S.big;
+  const hit = new Uint8Array(k * k);
+  for (let i = 0; i < L * L; i++) if (Lat.root[i] === rt) hit[Math.floor(((i / L) | 0) / e) * k + Math.floor((i % L) / e)] = 1;
+  ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1;
+  for (let y = 0; y < k; y++) for (let x = 0; x < k; x++) if (hit[y * k + x]) {
+    const w = Math.min(e, L - x * e) * cell, h = Math.min(e, L - y * e) * cell;
+    ctx.fillRect(lx + x * e * cell, ly + y * e * cell, w, h); ctx.strokeRect(lx + x * e * cell + 0.5, ly + y * e * cell + 0.5, w - 1, h - 1);
+  }
+}
+
+// a framed plot with linear or log₁₀ y; returns the coordinate maps
+function frame(x0, y0, w, h, title, [xa, xb], [ya, yb], logY) {
+  ctx.fillStyle = 'rgba(15,21,28,.92)'; ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = '#33414f'; ctx.lineWidth = 1 * dpr; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+  const ml = 40 * dpr, mr = 10 * dpr, mt = 22 * dpr, mb = 20 * dpr;
+  const X = x => x0 + ml + (x - xa) / (xb - xa) * (w - ml - mr);
+  const Y = v => { const t = logY ? Math.log10(Math.max(v, 10 ** (ya - 1))) : v; return y0 + h - mb - (t - ya) / (yb - ya) * (h - mt - mb); };
+  ctx.font = font(12); ctx.fillStyle = '#d6dee6'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(title, x0 + 8 * dpr, y0 + 5 * dpr);
+  return { X, Y, ml, mr, mt, mb, clip: () => { ctx.save(); ctx.beginPath(); ctx.rect(x0 + ml, y0 + mt, w - ml - mr, h - mt - mb); ctx.clip(); } };
+}
+function axes(F, x0, y0, w, h, xt, yt, logY) {
+  ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1 * dpr; ctx.font = font(10, true); ctx.fillStyle = '#8c98a5';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const [x, t] of xt) { ctx.beginPath(); ctx.moveTo(F.X(x), y0 + F.mt); ctx.lineTo(F.X(x), y0 + h - F.mb); ctx.stroke(); ctx.fillText(t, F.X(x), y0 + h - F.mb + 3 * dpr); }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const [v, t] of yt) { const y = F.Y(logY ? 10 ** v : v); ctx.beginPath(); ctx.moveTo(x0 + F.ml, y); ctx.lineTo(x0 + w - F.mr, y); ctx.stroke(); ctx.fillText(t, x0 + F.ml - 4 * dpr, y); }
+}
+function vline(F, x, y0, h, col, dash) {
+  ctx.strokeStyle = col; ctx.lineWidth = 1.2 * dpr; ctx.setLineDash(dash.map(v => v * dpr));
+  ctx.beginPath(); ctx.moveTo(F.X(x), y0 + F.mt); ctx.lineTo(F.X(x), y0 + h - F.mb); ctx.stroke(); ctx.setLineDash([]);
+}
+function curve(F, xs, ys, col, lw = 1.6) {
+  ctx.strokeStyle = col; ctx.lineWidth = lw * dpr; ctx.beginPath();
+  let on = false;
+  for (let j = 0; j < xs.length; j++) { if (!Number.isFinite(ys[j])) { on = false; continue; } on ? ctx.lineTo(F.X(xs[j]), F.Y(ys[j])) : ctx.moveTo(F.X(xs[j]), F.Y(ys[j])); on = true; }
+  ctx.stroke();
+}
+const tickRange = (a, b, st, dec) => { const o = []; for (let k = Math.ceil(a / st - 1e-9); k * st <= b + 1e-9 && o.length < 40; k++) o.push([k * st, (k * st).toFixed(dec)]); return o; };
+
+function drawPlots(Lo, E) {
+  const gap = 8 * dpr, x0 = Lo.px, w = Lo.pw, h = (H - 2 * 12 * dpr - 3 * gap) / 4, pc = PC[P.mode], g = Mz.grid;
+  let y0 = 12 * dpr;
+  const legend = (y) => {
+    ctx.font = font(10, true); ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    E.curves.forEach((c, k) => { ctx.fillStyle = SCOL[k]; ctx.fillText(`L=${c.L}`, x0 + w - 8 * dpr - (E.curves.length - 1 - k) * 46 * dpr, y + 6 * dpr); });
+  };
+  // 1. crossing probability, zoomed on p_c ± 0.12
+  const xr = [pc - 0.12, pc + 0.12];
+  let F = frame(x0, y0, w, h, '跨越概率 R_L(p)', xr, [0, 1]);
+  axes(F, x0, y0, w, h, tickRange(xr[0], xr[1], 0.05, 2), [[0, '0'], [0.5, '0.5'], [1, '1']]);
+  F.clip();
+  vline(F, pc, y0, h, 'rgba(255,255,255,.45)', [4, 3]);
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.setLineDash([2 * dpr, 3 * dpr]); ctx.beginPath(); ctx.moveTo(F.X(xr[0]), F.Y(0.5)); ctx.lineTo(F.X(xr[1]), F.Y(0.5)); ctx.stroke(); ctx.setLineDash([]);
+  E.curves.forEach((c, k) => curve(F, g, c.R, SCOL[k]));
+  vline(F, P.prob, y0, h, 'rgba(255,196,87,.8)', []);
+  ctx.restore(); legend(y0);
+  // 2. order parameter: share of all sites in the largest cluster
+  y0 += h + gap;
+  F = frame(x0, y0, w, h, '最大团簇占比 P_max(p)', [0, 1], [0, 1]);
+  axes(F, x0, y0, w, h, tickRange(0.1, 1, 0.1, 1), [[0, '0'], [0.5, '0.5'], [1, '1']]);
+  F.clip();
+  vline(F, pc, y0, h, 'rgba(255,255,255,.45)', [4, 3]);
+  if (P.mode === 'site') curve(F, [0, 1], [0, 1], 'rgba(255,255,255,.2)', 1);   // P_max ≤ p: only open sites can belong
+  E.curves.forEach((c, k) => curve(F, g, c.Pm, SCOL[k]));
+  vline(F, P.prob, y0, h, 'rgba(255,196,87,.8)', []);
+  ctx.restore();
+  // 3. mean cluster size (log scale)
+  y0 += h + gap;
+  let smax = 10; for (const c of E.curves) smax = Math.max(smax, c.Speak);
+  const top = Math.ceil(Math.log10(smax));
+  F = frame(x0, y0, w, h, '平均团簇大小 S(p)（对数坐标）', [0, 1], [0, top], true);
+  axes(F, x0, y0, w, h, tickRange(0.1, 1, 0.1, 1), Array.from({ length: top + 1 }, (_, e) => [e, e ? `1e${e}` : '1']), true);
+  F.clip();
+  vline(F, pc, y0, h, 'rgba(255,255,255,.45)', [4, 3]);
+  E.curves.forEach((c, k) => curve(F, g, c.Sm, SCOL[k]));
+  vline(F, P.prob, y0, h, 'rgba(255,196,87,.8)', []);
+  ctx.restore();
+  // 4. mass against linear size, log–log: M(L) at p_c from the measurement, and box counts N(ε) against L/ε
+  y0 += h + gap;
+  const ax = [0, 10], ay = [0, 6.5];
+  F = frame(x0, y0, w, h, '分形：质量 ∝ 尺度^D（双对数）', ax, ay);
+  const FX = F.X, FY = F.Y, X = r => FX(Math.log2(r)), Y = m => FY(Math.log10(m));
+  axes(F, x0, y0, w, h, [1, 4, 16, 64, 256, 1024].map(r => [Math.log2(r), String(r)]), [0, 2, 4, 6].map(e => [e, e ? `1e${e}` : '1']));
+  F.clip();
+  // reference slope D = 91/48 through the L = 16 point (or through (1, 1))
+  const c16 = E.curves.find(c => c.L === 16 && c.Mpc > 0), r0 = c16 ? 16 : 1, m0 = c16 ? c16.Mpc : 1;
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.lineWidth = 1 * dpr; ctx.beginPath();
+  ctx.moveTo(X(1), Y(m0 * (1 / r0) ** D_EXACT)); ctx.lineTo(X(1024), Y(m0 * (1024 / r0) ** D_EXACT)); ctx.stroke(); ctx.setLineDash([]);
+  E.curves.forEach((c, k) => { if (c.Mpc > 0) { ctx.fillStyle = SCOL[k]; ctx.beginPath(); ctx.arc(X(c.L), Y(c.Mpc), 4 * dpr, 0, 7); ctx.fill(); } });
+  if (S.box) {
+    ctx.strokeStyle = '#ffc457'; ctx.lineWidth = 1.5 * dpr;
+    for (const q of S.box.pts) if (q.n > 0) { ctx.beginPath(); ctx.arc(X(q.r), Y(q.n), 3.5 * dpr, 0, 7); ctx.stroke(); }
+  }
+  ctx.restore();
+  ctx.font = font(10, true); ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillStyle = '#d6dee6';
+  const lab = [`虚线 D = 91/48 ≈ 1.896`, `实心点：p_c 处最大团簇质量 M(L)` + (Number.isFinite(E.Dmass) ? `，D ≈ ${E.Dmass.toFixed(3)}` : '')];
+  if (S.box) lab.push(`金色圈：盒计数 N(ε) 对 L/ε` + (Number.isFinite(S.box.D) ? `，D ≈ ${S.box.D.toFixed(3)}` : ''));
+  ctx.textAlign = 'left';   // top-left is empty: the points run from bottom-left to top-right
+  lab.forEach((t, i) => ctx.fillText(t, x0 + F.ml + 6 * dpr, y0 + 24 * dpr + i * 14 * dpr));
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  const Lo = layout();
+  drawLattice(Lo);
+  if (P.plots) drawPlots(Lo, estimates());
+  return Lo;
+}
+
+// ---------- read-outs ----------
+const pct = (a, b) => b ? (100 * a / b).toFixed(1) + '%' : '—';
+const f4 = x => Number.isFinite(x) ? x.toFixed(4) : '—';
+let hover = null;
+function info() {
+  const L = P.L, site = P.mode === 'site';
+  const lines = site
+    ? [`开格点 ${S.nOpen.toLocaleString()} / ${S.N.toLocaleString()} = ${f4(S.nOpen / S.N)}`]
+    : [`开边 ${S.nBonds.toLocaleString()} / ${(2 * L * (L - 1)).toLocaleString()} = ${f4(S.nBonds / (2 * L * (L - 1)))}`];
+  lines.push(`团簇数 ${S.clusters.toLocaleString()}   最大团簇 ${S.sBig.toLocaleString()}（占全部格点 ${pct(S.sBig, S.N)}）`);
+  lines.push(S.nSpan ? `跨越团簇：有，${S.sSpan.toLocaleString()} 个格点` : '跨越团簇：没有（上下不连通）');
+  lines.push(`平均团簇大小（不含最大）= ${S.mean.toFixed(2)}`);
+  if (S.dual) lines.push(`对偶格左右连通：${S.dual.crossing ? '是' : '否'}（与上下连通恰好相反）`);
+  if (S.box) lines.push(`盒计数 ε = 4…${Math.max(4, L / 8)}：D ≈ ${Number.isFinite(S.box.D) ? S.box.D.toFixed(3) : '—（L 太小）'}   精确 91/48 = ${D_EXACT.toFixed(3)}`);
+  $('info').textContent = lines.join('\n');
+
+  const E = estimates(), nMin = Math.min(...Mz.per.map(t => t.n));
+  const m = [`样本 ${nMin} / ${P.T}（每个 L）` + (Mz.done ? ' · 完成' : Mz.running ? ' · 进行中' : ' · 已暂停')];
+  if (E.curves.length) {
+    m.push('L      R=½ 处 p   R(p_c)   S 峰值位置');
+    for (const c of E.curves) m.push(`${String(c.L).padEnd(6)} ${f4(c.p50).padEnd(10)} ${c.Rpc.toFixed(3).padEnd(8)} ${c.peak.toFixed(4)}`);
+    m.push('相邻 L 的 R_L 曲线交点：');
+    for (let k = 0; k < E.cross.length; k += 2) m.push('  ' + E.cross.slice(k, k + 2).map(c => `${(c.L1 + '/' + c.L2).padEnd(8)}${f4(c.p)}`).join('    '));
+    m.push(`宽度 ∝ L^(−1/ν)：1/ν ≈ ${Number.isFinite(E.invNu) ? E.invNu.toFixed(3) : '—'}（精确 3/4）`);
+    m.push(`M(p_c) ∝ L^D：D ≈ ${Number.isFinite(E.Dmass) ? E.Dmass.toFixed(3) : '—'}（精确 ${D_EXACT.toFixed(3)}）`);
+  }
+  $('mInfo').textContent = m.join('\n');
+
+  $('stat').textContent = hover ? `格点 (${hover.x}, ${hover.y}) · ` + (hover.rt < 0 ? '关闭' : `所在团簇 ${Lat.sz[hover.rt].toLocaleString()} 个格点` + (Lat.fl[hover.rt] === 3 ? '（跨越团簇）' : ''))
+    : `${MODES[P.mode]} · L = ${L} · p = ${P.prob.toFixed(4)} · ` + (S.nSpan ? '上下连通' : '上下不连通');
+  window.__perc = { mode: P.mode, L, p: P.prob, seed: P.seed, nOpen: S.nOpen, nBonds: S.nBonds, clusters: S.clusters, largest: S.sBig,
+    largestFrac: S.sBig / S.N, spanning: S.nSpan > 0, dualCrossing: S.dual ? S.dual.crossing : null, spanSize: S.sSpan, meanSize: S.mean, boxD: S.box ? S.box.D : null,
+    box: S.box ? S.box.pts : null };
+  window.__meas = { mode: P.mode, T: P.T, nMin, done: Mz.done, cross: E.cross, invNu: E.invNu, Dmass: E.Dmass,
+    sizes: E.curves.map(c => ({ L: c.L, n: c.n, p50: c.p50, width: c.w, Rpc: c.Rpc, peak: c.peak, Speak: c.Speak, Mpc: c.Mpc,
+      PmPc: c.Pm[Mz.iPc] })) };
+}
+
+// ---------- UI ----------
+const Lval = () => Math.round(clamp(2 ** +$('Lsl').value, LIM.L));
+function syncUI() {
+  $('Prob').value = P.prob; $('Lsl').value = Math.log2(P.L); $('Seed').value = P.seed; $('T').value = Math.log10(P.T);
+  $('vProb').textContent = P.prob.toFixed(4); $('vL').textContent = P.L; $('vSeed').textContent = P.seed; $('vT').textContent = P.T;
+  $('plots').checked = P.plots; $('box').checked = P.box; $('dual').checked = P.dual;
+  $('mSite').classList.toggle('on', P.mode === 'site'); $('mBond').classList.toggle('on', P.mode === 'bond');
+  $('modeNote').textContent = P.mode === 'site' ? '格点开或关，相邻的开格点相连。p_c ≈ 0.592746（数值结果，没有已知的闭式）。'
+    : '所有格点都在，每条边以概率 p 打开，被开边连起来的格点属于同一团簇。p_c = 1/2 恰好成立（Kesten 1980）。';
+  $('dualRow').style.display = $('dualNote').style.display = P.mode === 'bond' ? '' : 'none';
+  $('mPlay').textContent = Mz.running ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === P.color));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+// recompute what depends on the change; the measurement restarts only for a new mode or seed
+function changed() {
+  P.preset = ''; syncUI(); compute();
+  if (Mz.key !== `${P.mode}/${P.seed}`) measReset();
+}
+function applyPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, mode: p.mode, L: p.L, prob: p.prob, color: p.color, box: !!p.box, dual: !!p.dual });
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key;
+  b.onclick = () => { applyPreset(key); syncUI(); compute(); if (Mz.key !== `${P.mode}/${P.seed}`) measReset(); };
+  $('pre').appendChild(b);
+}
+for (const [key, name] of Object.entries(COLORS)) {
+  const b = document.createElement('button');
+  b.textContent = name; b.dataset.c = key; b.onclick = () => { P.color = key; syncUI(); dirtyImg = true; };
+  $('colors').appendChild(b);
+}
+$('mSite').onclick = () => { if (P.mode !== 'site') { P.mode = 'site'; P.prob = PC.site; changed(); } };
+$('mBond').onclick = () => { if (P.mode !== 'bond') { P.mode = 'bond'; P.prob = PC.bond; changed(); } };
+$('Prob').oninput = e => { P.prob = clamp(+e.target.value, LIM.prob); changed(); };
+$('toPc').onclick = () => { P.prob = PC[P.mode]; changed(); };
+$('pDown').onclick = () => { P.prob = clamp(Math.round((P.prob - 0.01) * 1e4) / 1e4, LIM.prob); changed(); };
+$('pUp').onclick = () => { P.prob = clamp(Math.round((P.prob + 0.01) * 1e4) / 1e4, LIM.prob); changed(); };
+$('Lsl').oninput = () => { const L = Lval(); if (L !== P.L) { P.L = L; changed(); } else syncUI(); };
+$('Seed').oninput = e => { P.seed = Math.round(clamp(+e.target.value, LIM.seed)); changed(); };
+$('T').oninput = e => { P.T = Math.round(clamp(10 ** +e.target.value, LIM.T) / 10) * 10; Mz.done = false; window.__done = false; syncUI(); };
+$('plots').onchange = e => { P.plots = e.target.checked; dirtyImg = true; };
+$('box').onchange = e => { P.box = e.target.checked; compute(); };
+$('dual').onchange = e => { P.dual = e.target.checked; };
+$('mPlay').onclick = () => { Mz.running = !Mz.running; syncUI(); };
+$('mRestart').onclick = () => { Mz.running = true; measReset(); syncUI(); };
+
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect(), Lo = layout();
+  const x = Math.floor(((e.clientX - r.left) * dpr - Lo.lx) / Lo.side * P.L), y = Math.floor(((e.clientY - r.top) * dpr - Lo.ly) / Lo.side * P.L);
+  hover = x >= 0 && y >= 0 && x < P.L && y < P.L ? { x, y, rt: Lat.root[y * P.L + x] } : null;
+});
+cv.addEventListener('pointerleave', () => { hover = null; });
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+  dirtyImg = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=fractal  or  ?mode=bond&L=64&prob=0.5&seed=7&color=span&plots=0&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { const v = q.get(k); if (v !== null && v.trim() !== '') { const x = Number(v); if (Number.isFinite(x)) f(x); } };
+const pk = q.get('p');
+if (pk !== null && Object.hasOwn(PRESETS, pk)) applyPreset(pk);
+{ const v = q.get('mode'); if (v !== null && Object.hasOwn(MODES, v) && v !== P.mode) { P.mode = v; P.prob = PC[v]; P.preset = ''; } }
+{ const v = q.get('color'); if (v !== null && Object.hasOwn(COLORS, v)) { P.color = v; P.preset = ''; } }
+num('L', x => { P.L = Math.round(clamp(x, LIM.L)); P.preset = ''; });
+num('prob', x => { P.prob = clamp(x, LIM.prob); P.preset = ''; });
+num('seed', x => { P.seed = Math.round(clamp(x, LIM.seed)); });
+num('T', x => { P.T = Math.round(clamp(x, LIM.T)); });
+if (q.get('plots') === '0') P.plots = false;
+if (q.get('box') === '1') P.box = true;
+if (q.get('box') === '0') P.box = false;
+if (q.get('dual') === '1') P.dual = true;
+if (q.get('run') === '0') Mz.running = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI(); compute(); measReset();
+
+(function loop() {
+  measStep();
+  draw(); info();
+  window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

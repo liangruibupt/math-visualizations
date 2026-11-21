@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>极小曲面 · 肥皂膜的几何</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0f15; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(20,28,37,.93); border: 1px solid #2f3e4e; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #9cc6d9; border-top: 1px solid #2f3e4e; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8a96a6; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .presets > span { align-self: center; color: #8a96a6; }
+  button { background: #253241; color: #e6e6e6; border: 1px solid #364759;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #2f4053; }
+  button.on { background: #2f6378; border-color: #4f93ab; }
+  button:disabled { opacity: .4; cursor: default; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+  .info { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #a9b6c8; margin-top: 4px; white-space: pre-line; }
+  #err { color: #ff8f8f; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c, #ov { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #c { cursor: grab; }
+  #ov { pointer-events: none; }
+  #pl { position: absolute; right: 10px; bottom: 10px; width: 400px; height: 240px; pointer-events: none;
+    border: 1px solid #2f3e4e; border-radius: 6px; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(10,15,21,.8); color: #cdd6e4; font-size: 12px; font-variant-numeric: tabular-nums; max-width: calc(100% - 440px); }
+  body.noui #panel, body.noui #stat, body.noui #pl, body.noui #ov { display: none; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; }
+    #pl { width: 280px; height: 170px; } #stat { max-width: calc(100% - 320px); } }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>极小曲面 · 肥皂膜的几何</h1>
+  <small>铁丝圈从肥皂水里拉出来，膜总会把面积缩到最小。这样的曲面每一点都满足 <span class="mono">H = (κ₁ + κ₂)/2 = 0</span>：两个主方向弯得一样多、方向相反，处处是马鞍。下面的曲面都由 Weierstrass–Enneper 公式 <span class="mono">x = Re(e<sup>−iθ</sup>Φ(w))</span> 生成，“检验”一栏在画出来的网格上实测 H。</small>
+
+  <h2>曲面</h2>
+  <div class="presets" id="pre"></div>
+  <small id="desc" style="margin-top:4px"></small>
+
+  <div id="thBox">
+    <h2>伴随族</h2>
+    <div class="row">
+      <label>θ <b id="vTh"></b></label>
+      <input id="Th" type="range" min="0" max="180" step="0.5">
+    </div>
+    <div class="presets"><button id="anim">▶ 播放 θ 变形</button></div>
+    <small>把 Φ 乘上 e<sup>−iθ</sup>：曲面边弯边扭，但每一小块的长度和角度都不变（等距变换），所以面积、高斯曲率 K 逐点不变，H 一直是 0。</small>
+    <div id="isoInfo" class="info"></div>
+  </div>
+
+  <div id="filmBox">
+    <h2>肥皂膜实验：两个同轴圆环</h2>
+    <div class="row">
+      <label>圆环间距 h / R <b id="vH"></b></label>
+      <input id="Hs" type="range" min="0.05" max="1.6" step="0.001">
+    </div>
+    <div class="presets"><span>显示：</span><button data-show="auto">实际的膜</button><button data-show="stable">稳定悬链面</button><button data-show="unstable">不稳定悬链面</button><button data-show="discs">两个圆盘</button></div>
+    <div class="presets"><button id="pull">▶ 慢慢拉开</button></div>
+    <div id="filmInfo" class="info"></div>
+  </div>
+
+  <h2>网格与显示</h2>
+  <div class="row">
+    <label>网格分辨率（每边格数） <b id="vN"></b></label>
+    <input id="N" type="range" min="16" max="160" step="4">
+  </div>
+  <div class="presets"><span>着色：</span><button data-c="shade">正反两面</button><button data-c="K">高斯曲率 K</button><button data-c="film">薄膜干涉色</button></div>
+  <div class="checks">
+    <label><input id="grid" type="checkbox"> 参数网格线</label>
+    <label><input id="rot" type="checkbox"> 自动旋转</label>
+    <label id="copyBox"><input id="copies" type="checkbox"> Schwarz 反射复制相邻几块</label>
+  </div>
+  <small id="copyNote"></small>
+
+  <h2>检验 H ≈ 0</h2>
+  <div id="hInfo" class="info"></div>
+  <small>κ 是曲率的大小 √|K|。比值 ⟨|H|⟩ / ⟨κ⟩ 对球面是 1，对极小曲面是 0。网格值来自余切 Laplace 算子 Δx = −2Hn 和角亏 K = (2π − Σ角)/A，只用三角形的顶点坐标；解析值用参数式的有限差分算第一、第二基本形式。</small>
+  <small id="err"></small>
+  <small style="margin-top:8px">拖动旋转 · 滚轮缩放 · 双击复位视角</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><canvas id="ov"></canvas><canvas id="pl"></canvas><div id="stat"></div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const PI = Math.PI;
+
+// ---------- complex numbers as [re, im] ----------
+const add = (p, q) => [p[0] + q[0], p[1] + q[1]];
+const sub = (p, q) => [p[0] - q[0], p[1] - q[1]];
+const mul = (p, q) => [p[0] * q[0] - p[1] * q[1], p[0] * q[1] + p[1] * q[0]];
+const div = (p, q) => { const d = q[0] * q[0] + q[1] * q[1]; return [(p[0] * q[0] + p[1] * q[1]) / d, (p[1] * q[0] - p[0] * q[1]) / d]; };
+const scl = (p, k) => [p[0] * k, p[1] * k];
+const clog = p => [Math.log(Math.hypot(p[0], p[1])), Math.atan2(p[1], p[0])];
+const csin = ([a, b]) => [Math.sin(a) * Math.cosh(b), Math.cos(a) * Math.sinh(b)];
+const ccos = ([a, b]) => [Math.cos(a) * Math.cosh(b), -Math.sin(a) * Math.sinh(b)];
+const csinh = ([a, b]) => [Math.sinh(a) * Math.cos(b), Math.cosh(a) * Math.sin(b)];
+const ccosh = ([a, b]) => [Math.cosh(a) * Math.cos(b), Math.sinh(a) * Math.sin(b)];
+const ONE = [1, 0], I = [0, 1];
+
+// ---------- Weierstrass ℘ and ζ for the square lattice with periods 1 and i ----------
+// Jacobi theta functions with nome q = e^{iπτ}, τ = i (DLMF 20.2); argument v = πz.
+const Q = Math.exp(-PI), NT = 8;
+const QH = Array.from({ length: NT }, (_, n) => Q ** ((n + 0.5) ** 2));
+let TH3 = 1, TH4 = 1;
+for (let n = 1; n < NT; n++) { TH3 += 2 * Q ** (n * n); TH4 += 2 * (-1) ** n * Q ** (n * n); }
+const E1 = PI * PI * (TH3 ** 4 + TH4 ** 4) / 3;          // e1 = ℘(1/2) ≈ 6.875185818 (DLMF 23.6.2–23.6.4, 2ω1 = 1)
+function theta12(v) {                                    // [θ1(v), θ1′(v), θ2(v)]
+  let t1 = [0, 0], d1 = [0, 0], t2 = [0, 0];
+  for (let n = 0; n < NT; n++) {
+    const k = 2 * n + 1, s = csin(scl(v, k)), c = ccos(scl(v, k)), a = 2 * QH[n] * (n % 2 ? -1 : 1);
+    t1 = add(t1, scl(s, a)); d1 = add(d1, scl(c, a * k)); t2 = add(t2, scl(c, 2 * QH[n]));
+  }
+  return [t1, d1, t2];
+}
+// ζ(z) = (η1/ω1) z + π θ1′(πz)/θ1(πz), with η1 = π/2 from the Legendre relation on the square lattice
+const wzeta = z => { const [t1, d1] = theta12(scl(z, PI)); return add(scl(z, PI), scl(div(d1, t1), PI)); };
+// ℘(z) = e1 + (π θ3 θ4 θ2(πz) / θ1(πz))²   (DLMF 23.6.2)
+const wp = z => { const [t1, , t2] = theta12(scl(z, PI)); const r = scl(div(t2, t1), PI * TH3 * TH4); return add([E1, 0], mul(r, r)); };
+
+// ---------- surfaces ----------
+// kind 'we': phi(w) is the holomorphic primitive Φ(w) ∈ ℂ³ of a Weierstrass–Enneper null curve, so the
+// point is x = Re(e^{−iθ} Φ(w)) and every θ is a member of the associate family. kind 'xyz': a real map.
+// Every surface is drawn over the unit parameter square (s, t) ∈ [0, 1]².
+// clip: a surface with ends at infinity has clipVal(s, t, point) per vertex; fragments with clipVal > clip are cut away.
+const CAT_V = 1.25, ENN_R = 1.9;
+const costaGrade = s => s - 0.9 * Math.sin(4 * PI * s) / (4 * PI);   // grid 10× denser at the punctures 0, 1/2, 1
+// Scherk on the unit disc: radius graded towards the rim, angle 6.7× denser at the four ends w = ±1, ±i
+const schW = (s, t) => { const r = 1 - (1 - t) ** 2, f = 2 * PI * (s - 0.85 * Math.sin(8 * PI * s) / (8 * PI)); return [r * Math.cos(f), r * Math.sin(f)]; };
+const schPhi3 = w => { const w2 = mul(w, w); return clog(div(add(ONE, w2), sub(ONE, w2))); };
+const SURF = {
+  cat: { kind: 'we', theta: true,
+    w: (s, t) => [-CAT_V + 2 * CAT_V * t, -PI + 2 * PI * s],                 // w = v + iu
+    phi: w => [ccosh(w), mul([0, -1], csinh(w)), w] },
+  enn: { kind: 'we', theta: true,
+    w: (s, t) => [ENN_R * t * Math.cos(2 * PI * s), ENN_R * t * Math.sin(2 * PI * s)],
+    phi: w => { const w3 = mul(mul(w, w), w);
+      return [sub(w, scl(w3, 1 / 3)), mul(I, add(w, scl(w3, 1 / 3))), mul(w, w)]; } },
+  sch: { kind: 'we', theta: true, arcs: true, clip: 3,
+    // |Φ₃(w)| does not depend on θ, so every member of the family shows the same piece of film
+    w: schW, clipVal: (s, t) => Math.hypot(...schPhi3(schW(s, t))),
+    phi: w => { const w2 = mul(w, w), iw = mul(I, w);
+      return [mul([0, -1], clog(div(add(ONE, iw), sub(ONE, iw)))),         // 2 arctan w
+        mul(I, clog(div(add(ONE, w), sub(ONE, w)))),                       // 2i artanh w
+        clog(div(add(ONE, w2), sub(ONE, w2)))]; } },
+  costa: { kind: 'xyz', theta: false, clip: 2.6, clipVal: (s, t, p) => Math.hypot(p[0], p[1]),
+    // A. Gray, Modern Differential Geometry of Curves and Surfaces with Mathematica, 2nd ed. (1998)
+    xyz: (s, t) => {
+      const u = costaGrade(s), v = costaGrade(t), z = [u, v];
+      const Z0 = wzeta(z), Za = wzeta(sub(z, [0.5, 0])), Zb = wzeta(sub(z, [0, 0.5])), P = wp(z);
+      const k = PI / (2 * E1), c0 = PI * PI / (4 * E1);
+      return [0.5 * (-Z0[0] + PI * u + c0 + k * (Za[0] - Zb[0])),
+        0.5 * (Z0[1] + PI * v + c0 + k * (Za[1] - Zb[1])),
+        Math.sqrt(2 * PI) / 4 * Math.log(Math.hypot(P[0] - E1, P[1]) / Math.hypot(P[0] + E1, P[1]))];
+    } },
+  film: { kind: 'xyz', theta: false },
+};
+const PRESETS = {
+  catenoid: { name: '悬链面', s: 'cat', th: 0,
+    desc: '悬链线 r = cosh z 绕 z 轴转一圈。Euler（1744）证明：除平面外，旋转曲面里只有它是极小曲面。Φ(w) = (cosh w, −i sinh w, w)，w = v + iu。' },
+  helicoid: { name: '正螺面', s: 'cat', th: 90,
+    desc: '同一个 Φ 取 θ = 90°：x = sinh v sin u, y = −sinh v cos u, z = u，一条直线边升边转扫出来。Catalan（1842）证明：除平面外，直纹曲面里只有它是极小曲面。' },
+  morph: { name: 'θ = 45° 中间态', s: 'cat', th: 45,
+    desc: '悬链面和正螺面之间的伴随曲面：既不是旋转曲面也不是直纹曲面，但它和两者等距，H 同样为 0。' },
+  enneper: { name: 'Enneper 曲面', s: 'enn', th: 0,
+    desc: 'Φ(w) = (w − w³/3, i(w + w³/3), w²)，w 取半径 1.9 的圆盘。中心像马鞍，越往外边缘卷得越厉害，半径超过 √3 后开始自己穿过自己。' },
+  scherk: { name: 'Scherk 曲面', s: 'sch', th: 0,
+    desc: 'Scherk（1834）：z = ln(cos y / cos x)，定义在正方形 |x|, |y| < π/2 上，两组对边上方分别伸向 +∞ 和 −∞，四个角上各有一条竖直线。绕这些直线转 180° 复制（Schwarz 反射），可以铺满整个棋盘格；按 |Φ₃| ≤ 3 截取一块。' },
+  tower: { name: 'Scherk 塔', s: 'sch', th: 90,
+    desc: '同一块 Scherk 曲面取 θ = 90°：变成 Scherk 第二曲面（马鞍塔）。四条竖直线变成了两个水平面 z = ±π/2 里的曲线，曲面在那里和平面垂直相交；对这两个平面做镜面反射，马鞍就一层层往上下堆叠，四片翼伸向无穷远。' },
+  costa: { name: 'Costa 曲面', s: 'costa', th: 0,
+    desc: 'Costa（1982）：环面挖掉三个点，嵌入空间且不自交。上下两个悬链面式的端点，中间一个平面端点。用方格点阵的 Weierstrass ℘ 和 ζ 函数写出（公式取自 A. Gray），按半径 2.6 的圆柱裁掉伸向无穷的部分。它没有伴随族：θ ≠ 0 时绕洞一圈回不到原处。' },
+  film: { name: '肥皂膜实验', s: 'film', th: 0,
+    desc: '两个半径 R 的同轴圆环相距 h，中间的肥皂膜是悬链面 r = a cosh(z/a)。h 慢慢变大，膜的腰越来越细，h/R 过了 1.3255 就没有悬链面了：膜“啪”地破开，只剩两个圆盘（Goldschmidt 解）。' },
+};
+const COLOR_MODES = { shade: 0, K: 1, film: 2 };
+const SHOWS = ['auto', 'stable', 'unstable', 'discs'];
+const LIM = { th: [0, 180], n: [16, 160], h: [0.05, 1.6], yaw: [-PI, PI], pitch: [-1.5, 1.5], zoom: [0.2, 8] };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+
+const P = { preset: 'catenoid', s: 'cat', th: 0, n: 96, c: 'shade', grid: false, rot: false, h: 0.9, show: 'auto', copies: true };
+const HOME = { yaw: -0.55, pitch: 0.42, zoom: 1 };
+const view = { ...HOME };
+let animTh = false, animPhase = 0, pulling = false;
+
+// ---------- soap film between two rings of radius R = 1 at z = ±h/2 ----------
+// Catenoid r = a cosh(z/a) through both rings: with t = h/(2a), the ring condition a cosh t = R gives h/R = 2t / cosh t.
+// Area A = π a² (2t + sinh 2t), i.e. A / πR² = (2t + sinh 2t) / cosh² t. Two discs: A / πR² = 2.
+function bisect(f, lo, hi) { for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (f(lo) * f(m) <= 0) hi = m; else lo = m; } return (lo + hi) / 2; }
+const T_STAR = bisect(t => t * Math.tanh(t) - 1, 0.5, 2);          // where 2t/cosh t is largest
+const H_MAX = 2 * T_STAR / Math.cosh(T_STAR);                       // ≈ 1.3255
+const hOf = t => 2 * t / Math.cosh(t);
+const areaOf = t => (2 * t + Math.sinh(2 * t)) / Math.cosh(t) ** 2;   // A / πR²
+const T_EQ = bisect(t => areaOf(t) - 2, 1e-6, T_STAR);
+const H_EQ = hOf(T_EQ);                                              // stable catenoid and discs have equal area
+function filmSolutions(h) {
+  if (h >= H_MAX) return null;
+  const t1 = bisect(t => hOf(t) - h, 0, T_STAR), t2 = bisect(t => hOf(t) - h, T_STAR, 60);
+  return { stable: { t: t1, a: 1 / Math.cosh(t1), A: areaOf(t1) }, unstable: { t: t2, a: 1 / Math.cosh(t2), A: areaOf(t2) } };
+}
+function filmShape() {
+  const sol = filmSolutions(P.h);
+  let shape = P.show === 'auto' ? (sol ? 'stable' : 'discs') : P.show;
+  if (!sol && shape !== 'discs') shape = 'discs';
+  return { sol, shape };
+}
+
+// ---------- geometry at one parameter point ----------
+const FD = 2e-4;
+function pointFn(S, th) {
+  if (S.kind === 'xyz') return S.xyz;
+  const c = Math.cos(th), s = Math.sin(th);
+  return (u, v) => { const F = S.phi(S.w(u, v)); return [F[0][0] * c + F[0][1] * s, F[1][0] * c + F[1][1] * s, F[2][0] * c + F[2][1] * s]; };
+}
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+// first and second fundamental forms by central differences: E, F, G, H = (EN − 2FM + GL) / 2(EG − F²), K = (LN − M²)/(EG − F²)
+function geom(f, s, t) {
+  const h = FD, p = f(s, t), a = f(s + h, t), b = f(s - h, t), c = f(s, t + h), d = f(s, t - h);
+  const ab = f(s + h, t + h), aB = f(s + h, t - h), Ab = f(s - h, t + h), AB = f(s - h, t - h);
+  const ps = [0, 1, 2].map(k => (a[k] - b[k]) / (2 * h)), pt = [0, 1, 2].map(k => (c[k] - d[k]) / (2 * h));
+  const pss = [0, 1, 2].map(k => (a[k] - 2 * p[k] + b[k]) / (h * h)), ptt = [0, 1, 2].map(k => (c[k] - 2 * p[k] + d[k]) / (h * h));
+  const pst = [0, 1, 2].map(k => (ab[k] - aB[k] - Ab[k] + AB[k]) / (4 * h * h));
+  const E = dot(ps, ps), F = dot(ps, pt), G = dot(pt, pt), det = E * G - F * F;
+  let n = cross(ps, pt); const nl = Math.hypot(...n) || 1; n = n.map(x => x / nl);
+  const L = dot(pss, n), M = dot(pst, n), N = dot(ptt, n);
+  return { p, n, E, F, G, det, H: (E * N - 2 * F * M + G * L) / (2 * det), K: (L * N - M * M) / det };
+}
+
+// ---------- discrete curvature on a triangle mesh ----------
+// cotangent Laplacian with mixed Voronoi areas (Meyer, Desbrun, Schröder, Barr 2003): Δx_i = −2 H_i n_i,
+// angle defect K_i = (2π − Σ angles) / A_i. Only vertices with a full ring of 6 triangles count as interior.
+function meshCurvature(pos, idx, nv) {
+  const Lp = new Float64Array(3 * nv), A = new Float64Array(nv), ang = new Float64Array(nv), cnt = new Uint8Array(nv), bad = new Uint8Array(nv);
+  let area = 0;
+  for (let k = 0; k < idx.length; k += 3) {
+    const i0 = idx[k], i1 = idx[k + 1], i2 = idx[k + 2];
+    cnt[i0]++; cnt[i1]++; cnt[i2]++;
+    const p0 = [pos[3 * i0], pos[3 * i0 + 1], pos[3 * i0 + 2]], p1 = [pos[3 * i1], pos[3 * i1 + 1], pos[3 * i1 + 2]], p2 = [pos[3 * i2], pos[3 * i2 + 1], pos[3 * i2 + 2]];
+    const e01 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], e02 = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]], e12 = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]];
+    const ar2 = Math.hypot(...cross(e01, e02));
+    if (!(ar2 > 1e-13)) { bad[i0] = bad[i1] = bad[i2] = 1; continue; }
+    const d0 = dot(e01, e02), d1 = -dot(e01, e12), d2 = dot(e02, e12);
+    const c0 = d0 / ar2, c1 = d1 / ar2, c2 = d2 / ar2, tri = ar2 / 2;
+    area += tri;
+    ang[i0] += Math.atan2(ar2, d0); ang[i1] += Math.atan2(ar2, d1); ang[i2] += Math.atan2(ar2, d2);
+    for (let j = 0; j < 3; j++) {
+      Lp[3 * i1 + j] += c0 * e12[j]; Lp[3 * i2 + j] -= c0 * e12[j];
+      Lp[3 * i0 + j] += c1 * e02[j]; Lp[3 * i2 + j] -= c1 * e02[j];
+      Lp[3 * i0 + j] += c2 * e01[j]; Lp[3 * i1 + j] -= c2 * e01[j];
+    }
+    if (d0 < 0) { A[i0] += tri / 2; A[i1] += tri / 4; A[i2] += tri / 4; }
+    else if (d1 < 0) { A[i1] += tri / 2; A[i0] += tri / 4; A[i2] += tri / 4; }
+    else if (d2 < 0) { A[i2] += tri / 2; A[i0] += tri / 4; A[i1] += tri / 4; }
+    else { const l01 = dot(e01, e01), l02 = dot(e02, e02), l12 = dot(e12, e12);
+      A[i0] += (l01 * c2 + l02 * c1) / 8; A[i1] += (l01 * c2 + l12 * c0) / 8; A[i2] += (l02 * c1 + l12 * c0) / 8; }
+  }
+  const H = new Float64Array(nv), K = new Float64Array(nv), interior = new Uint8Array(nv);
+  for (let i = 0; i < nv; i++) {
+    if (cnt[i] !== 6 || bad[i] || !(A[i] > 0)) continue;
+    interior[i] = 1;
+    H[i] = Math.hypot(Lp[3 * i], Lp[3 * i + 1], Lp[3 * i + 2]) / (4 * A[i]);
+    K[i] = (2 * PI - ang[i]) / A[i];
+  }
+  return { H, K, A, interior, area };
+}
+// ⟨|H|⟩ / ⟨√|K|⟩, both averages weighted by vertex area: 1 for a sphere, 0 for a minimal surface
+function ratio(H, K, A, use) {
+  let h = 0, k = 0;
+  for (let i = 0; i < use.length; i++) if (use[i]) { h += A[i] * Math.abs(H[i]); k += A[i] * Math.sqrt(Math.abs(K[i])); }
+  return { h, k, r: k > 0 ? h / k : NaN };
+}
+
+// ---------- mesh building ----------
+// one or more (n+1)×(n+1) grids over the unit square; triangles (a,b,d), (a,d,c) per cell
+// clipVal / clip: drop vertices well past the cut (the shader cuts exactly at clip)
+function gridMesh(fns, n, clipVal, clip) {
+  const g = n + 1, nv = g * g * fns.length;
+  const pos = new Float64Array(3 * nv), uv = new Float32Array(2 * nv), cv = new Float32Array(nv), ok = new Uint8Array(nv), idx = [];
+  fns.forEach((f, part) => {
+    for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
+      const v = part * g * g + j * g + i, p = f(i / n, j / n), c = clipVal ? clipVal(i / n, j / n, p) : 0;
+      pos[3 * v] = p[0]; pos[3 * v + 1] = p[1]; pos[3 * v + 2] = p[2];
+      uv[2 * v] = i / n; uv[2 * v + 1] = j / n; cv[v] = Math.min(c, 1e6);
+      ok[v] = Number.isFinite(p[0] + p[1] + p[2] + c) && (!clipVal || c < 1.35 * clip) ? 1 : 0;
+    }
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const a = part * g * g + j * g + i, b = a + 1, c = a + g, d = c + 1;
+      if (ok[a] && ok[b] && ok[d]) idx.push(a, b, d);
+      if (ok[a] && ok[d] && ok[c]) idx.push(a, d, c);
+    }
+  });
+  return { pos, uv, cv, ok, idx: new Uint32Array(idx), nv, g };
+}
+
+function ringFns(h) {
+  const tube = 0.024;
+  return [1, -1].map(sg => (s, t) => { const f = 2 * PI * s, q = 2 * PI * t, r = 1 + tube * Math.cos(q);
+    return [r * Math.cos(f), r * Math.sin(f), sg * h / 2 + tube * Math.sin(q)]; });
+}
+function filmFns() {
+  const { sol, shape } = filmShape(), h = P.h;
+  if (shape === 'discs') return [1, -1].map(sg => (s, t) => [t * Math.cos(2 * PI * s), t * Math.sin(2 * PI * s), sg * h / 2]);
+  const a = sol[shape].a;
+  return [(s, t) => { const z = (t - 0.5) * h, r = a * Math.cosh(z / a); return [r * Math.cos(2 * PI * s), r * Math.sin(2 * PI * s), z]; }];
+}
+
+const sphereCache = {};
+function sphereRatio(n) {   // control: the same estimator on a unit-sphere mesh of the same resolution
+  if (sphereCache[n]) return sphereCache[n];
+  const m = gridMesh([(s, t) => [Math.sin(PI * t) * Math.cos(2 * PI * s), Math.sin(PI * t) * Math.sin(2 * PI * s), Math.cos(PI * t)]], n);
+  const c = meshCurvature(m.pos, m.idx, m.nv);
+  return sphereCache[n] = ratio(c.H, c.K, c.A, c.interior).r;
+}
+
+// Schwarz reflection: a straight line on a minimal surface is an axis of 180° rotational symmetry, and a curve where
+// the surface meets a plane at right angles is a mirror line for that plane. The disc boundary arcs between Scherk's
+// ends are straight lines at θ = 0° and such planar curves at θ = 90°; the associate family swaps the two kinds.
+// Each arc is sampled at five points and tested for being straight, then for being planar.
+function schwarzCopies(S, th, m, inside) {
+  const c = Math.cos(th), sn = Math.sin(th), at = a => { const F = S.phi([Math.cos(a), Math.sin(a)]); return F.map(z => z[0] * c + z[1] * sn); };
+  const ops = [], sb = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+  for (let k = 0; k < 4; k++) {
+    const pts = [1, 2, 3, 4, 5].map(i => at(k * PI / 2 + i * PI / 12)), a = pts[0];
+    const d = sb(pts[4], a), L = Math.hypot(...d), u = d.map(x => x / L);
+    if (pts.every(p => Math.hypot(...cross(sb(p, a), u)) < 1e-7 * L)) { ops.push({ o: a, u, line: true }); continue; }
+    let nP = cross(sb(pts[2], a), d); const l = Math.hypot(...nP); nP = nP.map(x => x / l);
+    if (pts.every(p => Math.abs(dot(sb(p, a), nP)) < 1e-7 * L)) ops.push({ o: a, u: nP, line: false });
+  }
+  let cen = [0, 0, 0], cnt = 0;
+  for (let v = 0; v < m.nv; v++) if (inside(v)) { for (let j = 0; j < 3; j++) cen[j] += m.pos[3 * v + j]; cnt++; }
+  cen = cen.map(x => x / (cnt || 1));
+  // half-turn about a line through o along u, or mirror in the plane through o with normal u. Normals keep the
+  // orientation continuous across the seam: on the line n ⊥ u, on the mirror curve n lies in the plane.
+  const rot = ({ o, u, line }, p) => { const q = sb(p, o), t = dot(q, u);
+    return line ? [0, 1, 2].map(j => 2 * (o[j] + t * u[j]) - p[j]) : [0, 1, 2].map(j => p[j] - 2 * t * u[j]); };
+  const rotN = ({ u }, n) => { const t = dot(n, u); return [0, 1, 2].map(j => n[j] - 2 * t * u[j]); };
+  const seen = [cen], keep = [];
+  for (const op of ops) { const q = rot(op, cen); if (seen.every(s => Math.hypot(...sb(s, q)) > 1e-3)) { seen.push(q); keep.push(op); } }
+  if (!keep.length) return 0;
+  const nv = m.nv, k = keep.length + 1, M = MESH;
+  const pos = new Float32Array(3 * nv * k), nrm = new Float32Array(3 * nv * k), uv = new Float32Array(2 * nv * k), kc = new Float32Array(nv * k), cvv = new Float32Array(nv * k);
+  const idx = new Uint32Array(M.idx.length * k);
+  for (let r = 0; r < k; r++) {
+    for (let v = 0; v < nv; v++) {
+      const p = [M.pos[3 * v], M.pos[3 * v + 1], M.pos[3 * v + 2]], n = [M.nrm[3 * v], M.nrm[3 * v + 1], M.nrm[3 * v + 2]];
+      const P2 = r ? rot(keep[r - 1], p) : p, N2 = r ? rotN(keep[r - 1], n) : n, o = r * nv + v;
+      pos.set(P2, 3 * o); nrm.set(N2, 3 * o); uv[2 * o] = M.uv[2 * v]; uv[2 * o + 1] = M.uv[2 * v + 1]; kc[o] = M.kc[v]; cvv[o] = M.cv[v];
+    }
+    for (let i = 0; i < M.idx.length; i++) idx[r * M.idx.length + i] = M.idx[i] + r * nv;
+  }
+  MESH = { pos, nrm, uv, kc, cv: cvv, idx };
+  return keep.length;
+}
+let MESH = null, PROPS = null, COPIES = 0, STATS = {}, FIT = { c: [0, 0, 0], r: 1 }, fitKey = '';
+function build() {
+  const S = SURF[P.s], n = P.n, th = P.th * PI / 180, t0 = performance.now();
+  const f = P.s === 'film' ? null : pointFn(S, S.theta ? th : 0);
+  const fns = P.s === 'film' ? filmFns() : [f];
+  const m = gridMesh(fns, n, S.clipVal, S.clip);
+  const inside = v => m.ok[v] && (!S.clip || m.cv[v] <= S.clip);
+  const nrm = new Float32Array(3 * m.nv), kv = new Float64Array(m.nv), Hf = new Float64Array(m.nv), Kf = new Float64Array(m.nv);
+  const g = m.g, f0 = S.kind === 'we' && S.theta ? pointFn(S, 0) : null;
+  let dev = 0, devScale = 0, areaFD = 0;
+  for (let v = 0; v < m.nv; v++) {
+    if (!m.ok[v]) continue;
+    const part = Math.floor(v / (g * g)), i = v % g, j = Math.floor(v / g) % g, s = i / n, t = j / n, fp = fns[part];
+    let q = geom(fp, s, t);
+    Hf[v] = q.H; Kf[v] = q.K;
+    if (!(q.det > 1e-14)) q = geom(fp, s, t + (t < 0.5 ? 1e-3 : -1e-3));   // degenerate (polar centre): look next door
+    nrm[3 * v] = q.n[0]; nrm[3 * v + 1] = q.n[1]; nrm[3 * v + 2] = q.n[2]; kv[v] = q.K;
+    const w = (i === 0 || i === n ? 0.5 : 1) * (j === 0 || j === n ? 0.5 : 1);
+    if (q.det > 0 && inside(v)) areaFD += w * Math.sqrt(q.det) / (n * n);
+    if (f0 && inside(v)) { const r = geom(f0, s, t);
+      devScale = Math.max(devScale, r.E + r.G); dev = Math.max(dev, Math.abs(q.E - r.E), Math.abs(q.F - r.F), Math.abs(q.G - r.G)); }
+  }
+  const mc = meshCurvature(m.pos, m.idx, m.nv);
+  let areaIn = 0;
+  for (let k = 0; k < m.idx.length; k += 3) {
+    const [a, b, c] = [m.idx[k], m.idx[k + 1], m.idx[k + 2]];
+    if (!inside(a) || !inside(b) || !inside(c)) continue;
+    const pa = [m.pos[3 * a], m.pos[3 * a + 1], m.pos[3 * a + 2]], e1 = [0, 1, 2].map(j => m.pos[3 * b + j] - pa[j]), e2 = [0, 1, 2].map(j => m.pos[3 * c + j] - pa[j]);
+    areaIn += Math.hypot(...cross(e1, e2)) / 2;
+  }
+  const use = mc.interior.slice();
+  for (let v = 0; v < m.nv; v++) if (!inside(v)) use[v] = 0;
+  let nUse = 0; for (const u of use) nUse += u;
+  const rm = ratio(mc.H, mc.K, mc.A, use), rf = ratio(Hf, Kf, mc.A, use);
+  // colour by Gaussian curvature on a scale-free ramp: t = κ / (κ + κ_med), κ = √|K|
+  const ks = []; for (let v = 0; v < m.nv; v++) if (use[v]) ks.push(Math.sqrt(Math.abs(kv[v])));
+  ks.sort((a, b) => a - b);
+  const kMed = ks.length ? ks[ks.length >> 1] : 1;
+  const kc = new Float32Array(m.nv);
+  for (let v = 0; v < m.nv; v++) { const k = Math.sqrt(Math.abs(kv[v])); kc[v] = kMed > 0 ? k / (k + kMed) : 0; }
+  MESH = { pos: Float32Array.from(m.pos), nrm, uv: m.uv, kc, cv: m.cv, idx: m.idx };
+  // framing: computed once per surface and resolution, so the θ morph does not jump
+  const key = P.s === 'film' ? 'film' : P.s + ':' + n;
+  if (key !== fitKey) {
+    fitKey = key;
+    if (P.s === 'film') FIT = { c: [0, 0, 0], r: 1.25 };
+    else {
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (let v = 0; v < m.nv; v++) if (inside(v))
+        for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], m.pos[3 * v + k]); hi[k] = Math.max(hi[k], m.pos[3 * v + k]); }
+      const c = lo.map((x, k) => (x + hi[k]) / 2);
+      FIT = { c, r: Math.max(0.5, 0.5 * Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])) };
+    }
+  }
+  if (P.s === 'film') {
+    const r = gridMesh(ringFns(P.h), 128);
+    const rn = new Float32Array(3 * r.nv);
+    for (let v = 0; v < r.nv; v++) { const x = r.pos[3 * v], y = r.pos[3 * v + 1], z = r.pos[3 * v + 2], rho = Math.hypot(x, y), zc = z > 0 ? P.h / 2 : -P.h / 2;
+      const d = [x - x / rho, y - y / rho, z - zc], l = Math.hypot(...d) || 1; rn[3 * v] = d[0] / l; rn[3 * v + 1] = d[1] / l; rn[3 * v + 2] = d[2] / l; }
+    PROPS = { pos: Float32Array.from(r.pos), nrm: rn, uv: r.uv, kc: new Float32Array(r.nv), cv: r.cv, idx: r.idx };
+  } else PROPS = null;
+  STATS = { surface: P.s, preset: P.preset, theta: P.th, n, vertices: m.nv, triangles: m.idx.length / 3, interior: nUse,
+    meshRatio: rm.r, meshH: rm.h / (rf.k || 1), fdRatio: rf.r, sphereRatio: sphereRatio(n), kMed,
+    areaMesh: areaIn, areaFD: P.s === 'costa' ? null : areaFD, metricDev: f0 ? dev / (devScale || 1) : null, ms: performance.now() - t0 };
+  if (P.s === 'film') { STATS.film = filmStats(); if (STATS.film.shape === 'discs') STATS.meshRatio = STATS.fdRatio = NaN; }
+  COPIES = S.arcs && P.copies && !animTh ? schwarzCopies(S, th, m, inside) : 0;
+  STATS.copies = COPIES;
+  upload(surfGL, MESH); if (PROPS) upload(propGL, PROPS);
+  showInfo(); drawStat(); syncUI(); dirty = true;
+}
+
+function filmStats() {
+  const { sol, shape } = filmShape();
+  return { h: P.h, hMax: H_MAX, hEq: H_EQ, shape, discs: 2,
+    stable: sol && { a: sol.stable.a, A: sol.stable.A }, unstable: sol && { a: sol.unstable.a, A: sol.unstable.A } };
+}
+
+// ---------- readouts ----------
+const fe = x => !Number.isFinite(x) ? '—' : x === 0 ? '0' : Math.abs(x) >= 0.01 ? x.toFixed(4) : x.toExponential(1);
+function showInfo() {
+  const s = STATS, flat = P.s === 'film' && s.film.shape === 'discs';
+  const lines = flat ? ['两个圆盘都是平面：H = K = 0，比值无意义。', `对照：同分辨率的单位球面网格  ${fe(s.sphereRatio)}`] : [
+    `网格（余切 Laplace + 角亏）  ⟨|H|⟩/⟨κ⟩ = ${fe(s.meshRatio)}`,
+    `解析（有限差分）             ⟨|H|⟩/⟨κ⟩ = ${fe(s.fdRatio)}`,
+    `对照：同分辨率的单位球面网格  ⟨|H|⟩/⟨κ⟩ = ${fe(s.sphereRatio)}`,
+    `参与统计的内部顶点 ${s.interior} 个，κ 的中位数 ${s.kMed.toFixed(3)}`];
+  $('hInfo').textContent = lines.join('\n');
+  $('isoInfo').textContent = s.metricDev === null ? '' : [
+    `面积（解析积分） A = ${s.areaFD.toFixed(5)}`,
+    `面积（网格三角形） = ${s.areaMesh.toFixed(5)}`,
+    `度量 E, F, G 与 θ = 0 的最大差 / max(E + G)  ${fe(s.metricDev)}`].join('\n');
+  if (P.s === 'film') {
+    const f = s.film, L = [];
+    if (f.stable) L.push(`稳定悬链面   腰半径 a/R = ${f.stable.a.toFixed(4)}   面积 ${f.stable.A.toFixed(4)} πR²`,
+      `不稳定悬链面 腰半径 a/R = ${f.unstable.a.toFixed(4)}   面积 ${f.unstable.A.toFixed(4)} πR²`);
+    else L.push(`h/R > ${H_MAX.toFixed(4)}：没有悬链面能连上两个圆环`);
+    L.push(`两个圆盘                        面积 2.0000 πR²`,
+      `h/R < ${H_EQ.toFixed(4)}：悬链面比圆盘省面积（整体最小）`,
+      `${H_EQ.toFixed(4)} < h/R < ${H_MAX.toFixed(4)}：悬链面只是局部最小（亚稳）`,
+      f.shape === 'discs' && P.show === 'auto' && !f.stable ? '→ 膜已经破开，变成两个圆盘' : '');
+    $('filmInfo').textContent = L.filter(Boolean).join('\n');
+  }
+}
+function drawStat() {
+  const s = STATS, parts = [PRESETS[P.preset] ? PRESETS[P.preset].name : '自定义'];
+  if (SURF[P.s].theta) parts.push(`θ = ${P.th.toFixed(1)}°`);
+  if (P.s === 'film') parts.push(`h/R = ${P.h.toFixed(3)}`, { stable: '稳定悬链面', unstable: '不稳定悬链面', discs: '两个圆盘' }[s.film.shape]);
+  parts.push(`${s.vertices} 个顶点`, `${s.triangles} 个三角形`);
+  if (Number.isFinite(s.meshRatio)) parts.push(`网格 ⟨|H|⟩/⟨κ⟩ = ${fe(s.meshRatio)}`);
+  $('stat').textContent = parts.join(' · ');
+  window.__ms = { ...s, view: { ...view }, color: P.c, grid: P.grid, show: P.show };
+}
+
+// ---------- WebGL ----------
+const cv = $('c'), ov = $('ov'), octx = ov.getContext('2d'), pl = $('pl'), pctx = pl.getContext('2d');
+const gl = cv.getContext('webgl2', { antialias: true });
+const RAMP = [[0.96, 0.93, 0.78], [0.99, 0.70, 0.33], [0.88, 0.33, 0.43], [0.42, 0.24, 0.66], [0.10, 0.18, 0.46]];
+const VS = `#version 300 es
+in vec3 aP; in vec3 aN; in vec2 aUV; in float aK; in float aC;
+uniform mat4 uMV, uPr; uniform mat3 uR;
+out vec3 vN, vE; out vec2 vUV; out float vK, vC;
+void main() { vec4 e = uMV * vec4(aP, 1.0); vE = e.xyz; vN = uR * aN; vUV = aUV; vK = aK; vC = aC; gl_Position = uPr * e; }`;
+const FS = `#version 300 es
+precision highp float;
+in vec3 vN, vE; in vec2 vUV; in float vK, vC;
+uniform int uMode; uniform float uGrid, uClip; uniform vec3 uRamp[5], uSolid;
+out vec4 o;
+vec3 ramp(float t) { t = clamp(t, 0.0, 1.0) * 4.0; int i = int(min(floor(t), 3.0)); float f = t - float(i);
+  vec3 a = uRamp[0], b = uRamp[1];
+  if (i == 1) { a = uRamp[1]; b = uRamp[2]; } else if (i == 2) { a = uRamp[2]; b = uRamp[3]; } else if (i == 3) { a = uRamp[3]; b = uRamp[4]; }
+  return mix(a, b, f); }
+void main() {
+  if (uClip > 0.0 && vC > uClip) discard;
+  vec3 n = normalize(vN), V = normalize(-vE);
+  bool front = dot(n, V) >= 0.0; if (!front) n = -n;
+  vec3 L1 = normalize(vec3(-0.45, 0.65, 0.62)), L2 = normalize(vec3(0.7, -0.25, 0.45));
+  float dif = 0.2 + 0.72 * max(dot(n, L1), 0.0) + 0.28 * max(dot(n, L2), 0.0);
+  float spec = pow(max(dot(n, normalize(L1 + V)), 0.0), 70.0) * 0.16;
+  vec3 base;
+  if (uMode == 0) base = front ? vec3(0.42, 0.70, 0.93) : vec3(0.96, 0.64, 0.36);
+  else if (uMode == 1) base = ramp(vK);
+  else if (uMode == 2) { float c = abs(dot(n, V)); base = 0.55 + 0.45 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + 1.6 * sqrt(1.0 - 0.56 * (1.0 - c * c)) + 0.1)); }
+  else base = uSolid;
+  vec3 col = base * dif + spec;
+  if (uGrid > 0.0) { vec2 q = vUV * uGrid, g = abs(fract(q - 0.5) - 0.5) / fwidth(q);
+    col *= mix(0.5, 1.0, clamp(min(g.x, g.y) - 0.4, 0.0, 1.0)); }
+  o = vec4(col, 1.0);
+}`;
+let prog = null, U = {}, surfGL = null, propGL = null;
+function initGL() {
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.bindAttribLocation(prog, 0, 'aP'); gl.bindAttribLocation(prog, 1, 'aN'); gl.bindAttribLocation(prog, 2, 'aUV'); gl.bindAttribLocation(prog, 3, 'aK'); gl.bindAttribLocation(prog, 4, 'aC');
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  for (const u of ['uMV', 'uPr', 'uR', 'uMode', 'uGrid', 'uClip', 'uRamp', 'uSolid']) U[u] = gl.getUniformLocation(prog, u);
+  const mk = () => { const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const b = [0, 1, 2, 3, 4].map((loc, k) => { const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, [3, 3, 2, 1, 1][k], gl.FLOAT, false, 0, 0); return buf; });
+    const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bindVertexArray(null);
+    return { vao, b, ib, count: 0 }; };
+  surfGL = mk(); propGL = mk();
+  gl.enable(gl.DEPTH_TEST);
+}
+function upload(o, m) {
+  if (!gl || !o) return;
+  gl.bindVertexArray(o.vao);
+  [m.pos, m.nrm, m.uv, m.kc, m.cv].forEach((d, k) => { gl.bindBuffer(gl.ARRAY_BUFFER, o.b[k]); gl.bufferData(gl.ARRAY_BUFFER, d, gl.DYNAMIC_DRAW); });
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.idx, gl.DYNAMIC_DRAW);
+  o.count = m.idx.length; gl.bindVertexArray(null);
+}
+
+// camera: yaw about the vertical z axis, then pitch; rows of R are the eye-space x (right), y (up), z (towards viewer)
+function rotRows() {
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+  return [[cy, -sy, 0], [-sy * sp, -cy * sp, cp], [-sy * cp, -cy * cp, -sp]];
+}
+const DIST = 5;
+function drawGL() {
+  const W = cv.width, H = cv.height;
+  gl.viewport(0, 0, W, H); gl.clearColor(0.039, 0.059, 0.082, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const R = rotRows(), s = FIT.r * (COPIES ? 1.8 : 1), c = FIT.c;
+  const t = R.map(r => -dot(r, c) / s); t[2] -= DIST;
+  const MV = [R[0][0] / s, R[1][0] / s, R[2][0] / s, 0, R[0][1] / s, R[1][1] / s, R[2][1] / s, 0, R[0][2] / s, R[1][2] / s, R[2][2] / s, 0, t[0], t[1], t[2], 1];
+  const f = 0.86 * DIST * view.zoom, near = 0.05, far = 40;
+  const Pr = [f * H / W, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0];
+  gl.useProgram(prog);
+  gl.uniformMatrix4fv(U.uMV, false, MV); gl.uniformMatrix4fv(U.uPr, false, Pr);
+  gl.uniformMatrix3fv(U.uR, false, [R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]);
+  gl.uniform3fv(U.uRamp, RAMP.flat());
+  gl.uniform1i(U.uMode, COLOR_MODES[P.c]); gl.uniform1f(U.uGrid, P.grid ? 16 : 0); gl.uniform1f(U.uClip, SURF[P.s].clip || 0);
+  gl.bindVertexArray(surfGL.vao); gl.drawElements(gl.TRIANGLES, surfGL.count, gl.UNSIGNED_INT, 0);
+  if (PROPS) {
+    gl.uniform1i(U.uMode, 3); gl.uniform1f(U.uGrid, 0); gl.uniform1f(U.uClip, 0); gl.uniform3fv(U.uSolid, [0.78, 0.8, 0.84]);
+    gl.bindVertexArray(propGL.vao); gl.drawElements(gl.TRIANGLES, propGL.count, gl.UNSIGNED_INT, 0);
+  }
+  gl.bindVertexArray(null);
+}
+
+// ---------- 2D overlay: axis triad and the K legend ----------
+function drawOverlay() {
+  const W = ov.width, H = ov.height, dpr = devicePixelRatio, c = octx;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H);
+  const R = rotRows(), Lg = 26 * dpr, ox = 40 * dpr, oy = H - 64 * dpr;
+  c.lineWidth = 1.5 * dpr; c.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; c.textBaseline = 'middle';
+  for (const [nm, ax, col] of [['x', [1, 0, 0], '#ff8a7a'], ['y', [0, 1, 0], '#8ee08a'], ['z', [0, 0, 1], '#8ab4ff']]) {
+    const a = dot(R[0], ax), b = dot(R[1], ax);
+    c.strokeStyle = c.fillStyle = col; c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + a * Lg, oy - b * Lg); c.stroke();
+    c.fillText(nm, ox + a * Lg * 1.25 - 3 * dpr, oy - b * Lg * 1.25);
+  }
+  if (P.c === 'K' && Number.isFinite(STATS.kMed)) {
+    const bw = 200 * dpr, bh = 10 * dpr, x0 = W - bw - 24 * dpr, y0 = 26 * dpr;
+    for (let i = 0; i < bw; i++) {
+      const t = i / bw * 4, k = Math.min(3, Math.floor(t)), f = t - k, a = RAMP[k], b = RAMP[k + 1];
+      c.fillStyle = `rgb(${[0, 1, 2].map(j => Math.round(255 * (a[j] + (b[j] - a[j]) * f))).join(',')})`; c.fillRect(x0 + i, y0, 1, bh);
+    }
+    c.fillStyle = '#cdd6e4'; c.font = `${11 * dpr}px -apple-system, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'top';
+    for (const t of [0, 0.25, 0.5, 0.75]) {          // t = κ/(κ + κ_med)  ⇒  K = −(κ_med t/(1 − t))²
+      const K = -((STATS.kMed * t / (1 - t)) ** 2);
+      c.fillText(t ? K.toPrecision(2) : '0', x0 + t * bw, y0 + bh + 3 * dpr);
+    }
+    c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillText('高斯曲率 K（极小曲面上 K ≤ 0）', x0, y0 - 3 * dpr);
+    c.textAlign = 'start';
+  }
+}
+
+// ---------- area vs ring separation plot ----------
+function drawPlot() {
+  pl.style.display = P.s === 'film' ? '' : 'none';
+  if (pl.style.display) return;
+  const dpr = devicePixelRatio, c = pctx, W = pl.width, H = pl.height;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = 'rgba(10,15,21,.9)'; c.fillRect(0, 0, W, H);
+  const ml = 36 * dpr, mr = 10 * dpr, mt = 24 * dpr, mb = 26 * dpr, xM = 1.6, yM = 2.6;
+  const X = h => ml + h / xM * (W - ml - mr), Y = a => mt + (yM - a) / yM * (H - mt - mb);
+  c.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; c.fillStyle = '#8a96a6'; c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 1;
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (let a = 0; a <= yM + 1e-9; a += 0.5) { c.beginPath(); c.moveTo(ml, Y(a)); c.lineTo(W - mr, Y(a)); c.stroke(); c.fillText(a.toFixed(1), ml - 4 * dpr, Y(a)); }
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  for (let h = 0; h <= xM + 1e-9; h += 0.2) { c.beginPath(); c.moveTo(X(h), mt); c.lineTo(X(h), H - mb); c.stroke(); c.fillText(h.toFixed(1), X(h), H - mb + 4 * dpr); }
+  c.textAlign = 'left'; c.fillStyle = '#cdd6e4'; c.font = `${11 * dpr}px -apple-system, sans-serif`;
+  c.fillText('面积 / πR²  对  h / R', ml, 6 * dpr);
+  // discs
+  c.strokeStyle = '#8ee08a'; c.lineWidth = 1.6 * dpr; c.beginPath(); c.moveTo(X(0), Y(2)); c.lineTo(X(xM), Y(2)); c.stroke();
+  // catenoid branches: stable t < t*, unstable t > t*
+  const branch = (t0, t1, dash, col) => { c.strokeStyle = col; c.setLineDash(dash); c.beginPath();
+    for (let i = 0; i <= 300; i++) { const t = t0 + (t1 - t0) * i / 300; i ? c.lineTo(X(hOf(t)), Y(areaOf(t))) : c.moveTo(X(hOf(t)), Y(areaOf(t))); }
+    c.stroke(); c.setLineDash([]); };
+  branch(1e-4, T_STAR, [], '#6fb3ff'); branch(T_STAR, 9, [5 * dpr, 4 * dpr], '#ff8f8f');
+  c.strokeStyle = 'rgba(255,211,138,.6)'; c.lineWidth = 1 * dpr; c.setLineDash([3 * dpr, 3 * dpr]);
+  for (const h of [H_EQ, H_MAX]) { c.beginPath(); c.moveTo(X(h), mt); c.lineTo(X(h), H - mb); c.stroke(); }
+  c.setLineDash([]);
+  c.fillStyle = '#ffd38a'; c.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; c.textAlign = 'right';
+  c.fillText(H_EQ.toFixed(3), X(H_EQ) - 3 * dpr, mt + 2 * dpr); c.textAlign = 'left'; c.fillText(H_MAX.toFixed(4), X(H_MAX) + 3 * dpr, mt + 2 * dpr);
+  // current h
+  const f = STATS.film; c.strokeStyle = '#fff'; c.lineWidth = 1.2 * dpr; c.beginPath(); c.moveTo(X(P.h), mt); c.lineTo(X(P.h), H - mb); c.stroke();
+  const dotAt = (a, col, on) => { c.fillStyle = col; c.beginPath(); c.arc(X(P.h), Y(a), (on ? 5 : 3.5) * dpr, 0, 7); c.fill();
+    if (on) { c.strokeStyle = '#fff'; c.lineWidth = 1.5 * dpr; c.stroke(); } };
+  if (f.stable) { dotAt(f.stable.A, '#6fb3ff', f.shape === 'stable'); dotAt(f.unstable.A, '#ff8f8f', f.shape === 'unstable'); }
+  dotAt(2, '#8ee08a', f.shape === 'discs');
+  c.font = `${10 * dpr}px -apple-system, sans-serif`; c.textAlign = 'left'; c.textBaseline = 'bottom';
+  c.fillStyle = '#6fb3ff'; c.fillText('稳定悬链面', X(0.06), Y(0.55));
+  c.fillStyle = '#ff8f8f'; c.fillText('不稳定悬链面', X(0.5), Y(2.38));
+  c.fillStyle = '#8ee08a'; c.fillText('两个圆盘', X(1.36), Y(2) - 3 * dpr);
+}
+
+// ---------- UI ----------
+function syncUI() {
+  const S = SURF[P.s];
+  $('Th').value = P.th; $('vTh').textContent = `${P.th.toFixed(1)}°`;
+  $('N').value = P.n; $('vN').textContent = P.n;
+  $('Hs').value = P.h; $('vH').textContent = P.h.toFixed(3);
+  $('grid').checked = P.grid; $('rot').checked = P.rot; $('copies').checked = P.copies;
+  $('copyBox').style.display = $('copyNote').style.display = S.arcs ? '' : 'none';
+  $('copyNote').textContent = !S.arcs ? '' : COPIES ? `边界是${P.th % 180 === 0 ? '直线：绕它转 180°' : '平面曲线：对那个平面做镜面反射'}，复制了 ${COPIES} 块` :
+    P.copies ? '这个 θ 下边界既不是直线也不在一个平面上，不能做 Schwarz 反射（θ = 0° 或 90° 时可以）' : '';
+  $('thBox').style.display = S.theta ? '' : 'none';
+  $('filmBox').style.display = P.s === 'film' ? '' : 'none';
+  $('anim').textContent = animTh ? '⏸ 停止' : '▶ 播放 θ 变形';
+  $('pull').textContent = pulling ? '⏸ 停止' : '▶ 慢慢拉开';
+  $('desc').textContent = (PRESETS[P.preset] || PRESETS[Object.keys(PRESETS).find(k => PRESETS[k].s === P.s)]).desc;
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  document.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === P.c));
+  document.querySelectorAll('[data-show]').forEach(b => b.classList.toggle('on', b.dataset.show === P.show));
+}
+// a preset is "on" only while θ matches it
+const markPreset = () => { const p = PRESETS[P.preset]; if (!p || p.s !== P.s || (SURF[P.s].theta && p.th !== P.th))
+  P.preset = Object.keys(PRESETS).find(k => PRESETS[k].s === P.s && (!SURF[P.s].theta || PRESETS[k].th === P.th)) || ''; };
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  P.preset = key; P.s = p.s; P.th = p.th; animTh = false; pulling = false;
+  Object.assign(view, HOME); syncUI(); build();
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+$('Th').oninput = e => { P.th = +e.target.value; animTh = false; markPreset(); syncUI(); build(); };
+$('N').oninput = e => { P.n = +e.target.value; syncUI(); build(); };
+$('Hs').oninput = e => { P.h = +e.target.value; pulling = false; syncUI(); build(); };
+$('grid').onchange = e => { P.grid = e.target.checked; dirty = true; };
+$('rot').onchange = e => { P.rot = e.target.checked; };
+$('copies').onchange = e => { P.copies = e.target.checked; build(); syncUI(); };
+$('anim').onclick = () => { animTh = !animTh; animPhase = Math.acos(clamp(1 - P.th / 45, [-1, 1])); build(); };
+$('pull').onclick = () => { pulling = !pulling; if (pulling && P.h >= LIM.h[1] - 1e-9) P.h = 0.6; P.show = 'auto'; syncUI(); build(); };
+document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { P.c = b.dataset.c; syncUI(); dirty = true; });
+document.querySelectorAll('[data-show]').forEach(b => b.onclick = () => { P.show = b.dataset.show; syncUI(); build(); });
+
+// rotate / zoom
+let drag = null, dirty = true;
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  view.yaw = wrap(view.yaw + (e.clientX - drag[0]) * 0.008);
+  view.pitch = clamp(view.pitch + (e.clientY - drag[1]) * 0.008, LIM.pitch);
+  drag = [e.clientX, e.clientY]; dirty = true;
+});
+cv.addEventListener('pointerup', () => { drag = null; cv.style.cursor = ''; });
+cv.addEventListener('dblclick', () => { Object.assign(view, HOME); dirty = true; });
+cv.addEventListener('wheel', e => { e.preventDefault(); view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0015), LIM.zoom); dirty = true; }, { passive: false });
+
+function resize() {
+  const r = cv.getBoundingClientRect(), q = pl.getBoundingClientRect(), dpr = devicePixelRatio;
+  cv.width = ov.width = Math.max(1, Math.round(r.width * dpr)); cv.height = ov.height = Math.max(1, Math.round(r.height * dpr));
+  pl.width = Math.max(1, Math.round(q.width * dpr)); pl.height = Math.max(1, Math.round(q.height * dpr));
+  dirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=helicoid  ?p=catenoid&th=30&c=K  ?p=film&h=1.2&show=unstable  ?yaw=1&pitch=0.3&z=1.4&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const pk = q.get('p');
+if (pk !== null && Object.hasOwn(PRESETS, pk)) { P.preset = pk; P.s = PRESETS[pk].s; P.th = PRESETS[pk].th; }
+num('th', x => { P.th = Math.round(clamp(x, LIM.th) * 2) / 2; });
+num('n', x => { P.n = Math.round(clamp(x, LIM.n) / 4) * 4; });
+num('h', x => { P.h = Math.round(clamp(x, LIM.h) * 1000) / 1000; });
+const ck = q.get('c'); if (ck !== null && Object.hasOwn(COLOR_MODES, ck)) P.c = ck;
+const sk = q.get('show'); if (sk !== null && SHOWS.includes(sk)) P.show = sk;
+num('yaw', x => view.yaw = clamp(x, LIM.yaw)); num('pitch', x => view.pitch = clamp(x, LIM.pitch)); num('z', x => view.zoom = clamp(x, LIM.zoom));
+if (q.get('grid') === '1') P.grid = true;
+if (q.get('rot') === '1') P.rot = true;
+if (q.get('copies') === '0') P.copies = false;
+if (q.get('anim') === '1') animTh = true;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+markPreset();
+
+resize();
+if (!gl) $('err').textContent = '这个浏览器不支持 WebGL2，画不出曲面（数值检验照常进行）。';
+else { try { initGL(); } catch (e) { $('err').textContent = 'WebGL 着色器编译失败：' + e.message; } }
+syncUI(); build();
+if (animTh) animPhase = Math.acos(clamp(1 - P.th / 45, [-1, 1]));
+
+(function loop() {
+  if (animTh && SURF[P.s].theta) {           // ping-pong between catenoid-like θ = 0 and helicoid-like θ = 90°
+    animPhase += 0.012; P.th = Math.round((45 - 45 * Math.cos(animPhase)) * 10) / 10; markPreset(); syncUI(); build();
+  }
+  if (pulling && P.s === 'film') {
+    P.h = Math.min(LIM.h[1], P.h + 0.002); if (P.h >= LIM.h[1]) pulling = false; syncUI(); build();
+  }
+  if (P.rot && !drag) { view.yaw = wrap(view.yaw + 0.004); dirty = true; }
+  if (dirty) {
+    dirty = false;
+    if (gl && prog) drawGL();
+    drawOverlay(); drawPlot(); drawStat();
+    window.__ready = true;
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

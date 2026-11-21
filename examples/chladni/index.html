@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Chladni 图形 · 沙子画出的驻波</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #100f0c; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(31,29,24,.93); border: 1px solid #47402f; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #d8c69c; border-top: 1px solid #47402f; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #9a9282; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #352f24; color: #e6e6e6; border: 1px solid #4d4532;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #443c2d; }
+  button.on { background: #6e5a2e; border-color: #9a7f45; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #res { width: 100%; height: 96px; display: block; margin-top: 4px; background: #181611; border-radius: 4px; cursor: pointer; }
+  .info { font: 11px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #b9b19e; margin-top: 4px; white-space: pre-wrap; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(16,15,12,.8); color: #d8d2c4; font-size: 12px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Chladni 图形 · 沙子画出的驻波</h1>
+  <small>板按某个本征频率共振时，每一点以振幅 |u(x, y)| 上下振动。沙粒被振得乱跳，跳的幅度和 |u| 成正比；只有落到 <span class="mono">u = 0</span> 的节点线上才停得住。几千粒沙子就这样自己画出了节点线。</small>
+
+  <h2>板的形状与振型</h2>
+  <div class="presets" id="kinds"></div>
+  <small id="kindNote"></small>
+
+  <h2>本征模态</h2>
+  <div class="row">
+    <label><span id="lm">m</span> <b id="vm"></b></label>
+    <input id="m" type="range" min="0" max="10" step="1">
+  </div>
+  <div class="row">
+    <label><span id="ln">n</span> <b id="vn"></b></label>
+    <input id="n" type="range" min="1" max="10" step="1">
+  </div>
+  <div class="row" id="arow">
+    <label>简并混合角 α <b id="va"></b></label>
+    <input id="a" type="range" min="-90" max="90" step="1">
+    <small><span class="mono">u = cos α·φ<sub>m,n</sub> + sin α·φ<sub>n,m</sub></span>：两个振型频率相同，任何组合都是本征函数。</small>
+    <div class="presets"><button id="aP">＋ 组合 (45°)</button><button id="aM">− 组合 (−45°)</button><button id="a0">单个 (0°)</button></div>
+  </div>
+  <div class="info" id="minfo"></div>
+
+  <h2>扫频：在一点驱动整块板</h2>
+  <div class="checks"><label><input id="sw" type="checkbox"> 扫频模式</label></div>
+  <div class="row">
+    <label>驱动频率 f <b id="vf"></b></label>
+    <input id="f" type="range" step="0.001">
+  </div>
+  <div class="row">
+    <label>阻尼 ζ <b id="vz"></b></label>
+    <input id="z" type="range" min="0.002" max="0.05" step="0.001">
+  </div>
+  <div class="presets"><button id="auto">▶ 自动扫频</button><button id="snap">吸附到最近共振</button></div>
+  <canvas id="res"></canvas>
+  <small>响应曲线 ‖u‖（对数坐标）。灰色竖线是本征频率，金线是当前频率。单击曲线可以跳到那个频率，单击板面可以移动驱动点（红点）。</small>
+  <div class="info" id="sinfo"></div>
+
+  <h2>沙子</h2>
+  <div class="row">
+    <label>沙粒数 <b id="vg"></b></label>
+    <input id="g" type="range" min="500" max="30000" step="500">
+  </div>
+  <div class="row">
+    <label>振动强度 <b id="vsp"></b></label>
+    <input id="sp" type="range" min="0.2" max="3" step="0.05">
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="scatter">↺ 重新撒沙</button></div>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="fld" type="checkbox"> 位移场 u（红正蓝负）</label>
+    <label><input id="nl" type="checkbox"> 精确节点线</label>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+const G = 200;                 // field grid: G×G cell centres on the unit square
+const MAX_GRAINS = 30000;
+const MAX_IT = 3000;           // most warm-up jitter steps from the URL
+const CURVE_N = 800;           // samples of the resonance curve
+const BES_N = 160;             // trapezoid nodes for Bessel integrals (exact to float precision for m + x < ~120)
+const BES_XMAX = 50;           // Bessel zeros are tabulated up to here
+const BES_MMAX = 40;           // ... for orders 0..40 (enough to rank every mode the UI offers)
+const RAD_N = 1024;            // radial table resolution for J_m(j r)
+
+// ---------- Bessel functions and their zeros ----------
+// J_m(x) = (1/2π) ∫₀^{2π} cos(mτ − x sin τ) dτ. The integrand is periodic and analytic,
+// so the plain trapezoid rule converges exponentially.
+const BT = new Float64Array(BES_N), BS = new Float64Array(BES_N);
+for (let j = 0; j < BES_N; j++) { BT[j] = 2 * Math.PI * j / BES_N; BS[j] = Math.sin(BT[j]); }
+function besselJ(m, x) {
+  // small x: the power series Σ (−1)^s (x/2)^{2s+m} / (s!(s+m)!). The trapezoid sum would return rounding
+  // noise of either sign there (J_7(0.02) ≈ 1e−17), which breaks sign-based domain counts.
+  if (x < 4) {
+    let term = 1, s = 0;
+    for (let i = 1; i <= m; i++) term *= x / 2 / i;
+    for (let k = 0; k < 40; k++) { s += term; term *= -(x * x / 4) / ((k + 1) * (k + 1 + m)); }
+    return s;
+  }
+  let s = 0;
+  for (let j = 0; j < BES_N; j++) s += Math.cos(m * BT[j] - x * BS[j]);
+  return s / BES_N;
+}
+// positive zeros j_{m,1} < j_{m,2} < … below BES_XMAX. j_{m,1} > m, and J_m is tiny (pure rounding noise)
+// well below x = m, so the scan starts at x = m.
+function besselZeros(m) {
+  const out = [];
+  let x0 = Math.max(0.05, m), f0 = besselJ(m, x0);
+  for (let x1 = x0 + 0.1; x1 <= BES_XMAX; x1 += 0.1) {
+    const f1 = besselJ(m, x1);
+    if (f0 * f1 < 0) {
+      let a = x1 - 0.1, b = x1, fa = f0;
+      for (let it = 0; it < 50; it++) { const c = (a + b) / 2, fc = besselJ(m, c); if (fa * fc <= 0) b = c; else { a = c; fa = fc; } }
+      out.push((a + b) / 2);
+    }
+    f0 = f1;
+  }
+  return out;
+}
+const ZEROS = Array.from({ length: BES_MMAX + 1 }, (_, m) => besselZeros(m));
+
+// ---------- the three families of modes ----------
+// unit-square coordinates: x, y ∈ [0, 1]; the disk has centre (½, ½) and radius ½
+const KINDS = {
+  mem:  { name: '方膜 sin·sin', mLo: 1, mHi: 10, nLo: 1, nHi: 10, fmin: 0.5, fmax: 5, zeta: 0.01, mix: true,
+          note: '边缘固定的方形鼓膜：φ = sin(mπx)·sin(nπy)，频率 ∝ √(m² + n²)。', sw: [1, 10, 1, 10] },
+  chl:  { name: 'Chladni 板 cos·cos', mLo: 0, mHi: 10, nLo: 0, nHi: 10, fmin: 0.5, fmax: 50, zeta: 0.006, mix: true,
+          note: '边缘自由：φ = cos(mπx)·cos(nπy)，Chladni 的经典组合是 cos(nπx)cos(mπy) ± cos(mπx)cos(nπy)。频率按板的规律取 ∝ m² + n²。', sw: [0, 10, 0, 10] },
+  circ: { name: '圆膜 Bessel', mLo: 0, mHi: 8, nLo: 1, nHi: 6, fmin: 0.5, fmax: 5, zeta: 0.01, mix: false,
+          note: '边缘固定的圆形鼓膜：φ = J_m(j_{m,k}·r)·cos mθ，k − 1 个节点圆、m 条节点直径，频率 ∝ j_{m,k}。', sw: [0, 9, 1, 5] },
+};
+const KIND_KEYS = Object.keys(KINDS);
+
+function freq(kind, m, n) {
+  if (kind === 'mem') return Math.sqrt((m * m + n * n) / 2);       // (1,1) = 1
+  if (kind === 'chl') return m * m + n * n;
+  return ZEROS[m][n - 1] / ZEROS[0][0];                           // (0,1) = 1
+}
+
+const XC = new Float64Array(G);      // cell-centre coordinates
+for (let i = 0; i < G; i++) XC[i] = (i + 0.5) / G;
+const MASK = new Uint8Array(G * G), RR = new Float64Array(G * G), TH = new Float64Array(G * G);
+for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+  const dx = XC[i] - 0.5, dy = XC[j] - 0.5, k = j * G + i;
+  RR[k] = 2 * Math.hypot(dx, dy); TH[k] = Math.atan2(dy, dx); MASK[k] = RR[k] < 1 ? 1 : 0;
+}
+
+function radialTable(m, z) {
+  const t = new Float64Array(RAD_N + 1);
+  for (let i = 0; i <= RAD_N; i++) t[i] = besselJ(m, z * i / RAD_N);
+  return t;
+}
+// one basis function on the grid. part: 'c' = cos mθ, 's' = sin mθ (circle only)
+function basis(kind, m, n, part) {
+  const u = new Float32Array(G * G);
+  if (kind === 'circ') {
+    const t = radialTable(m, ZEROS[m][n - 1]);
+    for (let k = 0; k < G * G; k++) {
+      if (!MASK[k]) continue;
+      const r = RR[k] * RAD_N, i = Math.floor(r), f = r - i;
+      const rad = t[i] + (t[Math.min(RAD_N, i + 1)] - t[i]) * f;
+      u[k] = rad * (part === 's' ? Math.sin(m * TH[k]) : Math.cos(m * TH[k]));
+    }
+    return u;
+  }
+  const F = kind === 'mem' ? Math.sin : Math.cos, sx = new Float64Array(G), sy = new Float64Array(G);
+  for (let i = 0; i < G; i++) { sx[i] = F(m * Math.PI * XC[i]); sy[i] = F(n * Math.PI * XC[i]); }
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) u[j * G + i] = sx[i] * sy[j];
+  return u;
+}
+function normalize(u) {
+  let s = 0, c = 0;
+  for (let k = 0; k < u.length; k++) if (P.kind !== 'circ' || MASK[k]) { s += u[k] * u[k]; c++; }
+  const r = Math.sqrt(s / Math.max(1, c)) || 1;
+  for (let k = 0; k < u.length; k++) u[k] /= r;
+  return u;
+}
+
+// rank of an eigenvalue: 1 + number of eigenvalues (with multiplicity) strictly below it
+function courantIndex(kind, m, n) {
+  const f = freq(kind, m, n) * (1 - 1e-9);
+  let c = 0;
+  if (kind === 'circ') {
+    for (let mm = 0; mm <= BES_MMAX; mm++) for (const z of ZEROS[mm]) if (z / ZEROS[0][0] < f) c += mm ? 2 : 1;
+  } else {
+    const lo = kind === 'mem' ? 1 : 0;
+    for (let a = lo; a <= 60; a++) for (let b = lo; b <= 60; b++) if (freq(kind, a, b) < f) c++;
+  }
+  return c + 1;
+}
+
+// connected regions of constant sign in an nx × ny array (4-neighbour flood fill, explicit bounded stack).
+// wrap: the x direction is periodic (θ on a polar grid). Zeros belong to no region.
+function nodalDomains(u, nx, ny, wrap) {
+  const N = nx * ny, lab = new Int32Array(N), stack = new Int32Array(N);
+  let count = 0;
+  for (let s = 0; s < N; s++) {
+    if (lab[s] || u[s] === 0) continue;
+    count++; const sg = u[s] > 0; let sp = 0; stack[sp++] = s; lab[s] = count;
+    while (sp > 0) {
+      const k = stack[--sp], i = k % nx, j = (k - i) / nx;
+      const nb = [i > 0 ? k - 1 : wrap ? k + nx - 1 : -1, i < nx - 1 ? k + 1 : wrap ? k - nx + 1 : -1, j > 0 ? k - nx : -1, j < ny - 1 ? k + nx : -1];
+      for (const q of nb) {
+        if (q < 0 || lab[q] || u[q] === 0 || (u[q] > 0) !== sg) continue;
+        lab[q] = count; stack[sp++] = q;
+      }
+    }
+  }
+  return count;
+}
+// the disk is counted on a polar grid: near the centre the m nodal diameters are thinner than a square cell,
+// and same-sign sectors would touch there. On (r, θ) every sector keeps its full width down to r → 0.
+const POL_R = 240, POL_T = 480;
+function diskDomains(m, n) {
+  const t = radialTable(m, ZEROS[m][n - 1]), u = new Float32Array(POL_R * POL_T);
+  for (let j = 0; j < POL_R; j++) {
+    const r = (j + 0.5) / POL_R * RAD_N, i = Math.floor(r), rad = t[i] + (t[i + 1] - t[i]) * (r - i);
+    for (let a = 0; a < POL_T; a++) u[j * POL_T + a] = Math.sign(rad) * Math.sign(Math.cos(m * 2 * Math.PI * (a + 0.5) / POL_T));
+  }
+  return nodalDomains(u, POL_T, POL_R, true);
+}
+
+// ---------- state ----------
+const PRESETS = {
+  chl25m:  { name: 'Chladni (2,5) −', kind: 'chl', m: 2, n: 5, a: -45 },
+  chl24p:  { name: 'Chladni (2,4) ＋', kind: 'chl', m: 2, n: 4, a: 45 },
+  chl24m:  { name: 'Chladni (2,4) −', kind: 'chl', m: 2, n: 4, a: -45 },
+  chl37m:  { name: 'Chladni (3,7) −', kind: 'chl', m: 3, n: 7, a: -45 },
+  mem21:   { name: '方膜 (2,1)', kind: 'mem', m: 2, n: 1, a: 0 },
+  mem13:   { name: '方膜 (1,3) 简并混合', kind: 'mem', m: 1, n: 3, a: 45 },
+  circ23:  { name: '圆膜 (2,3)', kind: 'circ', m: 2, n: 3, a: 0 },
+  circ52:  { name: '圆膜 (5,2)', kind: 'circ', m: 5, n: 2, a: 0 },
+  sweep:   { name: '扫频 · 方膜', kind: 'mem', m: 2, n: 1, a: 0, sw: true, f: 1.58 },
+  sweepc:  { name: '扫频 · 圆膜', kind: 'circ', m: 1, n: 1, a: 0, sw: true, f: 1.59 },
+  sweepchl:{ name: '扫频 · Chladni 板', kind: 'chl', m: 2, n: 3, a: 0, sw: true, f: 13 },
+};
+const DRIVER = { mem: [0.13, 0.21], chl: [0.07, 0.29], circ: [0.79, 0.62] };
+const P = { preset: 'chl25m', kind: 'chl', m: 2, n: 5, a: -45, sw: false, f: 13, zeta: 0.006, grains: 12000, speed: 1,
+  fld: false, nl: false, dx: 0.07, dy: 0.29 };
+let running = true, autoSweep = false, seed = 1;
+
+const $ = id => document.getElementById(id);
+function rng(s) {   // mulberry32: same seed, same sand
+  let t = s >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+let rand = rng(1);
+
+// ---------- field ----------
+let U = new Float32Array(G * G);     // signed displacement (mode view) or amplitude (sweep)
+let AMP = new Float32Array(G * G);   // jitter amplitude in [0, 1]
+let domains = 0, cIndex = 1, sweepInfo = null, fieldDirty = true;
+
+function modeField() {
+  let u;
+  if (P.kind === 'circ') u = basis('circ', P.m, P.n, 'c');
+  else {
+    const al = P.m === P.n ? 0 : P.a * Math.PI / 180, ca = Math.cos(al), sa = Math.sin(al);
+    const b1 = basis(P.kind, P.m, P.n), b2 = basis(P.kind, P.n, P.m);
+    u = new Float32Array(G * G);
+    for (let k = 0; k < G * G; k++) u[k] = ca * b1[k] + sa * b2[k];
+  }
+  let mx = 0; for (let k = 0; k < G * G; k++) mx = Math.max(mx, Math.abs(u[k]));
+  for (let k = 0; k < G * G; k++) { AMP[k] = mx > 0 ? Math.abs(u[k]) / mx : 0; if (AMP[k] < 1e-6) u[k] = 0; }
+  U = u; cIndex = courantIndex(P.kind, P.m, P.n);
+  domains = P.kind === 'circ' ? diskDomains(P.m, P.n) : nodalDomains(u, G, G, false);
+}
+
+// sweep: driven, damped plate. u(x) = Σ_i φ_i(x₀) φ_i(x) / (f_i² − f² + 2iζ f_i f) with orthonormal φ_i
+let cache = { kind: null, modes: [] };
+function sweepModes() {
+  if (cache.kind === P.kind) return cache.modes;
+  const [a0, a1, b0, b1] = KINDS[P.kind].sw, modes = [];
+  for (let m = a0; m <= a1; m++) for (let n = b0; n <= b1; n++) {
+    if (P.kind === 'chl' && m === 0 && n === 0) continue;     // rigid bounce: f = 0
+    if (P.kind === 'circ' && !(ZEROS[m] && ZEROS[m][n - 1])) continue;
+    const parts = P.kind === 'circ' && m > 0 ? ['c', 's'] : ['c'];
+    for (const part of parts) modes.push({ m, n, part, f: freq(P.kind, m, n), phi: normalize(basis(P.kind, m, n, part)) });
+  }
+  cache = { kind: P.kind, modes };
+  return modes;
+}
+function sample(u, x, y) {
+  const gx = Math.min(G - 1, Math.max(0, x * G - 0.5)), gy = Math.min(G - 1, Math.max(0, y * G - 0.5));
+  const i = Math.min(G - 2, Math.floor(gx)), j = Math.min(G - 2, Math.floor(gy)), fx = gx - i, fy = gy - j, k = j * G + i;
+  return (u[k] * (1 - fx) + u[k + 1] * fx) * (1 - fy) + (u[k + G] * (1 - fx) + u[k + G + 1] * fx) * fy;
+}
+function weights(modes, f) {
+  return modes.map(md => {
+    const re = md.f * md.f - f * f, im = 2 * P.zeta * md.f * f, d = re * re + im * im, drv = sample(md.phi, P.dx, P.dy);
+    return [drv * re / d, -drv * im / d];
+  });
+}
+let curve = new Float64Array(CURVE_N), curveKey = '';
+function buildCurve() {
+  const key = [P.kind, P.dx, P.dy, P.zeta].join();
+  if (key === curveKey) return;
+  const modes = sweepModes(), K = KINDS[P.kind];
+  for (let s = 0; s < CURVE_N; s++) {
+    const f = K.fmin + (K.fmax - K.fmin) * s / (CURVE_N - 1);
+    curve[s] = Math.sqrt(weights(modes, f).reduce((t, [a, b]) => t + a * a + b * b, 0));
+  }
+  curveKey = key;
+}
+function sweepField() {
+  const modes = sweepModes(), w = weights(modes, P.f), re = new Float32Array(G * G), im = new Float32Array(G * G);
+  let tot = 0, best = 0;
+  for (let i = 0; i < modes.length; i++) { const e = w[i][0] ** 2 + w[i][1] ** 2; tot += e; if (e > w[best][0] ** 2 + w[best][1] ** 2) best = i; }
+  for (let i = 0; i < modes.length; i++) {
+    const [a, b] = w[i], phi = modes[i].phi;
+    if (a * a + b * b < 1e-10 * tot) continue;
+    for (let k = 0; k < G * G; k++) { re[k] += a * phi[k]; im[k] += b * phi[k]; }
+  }
+  let mx = 0;
+  for (let k = 0; k < G * G; k++) { U[k] = Math.hypot(re[k], im[k]); mx = Math.max(mx, U[k]); }
+  // share of the response energy in the dominant eigenvalue (degenerate partners counted together)
+  const fd = modes[best].f; let share = 0;
+  for (let i = 0; i < modes.length; i++) if (Math.abs(modes[i].f - fd) < 1e-9) share += w[i][0] ** 2 + w[i][1] ** 2;
+  // drive level: response relative to the peak of the nearest resonance. Far from resonance the plate barely moves.
+  const rNow = Math.sqrt(tot), wPeak = weights(modes, fd), rPeak = Math.sqrt(wPeak.reduce((t, [a, b]) => t + a * a + b * b, 0)) || 1;
+  const level = Math.min(1, 3 * rNow / rPeak);
+  for (let k = 0; k < G * G; k++) AMP[k] = mx > 0 ? level * U[k] / mx : 0;
+  sweepInfo = { mode: modes[best], share: tot > 0 ? share / tot : 0, level, rNow };
+}
+function rebuildField() {
+  buildCurve();
+  if (P.sw) sweepField(); else modeField();
+  fieldDirty = true; drawRes(); drawInfo();
+}
+
+// ---------- sand: a random walk whose step size is proportional to |u| ----------
+const XS = new Float32Array(MAX_GRAINS), YS = new Float32Array(MAX_GRAINS);
+let steps = 0, settle = 0;
+function scatter() {
+  rand = rng(seed);
+  for (let g = 0; g < MAX_GRAINS; g++) {
+    let x, y, it = 0;
+    do { x = rand(); y = rand(); } while (P.kind === 'circ' && (x - 0.5) ** 2 + (y - 0.5) ** 2 > 0.25 && ++it < 100);
+    XS[g] = x; YS[g] = y;
+  }
+  steps = 0;
+}
+function jitter() {
+  const s0 = 0.025 * P.speed, circ = P.kind === 'circ';
+  for (let g = 0; g < P.grains; g++) {
+    const x = XS[g], y = YS[g], s = s0 * sample(AMP, x, y);
+    let nx = x + s * (2 * rand() - 1), ny = y + s * (2 * rand() - 1);
+    if (circ) { if ((nx - 0.5) ** 2 + (ny - 0.5) ** 2 > 0.249) continue; }
+    else {
+      if (nx < 0) nx = -nx; if (nx > 1) nx = 2 - nx; if (ny < 0) ny = -ny; if (ny > 1) ny = 2 - ny;
+      nx = Math.min(1, Math.max(0, nx)); ny = Math.min(1, Math.max(0, ny));
+    }
+    XS[g] = nx; YS[g] = ny;
+  }
+  steps++;
+}
+// how settled the sand is: mean jitter amplitude at the grains (1 = loudest point, 0 = on a nodal line)
+function measure() {
+  let s = 0;
+  for (let g = 0; g < P.grains; g++) s += sample(AMP, XS[g], YS[g]);
+  settle = s / Math.max(1, P.grains);
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d'), rc = $('res'), rctx = rc.getContext('2d');
+const off = document.createElement('canvas'); off.width = off.height = G;
+const octx = off.getContext('2d'), oimg = octx.createImageData(G, G);
+let W = 1, H = 1;
+const PLATE = [34, 33, 30];
+function plateBox() {
+  const S = Math.min(W, H) * 0.88;
+  return { S, ox: (W - S) / 2, oy: (H - S) / 2 };
+}
+function paintField() {
+  const d = oimg.data, signed = !P.sw;
+  let mx = 0; for (let k = 0; k < G * G; k++) mx = Math.max(mx, Math.abs(U[k]));
+  for (let r = 0; r < G; r++) for (let i = 0; i < G; i++) {
+    const k = (G - 1 - r) * G + i, o = (r * G + i) * 4;
+    if (P.kind === 'circ' && !MASK[k]) { d[o + 3] = 0; continue; }
+    let c = PLATE;
+    if (P.fld && mx > 0) {
+      const v = U[k] / mx, t = Math.abs(v) * 0.6;
+      const tgt = !signed ? [200, 130, 60] : v > 0 ? [215, 85, 60] : [70, 120, 215];
+      c = [PLATE[0] + (tgt[0] - PLATE[0]) * t, PLATE[1] + (tgt[1] - PLATE[1]) * t, PLATE[2] + (tgt[2] - PLATE[2]) * t];
+    }
+    if (P.nl && signed) {
+      const u = U[k], rgt = i < G - 1 ? U[k + 1] : u, up = r > 0 ? U[k + G] : u;
+      if (u === 0 || u * rgt < 0 || u * up < 0) c = [110, 215, 255];
+    }
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  }
+  octx.putImageData(oimg, 0, 0);
+}
+function draw() {
+  const dpr = devicePixelRatio, { S, ox, oy } = plateBox(), circ = P.kind === 'circ';
+  ctx.fillStyle = '#100f0c'; ctx.fillRect(0, 0, W, H);
+  if (fieldDirty) { paintField(); fieldDirty = false; }
+  ctx.save();
+  ctx.beginPath(); circ ? ctx.arc(ox + S / 2, oy + S / 2, S / 2, 0, 2 * Math.PI) : ctx.rect(ox, oy, S, S); ctx.clip();
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(off, ox, oy, S, S);
+  // sand
+  const gs = Math.max(1, 1.4 * dpr);
+  ctx.fillStyle = 'rgba(246,230,186,.82)'; ctx.beginPath();
+  for (let g = 0; g < P.grains; g++) ctx.rect(ox + XS[g] * S - gs / 2, oy + (1 - YS[g]) * S - gs / 2, gs, gs);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#6b6352'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
+  circ ? ctx.arc(ox + S / 2, oy + S / 2, S / 2, 0, 2 * Math.PI) : ctx.rect(ox, oy, S, S); ctx.stroke();
+  if (P.sw) {
+    const x = ox + P.dx * S, y = oy + (1 - P.dy) * S;
+    ctx.fillStyle = '#ff6b5b'; ctx.beginPath(); ctx.arc(x, y, 5 * dpr, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,107,91,.5)'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(x, y, 10 * dpr, 0, 2 * Math.PI); ctx.stroke();
+  }
+}
+function drawRes() {
+  const dpr = devicePixelRatio, w = Math.max(1, Math.round(rc.clientWidth * dpr)), h = Math.max(1, Math.round(rc.clientHeight * dpr));
+  if (rc.width !== w || rc.height !== h) { rc.width = w; rc.height = h; }
+  rctx.clearRect(0, 0, w, h);
+  const K = KINDS[P.kind];
+  if (curveKey === '') return;
+  let lo = Infinity, hi = -Infinity;
+  for (const v of curve) { const l = Math.log10(Math.max(v, 1e-12)); lo = Math.min(lo, l); hi = Math.max(hi, l); }
+  lo = Math.max(lo, hi - 5);
+  const X = f => (f - K.fmin) / (K.fmax - K.fmin) * w, Y = v => h - 3 - (Math.log10(Math.max(v, 1e-12)) - lo) / Math.max(1e-9, hi - lo) * (h - 8);
+  rctx.strokeStyle = 'rgba(150,140,120,.35)'; rctx.lineWidth = 1;
+  for (const md of sweepModes()) if (md.f >= K.fmin && md.f <= K.fmax) { rctx.beginPath(); rctx.moveTo(X(md.f) + .5, 0); rctx.lineTo(X(md.f) + .5, h); rctx.stroke(); }
+  rctx.strokeStyle = '#e8b86a'; rctx.lineWidth = 1.4 * dpr; rctx.beginPath();
+  for (let s = 0; s < CURVE_N; s++) { const x = s / (CURVE_N - 1) * w, y = Y(curve[s]); s ? rctx.lineTo(x, y) : rctx.moveTo(x, y); }
+  rctx.stroke();
+  // sweep: the driving frequency; mode view: the frequency of the chosen mode (dashed)
+  const fm = P.sw ? P.f : freq(P.kind, P.m, P.n);
+  if (!P.sw) rctx.setLineDash([4 * dpr, 3 * dpr]);
+  rctx.strokeStyle = '#ffd38a'; rctx.lineWidth = 2 * dpr; rctx.beginPath(); rctx.moveTo(X(fm), 0); rctx.lineTo(X(fm), h); rctx.stroke();
+  rctx.setLineDash([]);
+}
+const modeName = (kind, m, n, part) => kind === 'circ' ? `(m=${m}, k=${n}${m && part ? (part === 's' ? ', sin' : ', cos') : ''})` : `(${m},${n})`;
+function drawInfo() {
+  const K = KINDS[P.kind];
+  const fstr = P.kind === 'chl' ? `f ∝ m² + n² = ${freq(P.kind, P.m, P.n)}` :
+    P.kind === 'mem' ? `f / f₁₁ = √((m²+n²)/2) = ${freq('mem', P.m, P.n).toFixed(4)}` :
+    `j_{${P.m},${P.n}} = ${ZEROS[P.m][P.n - 1].toFixed(4)} · f / f₀₁ = ${freq('circ', P.m, P.n).toFixed(4)}`;
+  $('minfo').textContent = P.sw ? '（扫频模式中：振型由驱动频率决定）' :
+    `${fstr}\n节点域 ${domains} 个 · 按频率排第 ${cIndex} 个本征值 · Courant 上界 ${cIndex}` +
+    (K.mix && P.m === P.n ? '\nm = n：只有一个振型，α 不起作用' : '');
+  if (P.sw && sweepInfo) {
+    const md = sweepInfo.mode;
+    const deg = P.kind === 'circ' ? md.m > 0 : md.m !== md.n;   // a degenerate pair: the driver point picks the mix
+    $('sinfo').textContent = `最近的共振 ${modeName(P.kind, md.m, md.n, '')}${deg ? '（简并的一对）' : ''}，f = ${md.f.toFixed(4)}\n` +
+      `它占响应能量 ${(100 * sweepInfo.share).toFixed(1)}% · 振动强度 ${(100 * sweepInfo.level).toFixed(0)}%`;
+  } else $('sinfo').textContent = '';
+  drawStat();
+}
+function drawStat() {
+  const K = KINDS[P.kind];
+  const head = P.sw ? `扫频 f = ${P.f.toFixed(3)} · ${K.name}` : `${K.name} ${modeName(P.kind, P.m, P.n, 'c')}` +
+    (K.mix && P.m !== P.n ? ` · α = ${P.a}°` : '') + ` · 节点域 ${domains}`;
+  $('stat').textContent = `${head} · ${P.grains.toLocaleString()} 粒沙 · 沙粒处平均振幅 ${(100 * settle).toFixed(1)}% · 第 ${steps} 步` +
+    (running ? '' : ' · 已暂停');
+}
+
+// ---------- UI ----------
+function syncUI() {
+  const K = KINDS[P.kind], circ = P.kind === 'circ';
+  $('m').min = K.mLo; $('m').max = K.mHi; $('m').value = P.m; $('vm').textContent = P.m;
+  $('n').min = K.nLo; $('n').max = K.nHi; $('n').value = P.n; $('vn').textContent = P.n;
+  $('lm').textContent = circ ? '角向 m（节点直径条数）' : 'm';
+  $('ln').textContent = circ ? '径向 k（第 k 个零点，k − 1 个节点圆）' : 'n';
+  $('arow').style.display = K.mix ? '' : 'none';
+  $('a').value = P.a; $('va').textContent = P.a + '°';
+  $('sw').checked = P.sw;
+  $('f').min = K.fmin; $('f').max = K.fmax; $('f').value = P.f; $('vf').textContent = P.f.toFixed(3);
+  $('z').value = P.zeta; $('vz').textContent = P.zeta.toFixed(3);
+  $('g').value = P.grains; $('vg').textContent = P.grains.toLocaleString();
+  $('sp').value = P.speed; $('vsp').textContent = P.speed.toFixed(2);
+  $('fld').checked = P.fld; $('nl').checked = P.nl;
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  $('auto').textContent = autoSweep ? '⏸ 停止扫频' : '▶ 自动扫频';
+  $('kindNote').textContent = K.note;
+  document.querySelectorAll('[data-k]').forEach(b => b.classList.toggle('on', b.dataset.k === P.kind));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+const fToMode = () => { const K = KINDS[P.kind]; P.f = Math.min(K.fmax, Math.max(K.fmin, freq(P.kind, P.m, P.n))); };
+const clampMN = () => { const K = KINDS[P.kind]; P.m = Math.min(K.mHi, Math.max(K.mLo, P.m)); P.n = Math.min(K.nHi, Math.max(K.nLo, P.n)); };
+function setKind(k) {
+  if (k === P.kind) return;
+  P.kind = k; clampMN(); P.zeta = KINDS[k].zeta;
+  [P.dx, P.dy] = DRIVER[k];
+  fToMode(); curveKey = ''; scatter();
+}
+function loadPreset(key) {
+  const p = PRESETS[key];
+  P.preset = key; setKind(p.kind); P.m = p.m; P.n = p.n; P.a = p.a; P.sw = !!p.sw;
+  if (p.f) P.f = p.f; else fToMode();
+  autoSweep = false; scatter(); syncUI(); rebuildField();
+}
+const changed = () => { P.preset = ''; syncUI(); rebuildField(); };
+
+for (const k of KIND_KEYS) {
+  const b = document.createElement('button');
+  b.textContent = KINDS[k].name; b.dataset.k = k; b.onclick = () => { setKind(k); changed(); };
+  $('kinds').appendChild(b);
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+$('m').oninput = e => { P.m = Math.round(+e.target.value); P.sw = false; changed(); };
+$('n').oninput = e => { P.n = Math.round(+e.target.value); P.sw = false; changed(); };
+$('a').oninput = e => { P.a = Math.round(+e.target.value); P.sw = false; changed(); };
+$('aP').onclick = () => { P.a = 45; P.sw = false; changed(); };
+$('aM').onclick = () => { P.a = -45; P.sw = false; changed(); };
+$('a0').onclick = () => { P.a = 0; P.sw = false; changed(); };
+$('sw').onchange = e => { P.sw = e.target.checked; if (P.sw) fToMode(); else autoSweep = false; changed(); };
+$('f').oninput = e => { P.f = +e.target.value; P.sw = true; changed(); };
+$('z').oninput = e => { P.zeta = +e.target.value; changed(); };
+$('g').oninput = e => { P.grains = Math.round(+e.target.value); syncUI(); };
+$('sp').oninput = e => { P.speed = +e.target.value; syncUI(); };
+$('fld').onchange = e => { P.fld = e.target.checked; fieldDirty = true; };
+$('nl').onchange = e => { P.nl = e.target.checked; fieldDirty = true; };
+$('play').onclick = () => { running = !running; syncUI(); drawStat(); };
+$('scatter').onclick = () => { scatter(); running = true; syncUI(); };
+$('auto').onclick = () => { autoSweep = !autoSweep; if (autoSweep) P.sw = true; changed(); };
+$('snap').onclick = () => {
+  const K = KINDS[P.kind];
+  let best = null;
+  for (const md of sweepModes()) if (md.f >= K.fmin && md.f <= K.fmax && (!best || Math.abs(md.f - P.f) < Math.abs(best.f - P.f))) best = md;
+  if (best) { P.f = best.f; P.sw = true; autoSweep = false; changed(); }
+};
+rc.addEventListener('pointerdown', e => {
+  const K = KINDS[P.kind], r = rc.getBoundingClientRect(), t = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  P.f = K.fmin + (K.fmax - K.fmin) * t; P.sw = true; autoSweep = false; changed();
+});
+cv.addEventListener('pointerdown', e => {
+  if (!P.sw) return;
+  const r = cv.getBoundingClientRect(), dpr = devicePixelRatio, { S, ox, oy } = plateBox();
+  const x = ((e.clientX - r.left) * dpr - ox) / S, y = 1 - ((e.clientY - r.top) * dpr - oy) / S;
+  if (x < 0 || x > 1 || y < 0 || y > 1 || (P.kind === 'circ' && (x - 0.5) ** 2 + (y - 0.5) ** 2 > 0.25)) return;
+  P.dx = x; P.dy = y; changed();
+});
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * devicePixelRatio));
+  H = Math.max(1, Math.round(r.height * devicePixelRatio));
+  cv.width = W; cv.height = H; drawRes();
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=chl37m&g=20000&it=400  or  ?k=mem&m=1&n=3&a=30  or  ?p=sweep&f=2.236&dx=0.3&dy=0.1
+// Numbers are clamped to their slider's range; p and k must be own keys of the tables.
+const q = new URLSearchParams(location.search);
+const num = (k, lo, hi, f) => { if (q.has(k) && q.get(k).trim() !== '') { const x = Number(q.get(k)); if (Number.isFinite(x)) f(Math.min(hi, Math.max(lo, x))); } };
+const flag = (k, f) => num(k, 0, 1, x => f(Math.round(x) === 1));
+{
+  const key = Object.hasOwn(PRESETS, q.get('p')) ? q.get('p') : 'chl25m', p = PRESETS[key];
+  P.preset = key; P.kind = p.kind; P.m = p.m; P.n = p.n; P.a = p.a; P.sw = !!p.sw; P.zeta = KINDS[p.kind].zeta;
+  P.f = p.f || 0;
+  [P.dx, P.dy] = DRIVER[p.kind];
+}
+if (q.has('k') && Object.hasOwn(KINDS, q.get('k')) && q.get('k') !== P.kind) {
+  P.kind = q.get('k'); P.preset = ''; P.zeta = KINDS[P.kind].zeta; [P.dx, P.dy] = DRIVER[P.kind];
+}
+num('m', 0, 10, x => { P.m = Math.round(x); P.preset = ''; });
+num('n', 0, 10, x => { P.n = Math.round(x); P.preset = ''; });
+clampMN();
+if (!(P.preset && P.f)) fToMode();   // a sweep preset keeps its own f; otherwise start at the chosen mode
+num('a', -90, 90, x => { P.a = Math.round(x); P.preset = ''; });
+flag('sw', v => P.sw = v);
+num('f', KINDS[P.kind].fmin, KINDS[P.kind].fmax, x => { P.f = x; P.sw = true; });
+P.f = Math.min(KINDS[P.kind].fmax, Math.max(KINDS[P.kind].fmin, P.f));
+num('z', 0.002, 0.05, x => P.zeta = x);
+num('dx', 0, 1, x => P.dx = x); num('dy', 0, 1, x => P.dy = x);
+if (P.kind === 'circ' && (P.dx - 0.5) ** 2 + (P.dy - 0.5) ** 2 > 0.25) [P.dx, P.dy] = DRIVER.circ;
+num('g', 500, MAX_GRAINS, x => P.grains = Math.round(x));
+num('sp', 0.2, 3, x => P.speed = x);
+num('seed', 1, 1e9, x => seed = Math.round(x));
+flag('fld', v => P.fld = v); flag('nl', v => P.nl = v);
+flag('run', v => running = v); flag('auto', v => autoSweep = v && P.sw);
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI(); scatter(); rebuildField();
+let warm = 0; num('it', 0, MAX_IT, x => warm = Math.round(x));
+for (let i = 0; i < warm; i++) jitter();
+measure();
+
+// test hook: read-only views of the current state
+window.__ch = { P, zeros: m => ZEROS[m].slice(), J: besselJ, domains: () => domains, index: () => cIndex, settle: () => settle,
+  steps: () => steps, sweep: () => sweepInfo && { m: sweepInfo.mode.m, n: sweepInfo.mode.n, part: sweepInfo.mode.part, f: sweepInfo.mode.f,
+  share: sweepInfo.share, level: sweepInfo.level }, curve: () => Array.from(curve), courant: courantIndex, modes: () => sweepModes().length };
+
+let last = performance.now();
+(function loop(now) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  if (autoSweep && P.sw) {
+    const K = KINDS[P.kind];
+    P.f += (K.fmax - K.fmin) / 90 * dt; if (P.f > K.fmax) P.f = K.fmin;
+    $('f').value = P.f; $('vf').textContent = P.f.toFixed(3); rebuildField();
+  }
+  if (running) { for (let i = 0; i < 3; i++) jitter(); if (steps % 12 < 3) measure(); }
+  draw(); drawStat(); window.__ready = true;
+  requestAnimationFrame(loop);
+})(last);
+</script>
+</body>
+</html>

@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>三体问题 · 8 字形轨道</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0b14; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(24,24,40,.93); border: 1px solid #363654; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #b9b2e6; border-top: 1px solid #363654; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #9090a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2a2a44; color: #e6e6e6; border: 1px solid #40406a;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #36365a; }
+  button.on { background: #55508f; border-color: #7a72c0; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #err { color: #ff8f8f; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #b0b4c8; margin-top: 4px; white-space: pre-line; }
+  #pinfo { margin-top: 4px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; vertical-align: -1px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  #pl { position: absolute; right: 10px; bottom: 10px; width: 360px; height: 170px; pointer-events: none;
+    border: 1px solid #363654; border-radius: 6px; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(10,11,20,.82); color: #cfd2e4; font-size: 12px; font-variant-numeric: tabular-nums; max-width: calc(100% - 400px); }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; }
+    #pl { width: 260px; height: 130px; } #stat { max-width: calc(100% - 300px); } }
+  body.noui #panel, body.noui #stat, body.noui #pl { display: none; }
+  body.noui #view { left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>三体问题 · 8 字形轨道</h1>
+  <small>三个质点只受彼此的万有引力：<span class="mono">r̈ᵢ = Σⱼ G mⱼ (rⱼ − rᵢ) / |rⱼ − rᵢ|³</span>（G = 1）。一般的初值下运动是混沌的，没有通用的闭式解；但少数特殊初值会让三个物体周期性地回到起点，8 字形就是其中最漂亮的一条。</small>
+
+  <h2>预设（周期轨道）</h2>
+  <div class="presets" id="pre"></div>
+  <small id="pinfo" class="info"></small>
+
+  <h2>扰动</h2>
+  <div class="row">
+    <label>δ <b id="vD"></b></label>
+    <input id="D" type="range" min="-6.5" max="-0.5" step="0.05">
+    <small>把物体 3（蓝）的 x 坐标挪动 δ，再把质心移回原点、总动量归零。最左端 δ = 0。</small>
+  </div>
+
+  <h2>质量</h2>
+  <div class="row"><label><span><i class="dot" style="background:#ff7a6b"></i>m₁</span> <b id="vM0"></b></label><input id="M0" type="range" min="-3" max="2" step="0.01"></div>
+  <div class="row"><label><span><i class="dot" style="background:#7cd67a"></i>m₂</span> <b id="vM1"></b></label><input id="M1" type="range" min="-3" max="2" step="0.01"></div>
+  <div class="row"><label><span><i class="dot" style="background:#6fb3ff"></i>m₃</span> <b id="vM2"></b></label><input id="M2" type="range" min="-3" max="2" step="0.01"></div>
+  <div class="presets"><button id="eqM">等质量</button><button id="heavyM">100 : 1 : 1</button><button id="edgeM">40 : 1 : 1</button><button id="edgeM2">60 : 1 : 1</button></div>
+  <small id="routh" class="info"></small>
+
+  <h2>积分</h2>
+  <div class="row">
+    <label>最大步长 h <b id="vH"></b></label>
+    <input id="H" type="range" min="-3.7" max="-2" step="0.05">
+    <small>4 阶 Yoshida 辛积分；两物体靠近时自动把步长缩到 0.004·√(r³/G(mᵢ+mⱼ))</small>
+  </div>
+  <div class="row">
+    <label>每帧推进的时间 <b id="vV"></b></label>
+    <input id="V" type="range" min="-3" max="-0.5" step="0.05">
+  </div>
+  <div class="row">
+    <label>尾迹长度（时间单位） <b id="vL"></b></label>
+    <input id="L" type="range" min="1" max="200" step="0.1">
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button><button id="recentre">质心归零</button></div>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="arr" type="checkbox"> 速度箭头</label>
+    <label><input id="plot" type="checkbox"> 守恒误差图</label>
+    <label><input id="rot" type="checkbox"> 随物体 1→2 连线旋转的参考系</label>
+  </div>
+  <small>旋转参考系：以质心为原点，让物体 1 到物体 2 的连线保持 t = 0 时的方向。Lagrange 解在这个参考系里静止不动，偏离多少一眼就能看出来。</small>
+
+  <h2>守恒量</h2>
+  <div id="cons" class="info"></div>
+  <small id="err"></small>
+  <small style="margin-top:8px">拖动物体改位置 · 暂停后拖动箭头尖改速度 · 拖空白处平移 · 滚轮缩放 · 双击复位视角</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><canvas id="pl"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- initial conditions ----------
+// state: x = [x1,y1, x2,y2, x3,y3], v likewise; G = 1.
+// Figure-8: Chenciner & Montgomery (2000), numbers from Simó; period 6.32591398.
+const FIG8 = () => {
+  const x = 0.97000436, y = -0.24308753, vx = -0.93240737, vy = -0.86473146;
+  return { x: [x, y, -x, -y, 0, 0], v: [-vx / 2, -vy / 2, -vx / 2, -vy / 2, vx, vy] };
+};
+// Šuvakov & Dmitrašinović, PRL 110, 114301 (2013), Table I: bodies at (−1,0), (1,0), (0,0), v1 = v2 = (p1,p2), v3 = −2(p1,p2)
+const SD = (p1, p2) => () => ({ x: [-1, 0, 1, 0, 0, 0], v: [p1, p2, p1, p2, -2 * p1, -2 * p2] });
+
+// Lagrange: equilateral triangle of side √3 (unit circumradius for equal masses), rigid rotation about the
+// centre of mass with ω² = G M / L³; this works for any three masses.
+function lagrange(m) {
+  const L = Math.sqrt(3), M = m[0] + m[1] + m[2], x = [], v = [];
+  // body 1 at the bottom, so the light bodies of 100 : 1 : 1 sit clear of the plot in the corner
+  for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + 2 * Math.PI * i / 3; x.push(Math.cos(a), Math.sin(a)); }
+  const w = Math.sqrt(M / L ** 3);
+  centre(x, m);
+  for (let i = 0; i < 3; i++) v.push(-w * x[2 * i + 1], w * x[2 * i]);
+  return { x, v };
+}
+// Euler: collinear x1 < x2 < x3 rotating rigidly. Put x1 = 0, x3 = 1 and find x2 = s by bisection so that every body's
+// acceleration is −ω²(xᵢ − c); with Σmᵢaᵢ = 0 two equal ratios force the third. Then scale the outer gap to 2.
+function euler(m) {
+  const acc = s => {
+    const X = [0, s, 1], c = (m[1] * s + m[2]) / (m[0] + m[1] + m[2]);
+    const a1 = m[1] / s ** 2 + m[2], a3 = -m[0] - m[1] / (1 - s) ** 2;
+    return { r1: a1 / (X[0] - c), r3: a3 / (X[2] - c), c };
+  };
+  let lo = 1e-9, hi = 1 - 1e-9;
+  for (let i = 0; i < 200; i++) { const s = (lo + hi) / 2, r = acc(s); if (r.r1 - r.r3 < 0) lo = s; else hi = s; }
+  const s = (lo + hi) / 2, { r1, c } = acc(s), k = 2;   // outer distance 2
+  const w = Math.sqrt(-r1 / k ** 3);
+  const x = [(0 - c) * k, 0, (s - c) * k, 0, (1 - c) * k, 0];
+  return { x, v: [0, w * x[0], 0, w * x[2], 0, w * x[4]] };
+}
+
+const PRESETS = {
+  fig8: { name: '8 字形', init: FIG8, T: 6.32591398, R: 1.15, tl: 7,
+    info: 'Moore (1993) 数值发现，Chenciner–Montgomery (2000) 证明存在。\n三个等质量物体沿同一条 8 字曲线追逐，彼此相差 T/3。\n文献周期 T = 6.32591398（Simó）' },
+  fig8b: { name: '8 字形 δ = 0.05', init: FIG8, T: 6.32591398, R: 1.15, tl: 40, d: -1.3,
+    info: '8 字形在线性意义下稳定：δ = 0.05 后总角动量不再是 0，8 字整体慢慢转动，形状一直保持，三个物体始终缠在一起。' },
+  fig8x: { name: '8 字形 δ = 0.22', init: FIG8, T: 6.32591398, R: 1.6, tl: 30, d: -0.65, v: -1.4,
+    info: 'δ = 0.224 超出了稳定区：绕几圈后一个物体被甩出去，剩下两个结成双星。' },
+  lag: { name: 'Lagrange 等边三角形', init: lagrange, R: 1.3, tl: 4,
+    info: 'Lagrange (1772)：任意三个质量放在等边三角形顶点上整体旋转，ω² = GM/L³。\n等质量时不稳定，连舍入误差都会被放大。' },
+  lagH: { name: 'Lagrange 100 : 1 : 1', init: lagrange, m: [100, 1, 1], R: 2.1, tl: 60, d: -1.3, rot: true,
+    info: '一个质量占绝对优势时满足 Routh 判据，等边三角形稳定：扰动 δ = 0.05 后，在旋转参考系里看，蓝色物体只在原位附近画一个小小的“蝌蚪”。\n这就是木星轨道上 L4 / L5 点的特洛伊小行星。δ 再大（0.1）就会脱离。' },
+  euler: { name: 'Euler 共线', init: euler, R: 1.3, tl: 6,
+    info: 'Euler (1767)：三个物体排成一条直线整体旋转，中间位置由 Euler 五次方程决定（这里用二分法求）。\n对任何质量都不稳定。' },
+  butterfly: { name: '蝴蝶 I', init: SD(0.306892758965492, 0.125506782829762), T: 6.23564136316479, R: 1.15, tl: 6.3,
+    info: 'Šuvakov–Dmitrašinović (2013) I.A.1：v₁ = v₂ = (0.306892758965492, 0.125506782829762)。\n文献周期 T = 6.23564136316479' },
+  moth: { name: '飞蛾 I', init: SD(0.464445237398184, 0.396059973403921), T: 14.8939113169584, R: 1.2, tl: 15,
+    info: 'Šuvakov–Dmitrašinović (2013) I.B.1：v₁ = v₂ = (0.464445237398184, 0.396059973403921)。\n文献周期 T = 14.8939113169584' },
+  yinyang: { name: '阴阳 I', init: SD(0.513938054919243, 0.304736003875733), T: 17.3284227296828, R: 1.35, tl: 17.4,
+    info: 'Šuvakov–Dmitrašinović (2013) II.C.2a：v₁ = v₂ = (0.513938054919243, 0.304736003875733)。\n文献周期 T = 17.3284227296828' },
+};
+const COL = ['#ff7a6b', '#7cd67a', '#6fb3ff'];
+const LIM = { d: [-6.5, -0.5], lm: [-3, 2], h: [-3.7, -2], v: [-3, -0.5], tl: [1, 200], t: [0, 500], z: [0.1, 20] };
+const D_OFF = -6.45;            // slider values at or below this mean δ = 0
+const ETA = 0.004;              // step-size factor for close approaches
+const R_COLL = 1e-6;            // two bodies closer than this: treat as a collision and stop
+const STEP_BUDGET = 20000, FF_BUDGET = 400000;   // integrator steps per frame (normal / fast-forward to ?t=)
+const TR_DT = 0.01, TR_MAX = 20000;              // trail sample spacing and ring length per body
+const HMAX = 4000;              // conservation-plot samples before they are halved
+
+const P = { preset: 'fig8', d: -6.5, lm: [0, 0, 0], h: Math.log10(0.002), v: Math.log10(0.02), tl: 7, arr: false, plot: true, rot: false };
+const view = { cx: 0, cy: 0, zoom: 1 };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+const delta = () => P.d <= D_OFF ? 0 : 10 ** P.d;
+const masses = () => P.lm.map(l => 10 ** l);
+
+function centre(x, m, v) {   // move the centre of mass to the origin (and remove the total momentum if v is given)
+  const M = m[0] + m[1] + m[2];
+  for (const a of v ? [x, v] : [x]) {
+    let cx = 0, cy = 0;
+    for (let i = 0; i < 3; i++) { cx += m[i] * a[2 * i]; cy += m[i] * a[2 * i + 1]; }
+    for (let i = 0; i < 3; i++) { a[2 * i] -= cx / M; a[2 * i + 1] -= cy / M; }
+  }
+}
+
+// ---------- physics ----------
+let m = [1, 1, 1];
+const X = new Float64Array(6), V = new Float64Array(6), A = new Float64Array(6);
+const X0 = new Float64Array(6), V0 = new Float64Array(6);
+let t = 0, steps = 0, E0 = 0, L0 = 0, hLast = 0, rMinSeen = Infinity, collided = false;
+let custom = null;              // user-edited initial state when no preset is active
+
+function accel() {
+  A.fill(0);
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) {
+    const dx = X[2 * j] - X[2 * i], dy = X[2 * j + 1] - X[2 * i + 1], r2 = dx * dx + dy * dy, r3 = r2 * Math.sqrt(r2);
+    A[2 * i] += m[j] * dx / r3; A[2 * i + 1] += m[j] * dy / r3;
+    A[2 * j] -= m[i] * dx / r3; A[2 * j + 1] -= m[i] * dy / r3;
+  }
+}
+function energy() {
+  let K = 0, U = 0;
+  for (let i = 0; i < 3; i++) K += 0.5 * m[i] * (V[2 * i] ** 2 + V[2 * i + 1] ** 2);
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) U -= m[i] * m[j] / Math.hypot(X[2 * j] - X[2 * i], X[2 * j + 1] - X[2 * i + 1]);
+  return K + U;
+}
+function angmom() { let L = 0; for (let i = 0; i < 3; i++) L += m[i] * (X[2 * i] * V[2 * i + 1] - X[2 * i + 1] * V[2 * i]); return L; }
+function momentum() {
+  let px = 0, py = 0; for (let i = 0; i < 3; i++) { px += m[i] * V[2 * i]; py += m[i] * V[2 * i + 1]; } return [px, py];
+}
+// step size: the user's h, or a fraction of the shortest two-body free-fall time, whichever is smaller
+function stepSize() {
+  let h = 10 ** P.h, rmin = Infinity;
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) {
+    const r = Math.hypot(X[2 * j] - X[2 * i], X[2 * j + 1] - X[2 * i + 1]);
+    rmin = Math.min(rmin, r); h = Math.min(h, ETA * Math.sqrt(r ** 3 / (m[i] + m[j])));
+  }
+  if (rmin < rMinSeen) rMinSeen = rmin;
+  if (rmin < R_COLL) collided = true;
+  return h;
+}
+// Yoshida (1990) 4th-order symplectic composition of three leapfrog steps
+const CBRT2 = Math.cbrt(2), W1 = 1 / (2 - CBRT2), W0 = -CBRT2 / (2 - CBRT2);
+const YC = [W1 / 2, (W0 + W1) / 2, (W0 + W1) / 2, W1 / 2], YD = [W1, W0, W1];
+function step(h) {
+  for (let k = 0; k < 4; k++) {
+    for (let i = 0; i < 6; i++) X[i] += YC[k] * h * V[i];
+    if (k < 3) { accel(); for (let i = 0; i < 6; i++) V[i] += YD[k] * h * A[i]; }
+  }
+  t += h; steps++; hLast = h;
+}
+
+// ---------- returns to the initial state (period measurement) ----------
+// d²(t) = |x − x₀|² + |v − v₀|²; a local minimum below the threshold is a return; a parabola through the
+// three samples around it gives the time to well below one step.
+let ret = [], rq = [], retThr2 = 0;
+function trackReturn() {
+  let d2 = 0;
+  for (let i = 0; i < 6; i++) d2 += (X[i] - X0[i]) ** 2 + (V[i] - V0[i]) ** 2;
+  rq.push(t, d2); if (rq.length > 6) rq.splice(0, 2);
+  if (rq.length < 6) return;
+  const [ta, ya, tb, yb, tc, yc] = rq;
+  if (!(yb < ya && yb <= yc && yb < retThr2 && tb > 0.5) || ret.length >= 200) return;
+  const den = (ta - tb) * (ta - tc) * (tb - tc);
+  const a = (tc * (yb - ya) + tb * (ya - yc) + ta * (yc - yb)) / den;
+  const b = (tc * tc * (ya - yb) + tb * tb * (yc - ya) + ta * ta * (yb - yc)) / den;
+  const tv = a > 0 ? clamp(-b / (2 * a), [ta, tc]) : tb;
+  const yv = ya + (a * (tv * tv - ta * ta) + b * (tv - ta));
+  ret.push({ t: tv, d: Math.sqrt(Math.max(0, yv)) });
+}
+
+// ---------- ejection ----------
+// body i is "ejected" if, seen from the centre of mass of the other two, it is far away (3× their separation and
+// 3 length units), moving outward, and its two-body energy relative to that pair is positive (hyperbolic)
+let ejected = null;
+function checkEjection() {
+  if (ejected) return;
+  for (let i = 0; i < 3; i++) {
+    const j = (i + 1) % 3, k = (i + 2) % 3, mo = m[j] + m[k];
+    const cx = (m[j] * X[2 * j] + m[k] * X[2 * k]) / mo, cy = (m[j] * X[2 * j + 1] + m[k] * X[2 * k + 1]) / mo;
+    const ux = (m[j] * V[2 * j] + m[k] * V[2 * k]) / mo, uy = (m[j] * V[2 * j + 1] + m[k] * V[2 * k + 1]) / mo;
+    const rx = X[2 * i] - cx, ry = X[2 * i + 1] - cy, vx = V[2 * i] - ux, vy = V[2 * i + 1] - uy;
+    const r = Math.hypot(rx, ry), sep = Math.hypot(X[2 * j] - X[2 * k], X[2 * j + 1] - X[2 * k + 1]);
+    const eps = 0.5 * (vx * vx + vy * vy) - (m[i] + mo) / r;
+    if (r > 3 && r > 3 * sep && rx * vx + ry * vy > 0 && eps > 0) { ejected = { i, t }; return; }
+  }
+}
+
+// ---------- history: trails and conservation errors ----------
+const TR = [0, 1, 2].map(() => new Float32Array(TR_MAX * 2));
+// display frame: inertial, or rotating about the centre of mass so that the 1→2 line keeps its t = 0 direction
+const F = new Float64Array(6);
+let phi0 = 0;
+const angle12 = () => Math.atan2(X[3] - X[1], X[2] - X[0]);
+function toFrame() {
+  if (!P.rot) { F.set(X); return; }
+  const M = m[0] + m[1] + m[2]; let cx = 0, cy = 0;
+  for (let i = 0; i < 3; i++) { cx += m[i] * X[2 * i] / M; cy += m[i] * X[2 * i + 1] / M; }
+  const a = phi0 - angle12(), c = Math.cos(a), s = Math.sin(a);
+  for (let i = 0; i < 3; i++) { const x = X[2 * i] - cx, y = X[2 * i + 1] - cy; F[2 * i] = c * x - s * y; F[2 * i + 1] = s * x + c * y; }
+}
+let trN = 0, trNext = 0;
+function record() {
+  if (t < trNext) return;
+  const o = (trN % TR_MAX) * 2;
+  toFrame();
+  for (let i = 0; i < 3; i++) { TR[i][o] = F[2 * i]; TR[i][o + 1] = F[2 * i + 1]; }
+  trN++; trNext = t + TR_DT;
+}
+let HT = new Float64Array(HMAX), HE = new Float64Array(HMAX), HL = new Float64Array(HMAX), hn = 0, hDt = 0.05, hNext = 0;
+function sampleErr() {
+  if (t < hNext) return;
+  if (hn >= HMAX) {           // halve the resolution, keep the whole run
+    for (let i = 0; i < HMAX / 2; i++) { HT[i] = HT[2 * i]; HE[i] = Math.max(HE[2 * i], HE[2 * i + 1]); HL[i] = Math.max(HL[2 * i], HL[2 * i + 1]); }
+    hn = HMAX / 2; hDt *= 2;
+  }
+  HT[hn] = t; HE[hn] = Math.log10(Math.max(1e-17, Math.abs((energy() - E0) / E0)));
+  HL[hn] = Math.log10(Math.max(1e-17, Math.abs(angmom() - L0))); hn++;
+  hNext = t + hDt;
+}
+
+// ---------- reset ----------
+function initialState() {
+  if (!P.preset) return { x: custom.x.slice(), v: custom.v.slice() };
+  const s = PRESETS[P.preset].init(m);
+  return { x: s.x.slice(), v: s.v.slice() };
+}
+function restart() {
+  m = masses();
+  const s = initialState();
+  if (P.preset) { s.x[4] += delta(); centre(s.x, m, s.v); }
+  X.set(s.x); V.set(s.v); fitR();
+  beginRun();
+}
+// t = 0 at the current state: conserved-quantity references, trails, returns, flags
+function beginRun() {
+  X0.set(X); V0.set(V);
+  t = 0; steps = 0; collided = false; ejected = null; rMinSeen = Infinity; hLast = 0;
+  E0 = energy(); L0 = angmom(); phi0 = angle12();
+  let n2 = 0; for (let i = 0; i < 6; i++) n2 += X[i] ** 2 + V[i] ** 2;
+  retThr2 = (0.03 ** 2) * n2; ret = []; rq = [];
+  trN = 0; trNext = 0; hn = 0; hDt = 0.05; hNext = 0;
+  accel(); record(); sampleErr();
+  $('err').textContent = '';
+}
+
+function advance(dT, budget) {
+  const target = t + dT;
+  for (let k = 0; k < budget && t < target; k++) {
+    const h = stepSize();
+    if (collided) { running = false; syncUI(); $('err').textContent = `t = ${t.toFixed(3)}：两个物体相距不到 ${R_COLL}，按碰撞处理并停止积分。`; return; }
+    step(h); trackReturn(); record(); sampleErr();
+    if (steps % 50 === 0) checkEjection();
+    if (!X.every(Number.isFinite)) { collided = true; running = false; syncUI(); $('err').textContent = '数值溢出，已停止。'; return; }
+  }
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d'), pl = $('pl'), pctx = pl.getContext('2d');
+let W = 1, H = 1, PW = 1, PH = 1, dpr = 1;
+const VSCALE = 0.5;   // velocity arrow: world length per unit speed
+// view radius: the preset's, widened to fit the bodies at t = 0 (heavy-mass Lagrange puts the light ones farther out)
+let viewR = 1.6;
+function fitR() {
+  let r = 0; for (let i = 0; i < 3; i++) r = Math.max(r, Math.hypot(X[2 * i], X[2 * i + 1]));
+  viewR = Math.max(P.preset ? PRESETS[P.preset].R : 1.6, 1.15 * r);
+}
+const baseR = () => viewR;
+const scale = () => 0.45 * Math.min(W, H) / baseR() * view.zoom;
+const sx = x => W / 2 + (x - view.cx) * scale(), sy = y => H / 2 - (y - view.cy) * scale();
+const wx = px => view.cx + (px - W / 2) / scale(), wy = py => view.cy - (py - H / 2) / scale();
+
+function drawScene() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0a0b14'; ctx.fillRect(0, 0, W, H);
+  // faint axes through the origin (the centre of mass for every preset)
+  ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = dpr; ctx.beginPath();
+  ctx.moveTo(0, sy(0)); ctx.lineTo(W, sy(0)); ctx.moveTo(sx(0), 0); ctx.lineTo(sx(0), H); ctx.stroke();
+
+  // trails: newest part brightest, drawn in chunks of increasing alpha
+  const n = Math.min(trN, TR_MAX, Math.round(P.tl / TR_DT)), start = trN - n, CH = 10;
+  ctx.lineJoin = ctx.lineCap = 'round'; ctx.lineWidth = 2 * dpr;
+  for (let i = 0; i < 3; i++) {
+    ctx.strokeStyle = COL[i];
+    for (let c = 0; c < CH; c++) {
+      const a = start + Math.floor(n * c / CH), b = start + Math.floor(n * (c + 1) / CH);
+      if (b - a < 1) continue;
+      ctx.globalAlpha = 0.15 + 0.7 * ((c + 1) / CH) ** 1.2;
+      ctx.beginPath();
+      for (let j = Math.max(start, a - 1); j < b; j++) {
+        const o = (j % TR_MAX) * 2, px = sx(TR[i][o]), py = sy(TR[i][o + 1]);
+        j === Math.max(start, a - 1) ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  toFrame();
+  // velocity arrows (inertial frame only)
+  if (arrowsOn()) for (let i = 0; i < 3; i++) {
+    const x0 = sx(X[2 * i]), y0 = sy(X[2 * i + 1]), x1 = sx(X[2 * i] + VSCALE * V[2 * i]), y1 = sy(X[2 * i + 1] + VSCALE * V[2 * i + 1]);
+    const ang = Math.atan2(y1 - y0, x1 - x0), hl = 8 * dpr;
+    ctx.strokeStyle = ctx.fillStyle = COL[i]; ctx.globalAlpha = 0.85; ctx.lineWidth = 1.6 * dpr;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - hl * Math.cos(ang - 0.4), y1 - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(x1 - hl * Math.cos(ang + 0.4), y1 - hl * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // bodies: radius grows like m^(1/3), with a soft glow
+  for (let i = 0; i < 3; i++) {
+    const px = sx(F[2 * i]), py = sy(F[2 * i + 1]), r = bodyR(i);
+    const g = ctx.createRadialGradient(px, py, 0, px, py, r * 3.2);
+    g.addColorStop(0, COL[i] + 'aa'); g.addColorStop(1, COL[i] + '00');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, r * 3.2, 0, 7); ctx.fill();
+    ctx.fillStyle = COL[i]; ctx.beginPath(); ctx.arc(px, py, r, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(px - r * 0.3, py - r * 0.3, r * 0.35, 0, 7); ctx.fill();
+    // off-screen bodies: an arrow on the edge pointing at them
+    if (px < 0 || py < 0 || px > W || py > H) {
+      ctx.fillStyle = COL[i];
+      const ex = clamp(px, [14 * dpr, W - 14 * dpr]), ey = clamp(py, [14 * dpr, H - 14 * dpr]), a = Math.atan2(py - ey, px - ex);
+      ctx.beginPath(); ctx.moveTo(ex + 9 * dpr * Math.cos(a), ey + 9 * dpr * Math.sin(a));
+      ctx.lineTo(ex + 7 * dpr * Math.cos(a + 2.4), ey + 7 * dpr * Math.sin(a + 2.4));
+      ctx.lineTo(ex + 7 * dpr * Math.cos(a - 2.4), ey + 7 * dpr * Math.sin(a - 2.4)); ctx.closePath(); ctx.fill();
+    }
+  }
+}
+// arrows: when switched on, or while a custom state is being edited
+const arrowsOn = () => !P.rot && (P.arr || (!running && !P.preset));
+const bodyR = i => clamp(5.5 * Math.cbrt(m[i]), [2.5, 14]) * dpr;
+
+const niceStep = x => { const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
+// log10 |ΔE/E₀| (yellow) and log10 |ΔL| (cyan) against t
+function drawPlot() {
+  pl.style.display = P.plot ? '' : 'none';
+  if (!P.plot) return;
+  const c = pctx;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = 'rgba(10,11,20,.88)'; c.fillRect(0, 0, PW, PH);
+  const ml = 34 * dpr, mr = 10 * dpr, mt = 22 * dpr, mb = 22 * dpr, yLo = -17, yHi = 0;
+  const ts = niceStep(Math.max(10, t) / 5), tMax = Math.max(10, Math.ceil(t / ts) * ts);
+  const Xp = s => ml + s / tMax * (PW - ml - mr), Yp = v => mt + (yHi - clamp(v, [yLo, yHi])) / (yHi - yLo) * (PH - mt - mb);
+  c.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; c.fillStyle = '#9090a8'; c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 1;
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (let v = -15; v <= 0; v += 5) { c.beginPath(); c.moveTo(ml, Yp(v)); c.lineTo(PW - mr, Yp(v)); c.stroke(); c.fillText(v ? `1e${v}` : '1', ml - 3 * dpr, Yp(v)); }
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  for (let s = 0; s <= tMax + 1e-9; s += ts) c.fillText(+s.toFixed(1), Xp(s), PH - mb + 4 * dpr);
+  c.textAlign = 'left'; c.font = `${11 * dpr}px -apple-system, sans-serif`;
+  c.fillStyle = '#ffd38a'; c.fillText('|ΔE/E₀|', ml, 5 * dpr);
+  c.fillStyle = '#6fe0e8'; c.fillText('|ΔL|', ml + 64 * dpr, 5 * dpr);
+  c.fillStyle = '#9090a8'; c.fillText('对数纵轴 · 横轴 t', ml + 110 * dpr, 5 * dpr);
+  for (const [arr, col] of [[HL, '#6fe0e8'], [HE, '#ffd38a']]) {
+    c.strokeStyle = col; c.lineWidth = 1.3 * dpr; c.beginPath();
+    for (let i = 0; i < hn; i++) i ? c.lineTo(Xp(HT[i]), Yp(arr[i])) : c.moveTo(Xp(HT[i]), Yp(arr[i]));
+    c.stroke();
+  }
+}
+
+const fd = d => d < 1e-4 ? '< 1e-4' : d.toExponential(1);   // the parabola's vertex value is only good to ~1e-4
+const fe = x => (Math.abs(x) < 1e-3 && x !== 0 ? x.toExponential(2) : x.toFixed(6));
+function routh() { const s = m[0] + m[1] + m[2]; return 27 * (m[0] * m[1] + m[1] * m[2] + m[2] * m[0]) / (s * s); }
+function drawInfo() {
+  const E = energy(), L = angmom(), [px, py] = momentum(), dE = Math.abs((E - E0) / E0), dL = Math.abs(L - L0);
+  const lines = [`E = ${E.toFixed(9)}   |ΔE/E₀| = ${dE.toExponential(2)}`,
+    `L = ${fe(L)}   |ΔL| = ${dL.toExponential(2)}`,
+    `P = (${px.toExponential(1)}, ${py.toExponential(1)})`,
+    `步数 ${steps.toLocaleString()}   当前步长 ${hLast.toExponential(2)}   最近距离 ${Number.isFinite(rMinSeen) ? rMinSeen.toFixed(4) : '—'}`];
+  if (ret.length) {
+    const r = ret[0];
+    lines.push(`回到初态：t = ${r.t.toFixed(6)}（距离 ${fd(r.d)}）`);
+    if (ret.length > 1) lines.push(`共 ${ret.length} 次，最近一次 t = ${ret[ret.length - 1].t.toFixed(4)}，距离 ${fd(ret[ret.length - 1].d)}`);
+  } else lines.push('回到初态：尚未（阈值为初态范数的 3%）');
+  if (ejected) lines.push(`t ≈ ${ejected.t.toFixed(1)}：物体 ${ejected.i + 1} 被抛出，另外两个结成双星`);
+  $('cons').textContent = lines.join('\n');
+
+  const parts = [`t = ${t.toFixed(2)}`, `|ΔE/E₀| = ${dE.toExponential(1)}`];
+  if (ret.length) parts.push(`周期 ${ret[0].t.toFixed(5)}`);
+  if (ejected) parts.push(`物体 ${ejected.i + 1} 被抛出`);
+  if (hLast > 0 && hLast < 1e-5 && !collided) parts.push('近距离交会，步长很小，推进变慢');
+  if (collided) parts.push('已停止');
+  else if (!running) parts.push('已暂停');
+  $('stat').textContent = parts.join(' · ');
+
+  window.__tb = { t, steps, E, E0, dE, L, L0, dL, P: [px, py], returns: ret.map(r => ({ ...r })), ejected, collided,
+    preset: P.preset, delta: delta(), m: m.slice(), routh: routh(), rMin: rMinSeen, h: hLast, x: Array.from(X), v: Array.from(V), running };
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('D').value = P.d; $('vD').textContent = delta() ? delta().toPrecision(3) : '0';
+  P.lm.forEach((l, i) => { $('M' + i).value = l; $('vM' + i).textContent = +(10 ** l).toPrecision(3); });
+  $('H').value = P.h; $('vH').textContent = (10 ** P.h).toPrecision(2);
+  $('V').value = P.v; $('vV').textContent = (10 ** P.v).toPrecision(2);
+  $('L').value = P.tl; $('vL').textContent = P.tl;
+  $('arr').checked = P.arr; $('plot').checked = P.plot; $('rot').checked = P.rot;
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  $('pinfo').textContent = P.preset ? PRESETS[P.preset].info : '自定义初值（拖动物体或箭头得到的状态）。“重新开始”回到最后一次编辑后的状态。';
+  const mm = masses(), s = mm[0] + mm[1] + mm[2], R = 27 * (mm[0] * mm[1] + mm[1] * mm[2] + mm[2] * mm[0]) / (s * s);
+  $('routh').textContent = `Routh 判据：27(m₁m₂ + m₂m₃ + m₃m₁) / (m₁+m₂+m₃)² = ${R.toFixed(4)}\n` +
+    (R < 1 ? '< 1：Lagrange 等边三角形线性稳定' : '≥ 1：Lagrange 等边三角形不稳定') + '\n（m₂ = m₃ = 1 时临界值 m₁ = 25 + √648 ≈ 50.46）';
+}
+function loadPreset(key) {
+  const p = PRESETS[key];
+  P.preset = key; P.d = p.d ?? -6.5; P.lm = (p.m ?? [1, 1, 1]).map(Math.log10); P.tl = p.tl; P.v = p.v ?? Math.log10(0.02); P.rot = !!p.rot;
+  Object.assign(view, { cx: 0, cy: 0, zoom: 1 });
+  running = true; syncUI(); restart();
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+let running = true;
+$('D').oninput = e => { P.d = +e.target.value; if (!P.preset) P.d = -6.5; syncUI(); restart(); };
+for (let i = 0; i < 3; i++) $('M' + i).oninput = e => { P.lm[i] = +e.target.value; syncUI(); restart(); };
+const setM = arr => { P.lm = arr.map(Math.log10); syncUI(); restart(); };
+$('eqM').onclick = () => setM([1, 1, 1]); $('heavyM').onclick = () => setM([100, 1, 1]);
+$('edgeM').onclick = () => setM([40, 1, 1]); $('edgeM2').onclick = () => setM([60, 1, 1]);
+$('H').oninput = e => { P.h = +e.target.value; syncUI(); };
+$('V').oninput = e => { P.v = +e.target.value; syncUI(); };
+$('L').oninput = e => { P.tl = +e.target.value; syncUI(); };
+$('arr').onchange = e => { P.arr = e.target.checked; };
+$('plot').onchange = e => { P.plot = e.target.checked; };
+$('rot').onchange = e => { P.rot = e.target.checked; phi0 = angle12(); trN = 0; trNext = t; record(); };
+$('play').onclick = () => { if (collided) return; running = !running; syncUI(); };
+$('restart').onclick = () => { running = true; syncUI(); restart(); };
+$('recentre').onclick = () => {
+  const x = Array.from(X), v = Array.from(V); centre(x, m, v); X.set(x); V.set(v);
+  if (!P.preset) custom = { x, v };
+  beginRun();
+};
+
+// ---------- pointer: drag bodies / velocity tips, pan, zoom ----------
+let drag = null;
+function pick(px, py) {
+  if (P.rot) return null;   // editing happens in the inertial frame
+  const tip = 10 * dpr;
+  if (!running && arrowsOn()) for (let i = 0; i < 3; i++) {
+    if (Math.hypot(px - sx(X[2 * i] + VSCALE * V[2 * i]), py - sy(X[2 * i + 1] + VSCALE * V[2 * i + 1])) < tip) return { kind: 'vel', i };
+  }
+  for (let i = 0; i < 3; i++) if (Math.hypot(px - sx(X[2 * i]), py - sy(X[2 * i + 1])) < Math.max(12 * dpr, bodyR(i) + 4 * dpr)) return { kind: 'pos', i };
+  return null;
+}
+function toEdit() {   // the first edit turns the current state into a custom initial state
+  running = false;
+  if (P.preset) { P.preset = ''; P.d = -6.5; }
+  syncUI();
+}
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect(), px = (e.clientX - r.left) * dpr, py = (e.clientY - r.top) * dpr;
+  const hit = pick(px, py);
+  drag = hit ? { ...hit } : { kind: 'pan', px, py, cx: view.cx, cy: view.cy };
+  if (hit) toEdit();
+  cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing';
+});
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const r = cv.getBoundingClientRect(), px = (e.clientX - r.left) * dpr, py = (e.clientY - r.top) * dpr;
+  if (drag.kind === 'pan') { view.cx = drag.cx - (px - drag.px) / scale(); view.cy = drag.cy + (py - drag.py) / scale(); return; }
+  const i = drag.i;
+  if (drag.kind === 'pos') { X[2 * i] = wx(px); X[2 * i + 1] = wy(py); }
+  else { V[2 * i] = (wx(px) - X[2 * i]) / VSCALE; V[2 * i + 1] = (wy(py) - X[2 * i + 1]) / VSCALE; }
+  // keep bodies apart so the potential stays finite
+  for (let j = 0; j < 3; j++) if (j !== i && Math.hypot(X[2 * i] - X[2 * j], X[2 * i + 1] - X[2 * j + 1]) < 0.02) X[2 * i] = X[2 * j] + 0.02;
+  custom = { x: Array.from(X), v: Array.from(V) };
+  beginRun();
+});
+cv.addEventListener('pointerup', () => { drag = null; cv.style.cursor = ''; });
+cv.addEventListener('dblclick', () => Object.assign(view, { cx: 0, cy: 0, zoom: 1 }));
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), px = (e.clientX - r.left) * dpr, py = (e.clientY - r.top) * dpr;
+  const ax = wx(px), ay = wy(py);
+  view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0015), LIM.z);
+  view.cx = ax - (px - W / 2) / scale(); view.cy = ay + (py - H / 2) / scale();
+}, { passive: false });
+
+function resize() {
+  const r = cv.getBoundingClientRect(), q = pl.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+  PW = pl.width = Math.max(1, Math.round(q.width * dpr)); PH = pl.height = Math.max(1, Math.round(q.height * dpr));
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=lagH  or  ?p=fig8&d=-0.7&t=150  or  ?p=lag&m1=40&tl=60&ui=0&run=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against a fixed list.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+{ const k = q.get('p'); if (k !== null && Object.hasOwn(PRESETS, k)) loadPreset(k); else loadPreset('fig8'); }
+num('d', x => P.d = clamp(x, LIM.d));
+['m1', 'm2', 'm3'].forEach((k, i) => num(k, x => { if (x > 0) P.lm[i] = clamp(Math.log10(x), LIM.lm); }));
+num('h', x => { if (x > 0) P.h = clamp(Math.log10(x), LIM.h); });
+num('v', x => { if (x > 0) P.v = clamp(Math.log10(x), LIM.v); });
+num('tl', x => P.tl = Math.round(clamp(x, LIM.tl) * 10) / 10);
+num('z', x => view.zoom = clamp(x, LIM.z));
+let ffT = 0; num('t', x => ffT = clamp(x, LIM.t));
+if (q.get('arr') === '1') P.arr = true;
+if (q.get('rot') === '1') P.rot = true; else if (q.get('rot') === '0') P.rot = false;
+if (q.get('plot') === '0') P.plot = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+if (q.get('run') === '0') running = false;
+
+resize(); syncUI(); restart();
+
+(function loop() {
+  if (!collided) {
+    if (t < ffT - 1e-9) advance(ffT - t, FF_BUDGET);
+    else if (running && !drag) advance(10 ** P.v, STEP_BUDGET);
+  }
+  drawScene(); drawPlot(); drawInfo();
+  if (t >= ffT - 1e-9 || collided) window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

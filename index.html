@@ -75,8 +75,12 @@
     <nav class="jump">
       <a href="#shell">贝壳<b>1</b></a>
       <a href="#fractal">分形<b>3</b></a>
-      <a href="#pattern">图案<b>2</b></a>
-      <a href="#motion">运动与波<b>2</b></a>
+      <a href="#pattern">图案<b>5</b></a>
+      <a href="#motion">运动与波<b>7</b></a>
+      <a href="#geom">几何与拓扑<b>5</b></a>
+      <a href="#number">数论<b>4</b></a>
+      <a href="#prob">概率<b>4</b></a>
+      <a href="#compute">计算<b>3</b></a>
     </nav>
   </div>
 </header>
@@ -172,6 +176,42 @@
           </div>
         </div>
       </article>
+      <article class="card">
+        <a class="thumb" href="examples/chladni/index.html"><img src="examples/chladni/images/card.png" alt="两万多粒沙子停在 Chladni 板 (3,7) 振型的节点线上"></a>
+        <div class="body">
+          <h3>Chladni 图形 · 沙子画出的驻波</h3>
+          <p>几千粒沙子在共振的板上乱跳，跳的幅度和振幅成正比，最后都停在不动的节点线上。方膜、Chladni 自由板和圆形鼓膜三种振型；扫频时图案会吸附到最近的共振，简并振型的 ± 组合画出完全不同的图。</p>
+          <div class="tags"><i>Helmholtz 方程</i><i>Bessel 函数</i><i>Courant 节点域定理</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/chladni/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/chladni/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/voronoi/index.html"><img src="examples/voronoi/images/card.png" alt="长颈鹿花纹般的 Voronoi 图"></a>
+        <div class="body">
+          <h3>Voronoi 图 · 长颈鹿的花纹</h3>
+          <p>每个位置归给离它最近的站点，平面就分成一块块凸多边形；把相邻站点连起来，就是它的对偶 Delaunay 三角剖分。把站点反复挪到自己格子的质心，随机的格子会慢慢变成六边形，像长颈鹿的斑、玄武岩柱和蜻蜓翅脉。</p>
+          <div class="tags"><i>计算几何</i><i>Euler 公式</i><i>Lloyd 松弛</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/voronoi/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/voronoi/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/dla/index.html"><img src="examples/dla/images/card.png" alt="5 万个粒子的 DLA 团簇按到达时间着色：中心最早为暖白，枝梢最晚为蓝"></a>
+        <div class="body">
+          <h3>DLA 扩散限制凝聚 · 闪电、珊瑚与雪花</h3>
+          <p>随机游走的粒子一碰到团簇就粘住，尖端接到的粒子最多、长得最快，长出维数约 1.71 的分枝分形，5 万个粒子约 1 秒长完。可以换点、线、圆三种种子，调粘附概率让团簇变密，并实时拟合分形维数。</p>
+          <div class="tags"><i>Laplace 生长</i><i>随机游走</i><i>分形维数</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/dla/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/dla/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
     </div>
   </section>
 
@@ -203,8 +243,288 @@
           </div>
         </div>
       </article>
+      <article class="card">
+        <a class="thumb" href="examples/brachistochrone/index.html"><img src="examples/brachistochrone/images/card.png" alt="五条轨道赛跑，金色的摆线最先到达 B"></a>
+        <div class="body">
+          <h3>最速降线 · 摆线赛跑</h3>
+          <p>珠子只受重力从 A 滑到 B，直线、圆弧、抛物线和你手画的轨道都跑不过摆线，数值积分出的用时和闭式解 √(a/g)·θ 分毫不差。B 很平时，最快的路要先沉到 B 下面再爬上来；把摆线倒过来当碗，从任意高度放下的珠子同时到底。</p>
+          <div class="tags"><i>变分法</i><i>摆线</i><i>等时曲线</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/brachistochrone/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/brachistochrone/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/logistic-map/index.html"><img src="examples/logistic-map/images/card.png" alt="Logistic 映射的分岔图：周期 1 → 2 → 4 → 8 后进入混沌，下方是 Lyapunov 指数"></a>
+        <div class="body">
+          <h3>Logistic 映射 · 倍周期分岔</h3>
+          <p>一行 x → r·x(1 − x)，r 增大时周期 1 → 2 → 4 → 8 越分越快，相邻分岔间距之比收敛到 Feigenbaum 常数 δ ≈ 4.669。分岔图可以点选、拖框放大，蛛网图、Lyapunov 指数和周期 3 窗口一起看，它其实就是 Mandelbrot 集沿实轴的那一条。</p>
+          <div class="tags"><i>倍周期分岔</i><i>Feigenbaum 常数</i><i>Lyapunov 指数</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/logistic-map/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/logistic-map/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/lissajous/index.html"><img src="examples/lissajous/images/card.png" alt="3:2 失谐谐波图：衰减的摆画出交叉的丝带"></a>
+        <div class="body">
+          <h3>李萨如图形与谐波图</h3>
+          <p>两个垂直的简谐振动合成一条曲线：频率比是有理数时闭合，页面现场数出自交点，正好是 2ab − a − b；是无理数时越画越密，直到填满方框。还能让 δ 转动看出圆柱上的立体线圈，看经典李萨如表，或者用会停下来的摆画谐波图。</p>
+          <div class="tags"><i>三角函数</i><i>Kronecker 稠密性</i><i>Chebyshev 多项式</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/lissajous/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/lissajous/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/three-body/index.html"><img src="examples/three-body/images/card.png" alt="三个等质量物体沿同一条 8 字曲线追逐，三段尾迹拼成一整条 8 字"></a>
+        <div class="body">
+          <h3>三体问题 · 8 字形轨道</h3>
+          <p>三个等质量的物体沿同一条 8 字曲线追逐，6.3259 个时间单位后精确回到起点。加一点扰动，看 8 字形保持住、Lagrange 等边三角形解体并甩出一个物体；一个质量占绝对优势时它又稳定下来，这就是特洛伊小行星。</p>
+          <div class="tags"><i>微分方程</i><i>辛积分</i><i>周期轨道与稳定性</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/three-body/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/three-body/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/double-pendulum/index.html"><img src="examples/double-pendulum/images/card.png" alt="60 个起点只差 10⁻⁹ 弧度的双摆在 t ≈ 60 散开，下摆锤尾迹成了一条彩带"></a>
+        <div class="body">
+          <h3>双摆 · 最简单的混沌</h3>
+          <p>100 个起点只差 10⁻⁹ 弧度的双摆一起放开，五十个时间单位后各走各的；摆幅减到几度，它们又老老实实做两个简正模态的叠加，实测频率和 √(2 ∓ √2) 对到第 4 位。另有下臂翻转时间的初始条件图和 KAM 岛链清晰可见的 Poincaré 截面。</p>
+          <div class="tags"><i>Lagrange 力学</i><i>简正模态</i><i>KAM 定理</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/double-pendulum/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/double-pendulum/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
     </div>
   </section>
+  <section id="geom">
+    <div class="sec-head"><h2>几何与拓扑</h2><span>形状、对称与空间</span></div>
+    <p class="sec-intro">有的铺砖永远不重复，有的曲面只有一面，四维的立方体也能转给你看。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/penrose-tiling/index.html"><img src="examples/penrose-tiling/images/card.png" alt="带红蓝匹配弧线的 Penrose 粗细菱形镶嵌"></a>
+        <div class="body">
+          <h3>Penrose 镶嵌 · 永不重复的铺砖</h3>
+          <p>只用 72° 和 36° 两种菱形，一代代切成更小的砖，就能铺满平面却永不周期重复。粗细砖块之比收敛到黄金比例 φ，中心的五重对称恰好是任何晶格都不可能有的对称。</p>
+          <div class="tags"><i>非周期镶嵌</i><i>自相似</i><i>晶体学限制</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/penrose-tiling/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/penrose-tiling/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/hopf-fibration/index.html"><img src="examples/hopf-fibration/images/card.png" alt="三层嵌套环面，每层由互相套住的 Hopf 纤维圆织成，按底点经度着色"></a>
+        <div class="body">
+          <h3>Hopf 纤维化 · 互相套住的圆</h3>
+          <p>(z₁, z₂) ↦ z₁/z₂ 把三维球面 S³ 切成一族大圆，S² 上每一点对应一个。球极投影到三维空间后，纬线变成嵌套环面，纤维是斜绕的 Villarceau 圆，任意两个都恰好套一次，Gauss 积分在页面上实时算出 Lk = 1。</p>
+          <div class="tags"><i>纤维丛</i><i>球极投影</i><i>链环数</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/hopf-fibration/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/hopf-fibration/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/tesseract/index.html"><img src="examples/tesseract/images/card.png" alt="四维超立方体的透视投影：立方体套着立方体"></a>
+        <div class="body">
+          <h3>四维超立方体 · 旋转的 tesseract</h3>
+          <p>在 xy、xz、xw、yz、yw、zw 六个平面里旋转超立方体，看它的影子“立方体套立方体”不停地内外翻转。再用超平面 w = c 去切它，顶点先切出四面体、截角四面体和正八面体，就像平面国居民看立方体穿过时看到的三角形和六边形。</p>
+          <div class="tags"><i>四维几何</i><i>投影与截面</i><i>正多胞体</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/tesseract/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/tesseract/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/minimal-surfaces/index.html"><img src="examples/minimal-surfaces/images/card.png" alt="按高斯曲率着色的 Costa 极小曲面"></a>
+        <div class="body">
+          <h3>极小曲面 · 肥皂膜的几何</h3>
+          <p>肥皂膜把面积缩到最小，处处满足平均曲率 H = 0。拖动 θ，悬链面不拉伸地弯成正螺面；两个圆环拉开到 h/R = 1.3255，悬链面就破成两个圆盘。</p>
+          <div class="tags"><i>极小曲面</i><i>Weierstrass 表示</i><i>分岔</i><i>WebGL</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/minimal-surfaces/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/minimal-surfaces/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/mobius-klein/index.html"><img src="examples/mobius-klein/images/card.png" alt="Möbius 带与头顶的法向量箭头"></a>
+        <div class="body">
+          <h3>Möbius 带与 Klein 瓶 · 只有一面的曲面</h3>
+          <p>让蚂蚁沿 Möbius 带的中线走一圈，它头顶的法向量回来时指向反面：这张纸只有一面。还能沿中线或 1/3 处剪开它，看 Klein 瓶为什么在三维空间里必须自己穿过自己。</p>
+          <div class="tags"><i>可定向性</i><i>Euler 示性数</i><i>粘合图</i><i>WebGL</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/mobius-klein/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/mobius-klein/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="number">
+    <div class="sec-head"><h2>数论</h2><span>整数里的秩序</span></div>
+    <p class="sec-intro">素数、分数和最简单的整数规则，画出来以后会露出意想不到的纹路。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/times-table-circle/index.html"><img src="examples/times-table-circle/images/card.png" alt="圆上 360 个点，每个点 i 连到 2i，直线围出心形线"></a>
+        <div class="body">
+          <h3>圆上的乘法表 · 心形线</h3>
+          <p>圆上放 N 个点，把每个点 i 连到 k·i mod N：k = 2 时直线围出心形线，k = 3 是肾形线，一般的 k 是 k − 1 个尖点的外摆线。同一张图还是 Mandelbrot 集的主心形、咖啡杯底的反射焦散，k 为整数时弦按 i → k·i 的环着色。</p>
+          <div class="tags"><i>外摆线与包络</i><i>乘法阶与模运算</i><i>反射焦散</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/times-table-circle/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/times-table-circle/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/collatz-tree/index.html"><img src="examples/collatz-tree/images/card.png" alt="Collatz 珊瑚树"></a>
+        <div class="body">
+          <h3>Collatz 3n+1 · 冰雹数与珊瑚树</h3>
+          <p>偶数除以 2，奇数乘 3 加 1：从 27 出发要走 111 步、冲到 9232 才落回 1。把一万条轨迹从 1 倒着画，偶数步左转、奇数步右转，长出一株珊瑚。</p>
+          <div class="tags"><i>Collatz 猜想</i><i>停止时间</i><i>2-adic 奇偶向量</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/collatz-tree/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/collatz-tree/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/ulam-spiral/index.html"><img src="examples/ulam-spiral/images/card.png" alt="301×301 的 Ulam 素数螺旋，素数沿斜线排列"></a>
+        <div class="body">
+          <h3>Ulam 素数螺旋 · 二次多项式的对角线</h3>
+          <p>把整数排成方形螺旋，素数挤在一条条斜线上：每条斜线是一个二次多项式 4k² + bk + c。单击一条线，看 Hardy–Littlewood 猜想对它素数密度的预测与 400 万以内的实测；换成 1/ln n 的随机对照，斜线就消失了。</p>
+          <div class="tags"><i>素数定理</i><i>Hardy–Littlewood 猜想</i><i>二次多项式</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/ulam-spiral/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/ulam-spiral/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/ford-circles/index.html"><img src="examples/ford-circles/images/card.png" alt="[0, 1] 上层层相切的 Ford 圆，一条金色竖线 x = 1/φ 穿过 Fibonacci 分数的圆"></a>
+        <div class="body">
+          <h3>Ford 圆与 Farey 数列 · 分数之间的相切</h3>
+          <p>在每个分数 p/q 上放一个半径 1/(2q²) 的圆，无穷多个圆从不交叠：|ps − qr| = 1 时恰好相切，否则彼此分开。相切的圆之间藏着中位分数、Farey 数列和 Stern–Brocot 树，一条竖线 x = π 穿过的圆正是它的连分数渐近分数。</p>
+          <div class="tags"><i>Farey 数列</i><i>Stern–Brocot 树</i><i>丢番图逼近</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/ford-circles/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/ford-circles/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="prob">
+    <div class="sec-head"><h2>概率</h2><span>随机中的规律</span></div>
+    <p class="sec-intro">单次结果无法预测，大量重复以后却精确地服从定律。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/galton-board/index.html"><img src="examples/galton-board/images/card.png" alt="24 排钉子的 Galton 板，小球落下堆出钟形曲线"></a>
+        <div class="body">
+          <h3>Galton 板 · 中心极限定理</h3>
+          <p>小球在每颗钉子上随机左右弹，几千个球堆出二项分布，排数一多就贴上正态曲线。换成均匀、指数、骰子等任意分布，n 项之和同样变成钟形，距离按 1/√n 缩小；只有方差无穷的柯西分布例外。</p>
+          <div class="tags"><i>二项分布</i><i>中心极限定理</i><i>大数定律</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/galton-board/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/galton-board/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/buffon-needle/index.html"><img src="examples/buffon-needle/images/card.png" alt="间距相等的平行线上散落着几百根针，压线的针是金色，右侧是样本空间和 π 的估计值随针数收敛"></a>
+        <div class="body">
+          <h3>Buffon 投针 · 用随机估计 π</h3>
+          <p>随手往画着平行线的地板上扔针，压线的概率是 2ℓ/(πd)，数一数交点就能估计 π，误差按 1/√N 缩小。长针、折针、圆圈和随机面条的平均交点数都一样（Barbier 定理）；还能看到 Lazzarini 1901 年那个好得可疑的 355/113 是怎样“扔”出来的。</p>
+          <div class="tags"><i>几何概率</i><i>蒙特卡罗方法</i><i>Barbier 定理</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/buffon-needle/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/buffon-needle/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/random-walk/index.html"><img src="examples/random-walk/images/card.png" alt="2000 条一维随机游走散成一把扇子，右侧第 1000 步的位置直方图贴着 Gauss 曲线"></a>
+        <div class="body">
+          <h3>随机游走 · 布朗运动</h3>
+          <p>每一步随机向左或向右，成千上万条路径散成一把扇子：均方位移恰好等于步数，宽度按 √t 增长，位置分布贴上热方程的 Gauss 核。一维、二维的醉汉总会回家，三维只有 34% 能回来；一条百万步的游走按 √ 缩放后，看起来始终像布朗运动。</p>
+          <div class="tags"><i>√t 定律</i><i>Pólya 常返定理</i><i>布朗运动</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/random-walk/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/random-walk/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/percolation/index.html"><img src="examples/percolation/images/card.png" alt="256×256 格点渗流停在临界点 p_c ≈ 0.5927，金色跨越团簇从上连到下"></a>
+        <div class="body">
+          <h3>渗流 · 概率的临界点</h3>
+          <p>每个格点以概率 p 打开，p 一过 0.5927，就突然出现一个从上连到下的团簇。用并查集给团簇上色，测出交于 p_c 的跨越概率曲线、在 p_c 发散的平均团簇大小，以及维数 91/48 的分形；键渗流靠自对偶恰好在 p = 1/2。</p>
+          <div class="tags"><i>相变</i><i>并查集</i><i>分形维数</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/percolation/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/percolation/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="compute">
+    <div class="sec-head"><h2>计算</h2><span>简单规则，复杂行为</span></div>
+    <p class="sec-intro">每个格子只看邻居、只按一条规则更新，整体却能长出滑翔机、混沌和自组织临界。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/elementary-ca/index.html"><img src="examples/elementary-ca/images/card.png" alt="规则 30 从单个黑格长出的三角：左边是整齐的斜纹，右边像抛硬币一样杂乱"></a>
+        <div class="body">
+          <h3>一维元胞自动机 · 规则 30 与规则 110</h3>
+          <p>每格只看自己和左右邻居，8 位二进制就是一条规则，256 条按镜像和黑白互换只剩 88 类。规则 30 的中心列能当随机数，规则 90 画出杨辉三角 mod 2，规则 184 是交通流，规则 110 的滑翔机在以太上碰撞，足以做任何计算。</p>
+          <div class="tags"><i>元胞自动机</i><i>Burnside 引理</i><i>图灵完备</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/elementary-ca/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/elementary-ca/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/game-of-life/index.html"><img src="examples/game-of-life/images/card.png" alt="512×512 环面上的随机汤：翻滚的团块拖着暗红余晖，四周散落着方块、闪烁子和蜂巢"></a>
+        <div class="body">
+          <h3>生命游戏 · 四条规则的宇宙</h3>
+          <p>每个格子只看身边 8 个邻居：3 个就出生，2 或 3 个就存活，其余死去。从一锅随机汤里长出静物、振荡子、飞船和每 30 代发射一只滑翔机的 Gosper 枪；页面实测 R-pentomino 在第 1103 代稳定，以及小环面上四分之三的状态都是没有前身的伊甸园。</p>
+          <div class="tags"><i>元胞自动机</i><i>图灵完备</i><i>伊甸园定理</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/game-of-life/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/game-of-life/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/sandpile/index.html"><img src="examples/sandpile/images/card.png" alt="中心放 2¹⁹ 粒沙倒塌稳定后的分形沙堆"></a>
+        <div class="body">
+          <h3>沙堆模型 · 自组织临界</h3>
+          <p>一格堆到 4 粒就塌给四个邻居。中心放一百万粒，长成直径 ∝ √N 的分形沙堆；常返构形构成一个群，单位元 (6 − (6)°)° 是一幅意外的图；一粒粒随机撒沙，系统自己走到临界态，雪崩大小服从幂律，平均高度趋于 17/8。</p>
+          <div class="tags"><i>自组织临界</i><i>阿贝尔群</i><i>幂律</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/sandpile/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/sandpile/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
 </main>
 
 <footer class="wrap">

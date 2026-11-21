@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Hopf 纤维化 · 互相套住的圆</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0b14; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(25,22,38,.93); border: 1px solid #3a3352; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #c0b2e2; border-top: 1px solid #3a3352; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #938ca8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2c2640; color: #e6e6e6; border: 1px solid #463d66;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #383055; }
+  button.on { background: #5a4790; border-color: #7d68b8; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #bs { width: 348px; height: 210px; display: block; margin-top: 4px; border: 1px solid #3a3352; border-radius: 6px;
+    background: #110f1c; touch-action: none; cursor: crosshair; }
+  #lkInfo { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #b3abc8; margin-top: 4px; white-space: pre-line; }
+  #lkInfo b { color: #ffd38a; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(12,11,20,.8); color: #d0cbe0; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #view { left: 0; top: 0; }   /* after @media so ui=0 also wins on small screens */
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Hopf 纤维化 · 互相套住的圆</h1>
+  <small>三维球面 S³ = {(z₁, z₂) ∈ ℂ² : |z₁|² + |z₂|² = 1} 被 Hopf 映射 <span class="mono">(z₁, z₂) ↦ z₁ / z₂</span> 送到二维球面 S²。S² 上每一点的原像是 S³ 里的一个大圆（纤维）。把 S³ 球极投影到 ℝ³，纤维就成了一个个圆，而且任意两个都套在一起。</small>
+
+  <h2>底空间 S²（在小球上点或画）</h2>
+  <canvas id="bs"></canvas>
+  <div class="presets" id="modes">
+    <button data-m="pts">加点 / 画曲线</button><button data-m="ring">加一圈纬线</button>
+    <button data-m="pick">选 A / B</button><button data-m="turn">转动小球</button>
+  </div>
+  <div class="presets"><button id="undo">↶ 撤销</button><button id="clear">清空</button><button id="noPick">取消 A / B</button></div>
+  <small>小球上的每个点对应右边一根同色的圆。按住 Shift 或右键拖动也能转动小球。颜色：色相 = 经度 φ，越靠北越亮、越淡。</small>
+
+  <h2>纤维</h2>
+  <div class="row">
+    <label>每根纤维的采样点数 <b id="vK"></b></label>
+    <input id="K" type="range" min="24" max="400" step="1">
+  </div>
+  <div class="row">
+    <label>每圈纬线的纤维数 <b id="vM"></b></label>
+    <input id="M" type="range" min="4" max="72" step="1">
+  </div>
+
+  <h2>链环数 Lk(A, B)</h2>
+  <div id="lkInfo"></div>
+  <small>Gauss 积分 Lk = (1/4π) ∮∮ (r₁ − r₂)·(dr₁ × dr₂) / |r₁ − r₂|³，两根纤维各取 N 个等距参数点，用精确的切向量做梯形求和（对光滑闭曲线收敛极快）。</small>
+
+  <h2>投影之前先在 S³ 里转动</h2>
+  <div class="row">
+    <label>α（x–w 平面） <b id="vA"></b></label>
+    <input id="A" type="range" min="-180" max="180" step="0.5">
+  </div>
+  <div class="row">
+    <label>β（z–w 平面） <b id="vB"></b></label>
+    <input id="B" type="range" min="-180" max="180" step="0.5">
+  </div>
+  <small>四维旋转把一些纤维转到投影极点附近，它们在 ℝ³ 里变成很大的圆或直线；纤维之间的套连关系不变。</small>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="rot" type="checkbox"> 自动旋转视角</label>
+    <label><input id="r4" type="checkbox"> 自动 4D 旋转 α</label>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">右边：拖动旋转 · 滚轮缩放 · 双击复位视角 · 按 h 隐藏面板</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- geometry ----------
+// A base point on S² is [θ, φ]: polar angle from the north pole (0..π) and longitude.
+// Its fibre in S³ ⊂ ℂ² is t ↦ (cos(θ/2)·e^{i(φ+t)}, sin(θ/2)·e^{it}), written as real (x, y, z, w).
+const D2R = Math.PI / 180;
+const fibre4 = (th, ph, t) => {
+  const c = Math.cos(th / 2), s = Math.sin(th / 2);
+  return [c * Math.cos(ph + t), c * Math.sin(ph + t), s * Math.cos(t), s * Math.sin(t)];
+};
+// Hopf map S³ → S²: (z₁, z₂) ↦ (2 Re z₁z̄₂, 2 Im z₁z̄₂, |z₁|² − |z₂|²)
+const hopf = ([x, y, z, w]) => [2 * (x * z + y * w), 2 * (y * z - x * w), x * x + y * y - z * z - w * w];
+const toVec = ([th, ph]) => [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
+const toAng = ([x, y, z]) => [Math.acos(Math.max(-1, Math.min(1, z))), Math.atan2(y, x)];
+// a rotation of ℝ⁴ as a list of plane rotations [i, j, angle], applied in order
+function rotate(p, rots) {
+  for (const [i, j, a] of rots) {
+    const c = Math.cos(a), s = Math.sin(a), u = p[i], v = p[j];
+    p[i] = u * c - v * s; p[j] = u * s + v * c;
+  }
+  return p;
+}
+// stereographic projection from the pole (0, 0, 0, 1); null at the pole itself
+const stereo = p => { const k = 1 - p[3]; return k < 1e-12 ? null : [p[0] / k, p[1] / k, p[2] / k]; };
+
+const MAX_FIB = 720;      // fibres drawn (picks A and B come on top of this)
+const RCLIP = 9;          // points farther than this from the origin of ℝ³ are not drawn
+const LIM = { K: [24, 400], m: [4, 72], a: [-180, 180], b: [-180, 180], yaw: [-Math.PI, Math.PI], pitch: [-1.5, 1.5],
+  zoom: [0.2, 8], th: [0, 180], ph: [-360, 360] };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+
+// ---------- presets ----------
+const ring = (thDeg, arc = 1, ph0 = 0) => ({ kind: 'ring', th: thDeg * D2R, arc, ph0: ph0 * D2R });
+const pts = list => ({ kind: 'pts', pts: list.map(([t, p]) => [t * D2R, p * D2R]) });
+function curve(n, f) { const out = []; for (let i = 0; i < n; i++) out.push(f(i / (n - 1))); return pts(out); }
+function rand(seed) {   // mulberry32
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+function randomPts(n) {
+  const r = rand(5), out = [];
+  for (let i = 0; i < n; i++) out.push([Math.acos(2 * r() - 1) / D2R, 360 * r()]);
+  return pts(out);
+}
+const PRESETS = {
+  tori:     { name: '嵌套环面', groups: [ring(45, 0.75, 45), ring(90, 0.75, 45), ring(125, 0.75, 45)], m: 30, A: [45, 200], B: [125, 330] },
+  torus:    { name: '一个环面（Villarceau 圆）', groups: [ring(90)], m: 36, A: [90, 0], B: [90, 120] },
+  poles:    { name: '两极：圆和直线', groups: [], m: 24, A: [0, 0], B: [180, 0] },
+  link:     { name: 'Hopf 链环', groups: [], m: 24, A: [60, 0], B: [120, 180] },
+  meridian: { name: '一条经线', groups: [curve(36, u => [4 + 172 * u, 0])], m: 24, A: [40, 0], B: [140, 0] },
+  spiral:   { name: '螺旋线', groups: [curve(150, u => [3 + 157 * u, 4 * 360 * u])], m: 24, A: [], B: [] },
+  random:   { name: '随机 60 点', groups: [randomPts(60)], m: 24, A: [], B: [] },
+  lats:     { name: '整圈纬线', groups: [ring(30), ring(60), ring(90), ring(120)], m: 18, A: [30, 0], B: [120, 0] },
+};
+const pickOf = a => a.length === 2 ? [a[0] * D2R, a[1] * D2R] : null;
+
+// ---------- state ----------
+const HOME = { yaw: -0.5, pitch: -0.42, zoom: 1 };
+const view = { ...HOME };
+const P = { preset: 'tori', groups: [], K: 200, m: 30, a: 0, b: 0, A: null, B: null, rot: false, r4: false };
+const bsView = { yaw: -0.5, pitch: -0.55 };
+let mode = 'pts', pickNext = 0;
+const $ = id => document.getElementById(id);
+
+function baseList() {
+  const out = [];
+  for (const g of P.groups) {
+    if (g.kind === 'ring') {
+      const m = P.m, full = g.arc >= 1;
+      for (let k = 0; k < m && out.length < MAX_FIB; k++) out.push([g.th, g.ph0 + 2 * Math.PI * g.arc * k / (full ? m : m - 1)]);
+    } else for (const p of g.pts) { if (out.length >= MAX_FIB) break; out.push(p); }
+    if (out.length >= MAX_FIB) break;
+  }
+  return out;
+}
+const countBase = () => baseList().length;
+
+// ---------- colours ----------
+// hue = longitude φ; saturation falls off towards the poles (where φ is undefined); brighter towards the north
+function baseRGB([th, ph]) {
+  const h = ((ph / D2R) % 360 + 360) % 360, s = 0.15 + 0.75 * Math.sin(th), l = 0.8 - 0.32 * th / Math.PI;
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+const BG = [12, 11, 20], LV = 10;
+// LV depth levels per fibre: far pieces fade towards the background colour
+function shades(rgb) {
+  const out = [];
+  for (let i = 0; i < LV; i++) {
+    const k = 0.2 + 0.8 * i / (LV - 1);
+    out.push(`rgb(${rgb.map((v, j) => Math.round(BG[j] + (v - BG[j]) * k)).join(',')})`);
+  }
+  return out;
+}
+const cssRGB = rgb => `rgb(${rgb.map(Math.round).join(',')})`;
+
+// ---------- fibres in ℝ³ ----------
+// G.X holds (K+1) samples per fibre (the last repeats the first), NaN where the point is at or beyond the clip radius
+let G = null;
+const viewRots = () => [[0, 3, P.a * D2R], [2, 3, P.b * D2R]];
+function buildGeometry() {
+  const list = baseList().map(b => ({ b, pick: 0 }));
+  if (P.A) list.push({ b: P.A, pick: 1 });
+  if (P.B) list.push({ b: P.B, pick: 2 });
+  const K = P.K, S = K + 1, n = list.length, X = new Float64Array(n * S * 3), rots = viewRots();
+  for (let f = 0; f < n; f++) {
+    const [th, ph] = list[f].b;
+    for (let k = 0; k < S; k++) {
+      const q = stereo(rotate(fibre4(th, ph, 2 * Math.PI * k / K), rots)), o = (f * S + k) * 3;
+      if (q && Math.hypot(q[0], q[1], q[2]) < RCLIP) { X[o] = q[0]; X[o + 1] = q[1]; X[o + 2] = q[2]; }
+      else X[o] = X[o + 1] = X[o + 2] = NaN;
+    }
+  }
+  G = { n, K, S, X, pick: list.map(l => l.pick), base: list.map(l => l.b), col: list.map(l => shades(baseRGB(l.b))),
+    sx: new Float32Array(n * S), sy: new Float32Array(n * S), sd: new Float32Array(n * S) };
+  circleInfo();
+  dirty = true;
+}
+
+// ---------- linking number by the Gauss integral ----------
+// sample a fibre at N equally spaced t after rotating S³ by rots: positions and exact tangents dq/dt in ℝ³.
+// null if a sample lands on the projection pole.
+function polygon([th, ph], N, rots) {
+  const Q = new Float64Array(3 * N), T = new Float64Array(3 * N), c = Math.cos(th / 2), s = Math.sin(th / 2);
+  for (let k = 0; k < N; k++) {
+    const t = 2 * Math.PI * k / N;
+    const p = rotate(fibre4(th, ph, t), rots), dp = rotate([-c * Math.sin(ph + t), c * Math.cos(ph + t), -s * Math.sin(t), s * Math.cos(t)], rots);
+    const m = 1 - p[3];
+    if (m < 1e-12) return null;
+    for (let j = 0; j < 3; j++) { Q[3 * k + j] = p[j] / m; T[3 * k + j] = (dp[j] * m + p[j] * dp[3]) / (m * m); }
+  }
+  return { Q, T };
+}
+// trapezoid rule on the periodic double integral: spectrally accurate for smooth closed curves
+function gauss(a, b, N) {
+  const { Q: P1, T: D1 } = a, { Q: P2, T: D2 } = b;
+  let s = 0;
+  for (let i = 0; i < N; i++) {
+    const mx = P1[3 * i], my = P1[3 * i + 1], mz = P1[3 * i + 2], ax = D1[3 * i], ay = D1[3 * i + 1], az = D1[3 * i + 2];
+    for (let j = 0; j < N; j++) {
+      const rx = mx - P2[3 * j], ry = my - P2[3 * j + 1], rz = mz - P2[3 * j + 2];
+      const bx = D2[3 * j], by = D2[3 * j + 1], bz = D2[3 * j + 2];
+      const r2 = rx * rx + ry * ry + rz * rz;
+      s += (rx * (ay * bz - az * by) + ry * (az * bx - ax * bz) + rz * (ax * by - ay * bx)) / (r2 * Math.sqrt(r2));
+    }
+  }
+  const h = 2 * Math.PI / N;
+  return s * h * h / (4 * Math.PI);
+}
+// Lk does not depend on where we project from, so pick a pole far from both fibres: try a few rotations of S³
+// and keep the one whose image is smallest. Then choose N from how close the two curves come.
+const POLES = [[], [[0, 3, Math.PI / 2]], [[0, 3, -Math.PI / 2]], [[1, 3, Math.PI / 2]], [[1, 3, -Math.PI / 2]],
+  [[2, 3, Math.PI / 2]], [[2, 3, -Math.PI / 2]], [[0, 3, Math.PI]], [[0, 3, Math.PI / 4], [1, 3, Math.PI / 4]],
+  [[1, 3, -Math.PI / 4], [2, 3, Math.PI / 4]]];
+function linking(A, B, rots = null, Nfix = 0) {
+  const c = toVec(A), d = toVec(B);
+  if (Math.hypot(c[0] - d[0], c[1] - d[1], c[2] - d[2]) < 1e-9) return { same: true };
+  let best = null;
+  for (const r of rots ? [rots] : POLES) {
+    const a = polygon(A, 64, r), b = polygon(B, 64, r);
+    if (!a || !b) continue;
+    let R = 0, sep = Infinity;
+    const u = a.Q, v = b.Q;
+    for (let i = 0; i < 64; i++) {
+      R = Math.max(R, Math.hypot(u[3 * i], u[3 * i + 1], u[3 * i + 2]), Math.hypot(v[3 * i], v[3 * i + 1], v[3 * i + 2]));
+      for (let j = 0; j < 64; j++) sep = Math.min(sep, Math.hypot(u[3 * i] - v[3 * j], u[3 * i + 1] - v[3 * j + 1], u[3 * i + 2] - v[3 * j + 2]));
+    }
+    if (!best || R < best.R) best = { r, R, sep };
+  }
+  if (!best) return null;
+  // the integrand varies on the scale of the gap between the curves, so N grows like R / gap
+  const need = Math.ceil(16 * best.R / best.sep), N = Nfix || Math.round(clamp(need, [128, 2048]));
+  const value = gauss(polygon(A, N, best.r), polygon(B, N, best.r), N);
+  return { value, N, R: best.R, sep: best.sep, pole: POLES.indexOf(best.r), short: !Nfix && need > 2048 };
+}
+
+// circle through three samples of fibre A in the current projection, and how far all samples stray from it
+let circA = null;
+function circleOf(b) {
+  const rots = viewRots(), K = 360, q = [];
+  for (let k = 0; k < K; k++) { const p = stereo(rotate(fibre4(b[0], b[1], 2 * Math.PI * k / K), rots)); if (!p) return { line: true }; q.push(p); }
+  const p1 = q[0], p2 = q[K / 3], p3 = q[2 * K / 3];
+  const a = p1.map((v, i) => v - p3[i]), bb = p2.map((v, i) => v - p3[i]);
+  const cr = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  const dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  const n = cr(a, bb), n2 = dot(n, n);
+  const t = cr(bb.map(v => v * dot(a, a)).map((v, i) => v - a[i] * dot(bb, bb)), n);
+  const c = p3.map((v, i) => v + t[i] / (2 * n2));
+  const R = Math.hypot(...p1.map((v, i) => v - c[i])), nn = n.map(v => v / Math.sqrt(n2));
+  let dev = 0;
+  for (const p of q) {
+    const w = p.map((v, i) => v - c[i]), h = dot(w, nn), rho = Math.hypot(...w.map((v, i) => v - h * nn[i]));
+    dev = Math.max(dev, Math.hypot(rho - R, h) / R);
+  }
+  return { R, centre: c, tilt: Math.acos(Math.min(1, Math.abs(nn[2]))) / D2R, dev };
+}
+function circleInfo() { circA = P.A ? circleOf(P.A) : null; showLink(); }
+
+let LK = null;
+function updateLink() { LK = P.A && P.B ? linking(P.A, P.B) : null; showLink(); }
+const fmtAng = b => `θ = ${(b[0] / D2R).toFixed(1)}°, φ = ${(((b[1] / D2R) % 360 + 540) % 360 - 180).toFixed(1)}°`;
+function showLink() {
+  const el = $('lkInfo'); el.textContent = '';
+  const line = (txt, val) => { const d = document.createElement('div'); d.textContent = txt;
+    if (val !== undefined) { const b = document.createElement('b'); b.textContent = val; d.appendChild(b); } el.appendChild(d); };
+  if (!P.A || !P.B) { line('在小球上选“选 A / B”，再点两次，选出两根纤维。'); }
+  line(`A：${P.A ? fmtAng(P.A) : '—'}`); line(`B：${P.B ? fmtAng(P.B) : '—'}`);
+  if (LK && LK.same) line('A、B 是同一根纤维');
+  else if (LK) {
+    line(`N = ${LK.N} × ${LK.N}，Gauss 积分 = `, `${LK.value.toFixed(8)} → Lk = ${LK.short ? '?' : Math.round(LK.value)}`);
+    if (LK.short) line('A、B 靠得太近，2048 个点还不够细，这个数值不可靠；把两个点拉开一些');
+  }
+  if (circA) line(circA.line ? 'A 经过投影极点：在 ℝ³ 里是一条直线' :
+    `A 的像：半径 ${circA.R.toFixed(4)}，与 xy 平面夹角 ${circA.tilt.toFixed(1)}°，偏离圆 ${circA.dev.toExponential(1)}`);
+}
+
+// ---------- drawing the fibres ----------
+const cv = $('c'), ctx = cv.getContext('2d'), bs = $('bs'), bctx = bs.getContext('2d');
+let W = 1, H = 1, BW = 1, BH = 1, dirty = true, bsDirty = true;
+
+function camera() {
+  const sc = 0.115 * Math.min(W, H) * view.zoom;
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+  return (x, y, z, k) => {
+    const a = x * cy - y * sy, b = x * sy + y * cy, v = z * cp - b * sp, d = z * sp + b * cp;
+    const f = sc / (1 + Math.max(d, -10) / 22);
+    G.sx[k] = W / 2 + a * f; G.sy[k] = H / 2 - v * f; G.sd[k] = d;
+  };
+}
+
+function drawScene() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = cssRGB(BG); ctx.fillRect(0, 0, W, H);
+  const { n, K, S, X, sx, sy, sd } = G, proj = camera(), dpr = devicePixelRatio;
+  for (let i = 0; i < n * S; i++) if (X[3 * i] === X[3 * i]) proj(X[3 * i], X[3 * i + 1], X[3 * i + 2], i); else sd[i] = NaN;
+  // cut each fibre into short pieces and paint them far to near, so crossings show which strand is in front
+  const PL = Math.max(3, Math.ceil(K / 20)), pieces = [];
+  let dmin = Infinity, dmax = -Infinity;
+  for (let f = 0; f < n; f++) for (let k = 0; k < K; k += PL) {
+    const e = Math.min(K, k + PL);
+    let s = 0, c = 0;
+    for (let j = k; j <= e; j++) { const d = sd[f * S + j]; if (d === d) { s += d; c++; } }
+    if (c < 2) continue;
+    const d = s / c; pieces.push([d, f, k, e]);
+    if (d < dmin) dmin = d; if (d > dmax) dmax = d;
+  }
+  pieces.sort((p, q) => q[0] - p[0]);
+  const span = Math.max(1e-6, dmax - dmin), outline = n <= 150;
+  ctx.lineCap = ctx.lineJoin = 'round';
+  const path = (f, k, e) => {
+    ctx.beginPath(); let pen = false;
+    for (let j = k; j <= e; j++) {
+      const i = f * S + j;
+      if (sd[i] !== sd[i]) { pen = false; continue; }
+      pen ? ctx.lineTo(sx[i], sy[i]) : ctx.moveTo(sx[i], sy[i]); pen = true;
+    }
+  };
+  const bgCss = cssRGB(BG), wBase = (n > 300 ? 0.9 : n > 100 ? 1.2 : 1.7) * dpr;
+  for (const [d, f, k, e] of pieces) {
+    const near = 1 - (d - dmin) / span, lv = Math.round(near * (LV - 1)), pk = G.pick[f];
+    const w = pk ? 3.2 * dpr : wBase * (0.7 + 0.5 * near);
+    path(f, k, e);
+    // butt caps on the outline, round caps on the colour: the next piece's outline never cuts into this one
+    if (outline || pk) { ctx.lineCap = 'butt'; ctx.strokeStyle = bgCss; ctx.lineWidth = w + (pk ? 3 : 2) * dpr; ctx.stroke(); ctx.lineCap = 'round'; }
+    ctx.strokeStyle = G.col[f][pk ? Math.max(lv, 4) : lv]; ctx.lineWidth = w; ctx.stroke();
+  }
+  // labels A and B at the topmost visible point of each pick
+  ctx.font = `bold ${14 * dpr}px -apple-system, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  for (let f = 0; f < n; f++) if (G.pick[f]) {
+    let best = -1;
+    for (let j = 0; j < K; j++) { const i = f * S + j; if (sd[i] === sd[i] && (best < 0 || sy[i] < sy[best])) best = i; }
+    if (best < 0) continue;
+    ctx.fillStyle = '#fff'; ctx.fillText(G.pick[f] === 1 ? 'A' : 'B', sx[best], sy[best] - 5 * dpr);
+  }
+}
+
+function drawStat() {
+  const nb = G.n - (P.A ? 1 : 0) - (P.B ? 1 : 0);
+  const parts = [`${nb} 根纤维`, `每根 ${P.K} 点`, `α = ${P.a.toFixed(1)}°`, `β = ${P.b.toFixed(1)}°`];
+  if (LK && !LK.same && !LK.short) parts.push(`Lk(A, B) = ${LK.value.toFixed(4)}`);
+  $('stat').textContent = parts.join(' · ');
+  window.__hopf = { preset: P.preset, fibres: nb, K: P.K, m: P.m, a: P.a, b: P.b, A: P.A, B: P.B, lk: LK, circA,
+    view: { ...view }, bsView, mode, fibre4, hopf, stereo, rotate, linking, circleOf, baseList, toVec, toAng };
+}
+
+// ---------- the base sphere widget ----------
+function bsGeom() { const R = 0.44 * Math.min(BW, BH); return { R, cx: BW / 2, cy: BH / 2 }; }
+function bsProj([x, y, z]) {
+  const cy = Math.cos(bsView.yaw), sy = Math.sin(bsView.yaw), cp = Math.cos(bsView.pitch), sp = Math.sin(bsView.pitch);
+  const a = x * cy - y * sy, b = x * sy + y * cy;
+  return [a, z * cp - b * sp, z * sp + b * cp];   // screen right, screen up, depth (negative = facing us)
+}
+function bsUnproj(px, py) {    // canvas pixels → point on the front hemisphere, or null outside the disc
+  const { R, cx, cy } = bsGeom(), a = (px - cx) / R, v = (cy - py) / R, r2 = a * a + v * v;
+  if (r2 > 1) return null;
+  const d = -Math.sqrt(1 - r2);
+  const yc = Math.cos(bsView.yaw), ys = Math.sin(bsView.yaw), pc = Math.cos(bsView.pitch), ps = Math.sin(bsView.pitch);
+  const z = v * pc + d * ps, b = -v * ps + d * pc;
+  return [a * yc + b * ys, -a * ys + b * yc, z];
+}
+function drawBase() {
+  const c = bctx, dpr = devicePixelRatio, { R, cx, cy } = bsGeom();
+  c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = '#110f1c'; c.fillRect(0, 0, BW, BH);
+  const g = c.createRadialGradient(cx - R * 0.35, cy - R * 0.35, R * 0.1, cx, cy, R);
+  g.addColorStop(0, '#2d2846'); g.addColorStop(1, '#17142a');
+  c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, 7); c.fill();
+  const S = (p) => { const [a, v, d] = bsProj(p); return [cx + a * R, cy - v * R, d]; };
+  // graticule: back half faint, front half brighter
+  c.lineWidth = 1;
+  const seg = (f, steps) => {
+    let prev = null;
+    for (let i = 0; i <= steps; i++) {
+      const p = S(f(i / steps));
+      if (prev) { c.strokeStyle = p[2] < 0 ? 'rgba(200,190,240,.22)' : 'rgba(200,190,240,.06)';
+        c.beginPath(); c.moveTo(prev[0], prev[1]); c.lineTo(p[0], p[1]); c.stroke(); }
+      prev = p;
+    }
+  };
+  for (let la = 30; la < 180; la += 30) seg(u => toVec([la * D2R, u * 2 * Math.PI]), 72);
+  for (let lo = 0; lo < 360; lo += 30) seg(u => toVec([u * Math.PI, lo * D2R]), 36);
+  c.strokeStyle = 'rgba(200,190,240,.35)'; c.beginPath(); c.arc(cx, cy, R, 0, 7); c.stroke();
+  // base points, back ones first and faded
+  const base = baseList().map(b => [S(toVec(b)), b]).sort((p, q) => q[0][2] - p[0][2]);
+  for (const [[x, y, d], b] of base) {
+    c.globalAlpha = d < 0 ? 1 : 0.28; c.fillStyle = cssRGB(baseRGB(b));
+    c.beginPath(); c.arc(x, y, (base.length > 200 ? 1.8 : 2.6) * dpr, 0, 7); c.fill();
+  }
+  c.globalAlpha = 1;
+  c.font = `${10 * dpr}px -apple-system, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  for (const [nm, v] of [['N', [0, 0, 1]], ['S', [0, 0, -1]]]) {
+    const [x, y, d] = S(v); c.fillStyle = d < 0 ? '#e6e0ff' : 'rgba(230,224,255,.35)'; c.fillText(nm, x, y + (nm === 'N' ? -9 : 9) * dpr);
+  }
+  c.font = `bold ${11 * dpr}px -apple-system, sans-serif`;
+  for (const [nm, b] of [['A', P.A], ['B', P.B]]) if (b) {
+    const [x, y, d] = S(toVec(b));
+    c.globalAlpha = d < 0 ? 1 : 0.45; c.strokeStyle = '#fff'; c.lineWidth = 1.6 * dpr;
+    c.beginPath(); c.arc(x, y, 5 * dpr, 0, 7); c.stroke(); c.fillStyle = '#fff'; c.fillText(nm, x + 11 * dpr, y - 8 * dpr);
+  }
+  c.globalAlpha = 1;
+  c.fillStyle = '#938ca8'; c.textAlign = 'left'; c.textBaseline = 'top'; c.font = `${10 * dpr}px -apple-system, sans-serif`;
+  c.fillText(`${countBase()} / ${MAX_FIB} 个点`, 6 * dpr, 5 * dpr);
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('K').value = P.K; $('M').value = P.m; $('A').value = P.a; $('B').value = P.b;
+  $('vK').textContent = P.K; $('vM').textContent = P.m; $('vA').textContent = `${P.a.toFixed(1)}°`; $('vB').textContent = `${P.b.toFixed(1)}°`;
+  $('rot').checked = P.rot; $('r4').checked = P.r4;
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+  document.querySelectorAll('[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+}
+const custom = () => { P.preset = ''; };
+function changedBase() { custom(); syncUI(); buildGeometry(); bsDirty = true; }
+
+function applyPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, groups: p.groups.map(g => g.kind === 'pts' ? { kind: 'pts', pts: g.pts.slice() } : { ...g }),
+    m: p.m, A: pickOf(p.A), B: pickOf(p.B), a: 0, b: 0 });
+}
+function loadPreset(key) { applyPreset(key); P.r4 = false; syncUI(); buildGeometry(); updateLink(); bsDirty = true; }
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; pickNext = 0; syncUI(); });
+$('undo').onclick = () => { if (P.groups.length) { P.groups.pop(); changedBase(); } };
+$('clear').onclick = () => { P.groups = []; changedBase(); };
+$('noPick').onclick = () => { P.A = P.B = null; changedBase(); updateLink(); };
+$('K').oninput = e => { P.K = +e.target.value; syncUI(); buildGeometry(); };
+$('M').oninput = e => { P.m = +e.target.value; changedBase(); };
+$('A').oninput = e => { P.a = +e.target.value; syncUI(); buildGeometry(); };
+$('B').oninput = e => { P.b = +e.target.value; syncUI(); buildGeometry(); };
+$('rot').onchange = e => { P.rot = e.target.checked; };
+$('r4').onchange = e => { P.r4 = e.target.checked; };
+
+// base sphere: click / paint / pick / turn
+let bdrag = null;
+const bsXY = e => { const r = bs.getBoundingClientRect(), dpr = devicePixelRatio; return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; };
+bs.addEventListener('contextmenu', e => e.preventDefault());
+bs.addEventListener('pointerdown', e => {
+  bs.setPointerCapture(e.pointerId);
+  const turn = mode === 'turn' || e.shiftKey || e.button === 2, [px, py] = bsXY(e);
+  bdrag = { turn, x: e.clientX, y: e.clientY, group: null };
+  if (turn) return;
+  const v = bsUnproj(px, py);
+  if (!v) return;
+  const b = toAng(v);
+  if (mode === 'pts') {
+    if (countBase() >= MAX_FIB) return;
+    bdrag.group = { kind: 'pts', pts: [b] }; P.groups.push(bdrag.group); bdrag.last = v; changedBase();
+  } else if (mode === 'ring') {
+    P.groups.push({ kind: 'ring', th: b[0], arc: 1, ph0: 0 }); changedBase();
+  } else if (mode === 'pick') {
+    if (pickNext === 0) P.A = b; else P.B = b;
+    pickNext = 1 - pickNext; changedBase(); updateLink();
+  }
+});
+bs.addEventListener('pointermove', e => {
+  if (!bdrag) return;
+  if (bdrag.turn) {
+    bsView.yaw = wrap(bsView.yaw + (e.clientX - bdrag.x) * 0.01);
+    bsView.pitch = clamp(bsView.pitch + (e.clientY - bdrag.y) * 0.01, LIM.pitch);
+    bdrag.x = e.clientX; bdrag.y = e.clientY; bsDirty = true; return;
+  }
+  if (!bdrag.group) return;
+  const v = bsUnproj(...bsXY(e));
+  // paint: add a point whenever the pointer has moved 4° along the sphere
+  if (!v || v[0] * bdrag.last[0] + v[1] * bdrag.last[1] + v[2] * bdrag.last[2] > Math.cos(4 * D2R) || countBase() >= MAX_FIB) return;
+  bdrag.group.pts.push(toAng(v)); bdrag.last = v; changedBase();
+});
+bs.addEventListener('pointerup', () => { bdrag = null; });
+
+// main view: rotate / zoom
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  view.yaw = wrap(view.yaw + (e.clientX - drag[0]) * 0.008);
+  view.pitch = clamp(view.pitch + (e.clientY - drag[1]) * 0.008, LIM.pitch);
+  drag = [e.clientX, e.clientY]; dirty = true;
+});
+cv.addEventListener('pointerup', () => { drag = null; cv.style.cursor = ''; });
+cv.addEventListener('dblclick', () => { Object.assign(view, HOME); dirty = true; });
+cv.addEventListener('wheel', e => {
+  e.preventDefault(); view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0015), LIM.zoom); dirty = true;
+}, { passive: false });
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+addEventListener('keydown', e => { if (e.key === 'h' && e.target === document.body) { document.body.classList.toggle('noui'); resize(); } });
+
+function resize() {
+  const r = cv.getBoundingClientRect(), q = bs.getBoundingClientRect(), dpr = devicePixelRatio;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+  BW = bs.width = Math.max(1, Math.round(q.width * dpr)); BH = bs.height = Math.max(1, Math.round(q.height * dpr));
+  dirty = bsDirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=torus  or  ?lat=45,90,135&m=24&A=90,0&B=90,120&a=30&yaw=0.4&pitch=-0.6&z=1.2&ui=0
+// Numbers must be finite and are clamped to the slider ranges; p is matched against PRESETS with an own-property check.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const pair = s => { const v = s.split(',').map(Number); return v.length === 2 && v.every(Number.isFinite) ? [clamp(v[0], LIM.th) * D2R, clamp(v[1], LIM.ph) * D2R] : null; };
+const pk = q.get('p');
+applyPreset(pk !== null && Object.hasOwn(PRESETS, pk) ? pk : 'tori');
+if (q.has('lat') || q.has('pts')) {
+  const groups = [];
+  if (q.has('lat')) for (const s of q.get('lat').split(',').slice(0, 12)) { const x = Number(s); if (s.trim() !== '' && Number.isFinite(x)) groups.push(ring(clamp(x, LIM.th))); }
+  if (q.has('pts')) { const list = q.get('pts').split(';').slice(0, MAX_FIB).map(pair).filter(Boolean); if (list.length) groups.push({ kind: 'pts', pts: list }); }
+  P.groups = groups; custom();
+}
+for (const k of ['A', 'B']) if (q.has(k)) { P[k] = pair(q.get(k)); custom(); }
+num('n', x => P.K = Math.round(clamp(x, LIM.K)));
+num('m', x => { P.m = Math.round(clamp(x, LIM.m)); custom(); });
+num('a', x => P.a = Math.round(clamp(x, LIM.a) * 2) / 2);
+num('b', x => P.b = Math.round(clamp(x, LIM.b) * 2) / 2);
+num('yaw', x => view.yaw = clamp(x, LIM.yaw)); num('pitch', x => view.pitch = clamp(x, LIM.pitch)); num('z', x => view.zoom = clamp(x, LIM.zoom));
+if (q.get('rot') === '1') P.rot = true;
+if (q.get('r4') === '1') P.r4 = true;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI(); buildGeometry(); updateLink();
+
+(function loop() {
+  if (P.rot && !drag) { view.yaw = wrap(view.yaw + 0.003); dirty = true; }
+  if (P.r4) { P.a = Math.round(((P.a + 180.25) % 360 - 180) * 100) / 100; syncUI(); buildGeometry(); }
+  if (dirty) { dirty = false; drawScene(); drawStat(); window.__ready = true; }
+  if (bsDirty) { bsDirty = false; drawBase(); }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
