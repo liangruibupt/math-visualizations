@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Lorenz 吸引子 · 蝴蝶效应</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0e16; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(22,27,40,.93); border: 1px solid #323a52; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a4b4d8; border-top: 1px solid #323a52; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8b93a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #283047; color: #e6e6e6; border: 1px solid #3a4462;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #333d5a; }
+  button.on { background: #3f5a8a; border-color: #5f7fb8; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #err { color: #ff8f8f; }
+  #fpInfo { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #a9b2c8; margin-top: 4px; white-space: pre-line; }
+  #regime { color: #ffd38a; margin-top: 4px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  #pl { position: absolute; right: 10px; bottom: 10px; width: 380px; height: 220px; pointer-events: none;
+    border: 1px solid #323a52; border-radius: 6px; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(11,14,22,.8); color: #cdd4e4; font-size: 12px; font-variant-numeric: tabular-nums; max-width: calc(100% - 420px); }
+  #stat b { color: #fff; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; }
+    #pl { width: 280px; height: 170px; } #stat { max-width: calc(100% - 320px); } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Lorenz 吸引子 · 蝴蝶效应</h1>
+  <small>三个变量、两个乘积项：<span class="mono">ẋ = σ(y − x)，ẏ = x(ρ − z) − y，ż = xy − βz</span>。让很多条起点只差 ε 的轨道一起跑，开始时它们重合成一个点，十几个时间单位后就散满整只“蝴蝶”。右下角是距离的对数随时间的曲线，直线段的斜率就是最大 Lyapunov 指数。</small>
+
+  <h2>参数</h2>
+  <div class="row">
+    <label>ρ（Rayleigh 数） <b id="vR"></b></label>
+    <input id="R" type="range" min="0" max="400" step="0.01">
+    <small id="regime"></small>
+  </div>
+  <div class="row">
+    <label>σ（Prandtl 数） <b id="vS"></b></label>
+    <input id="S" type="range" min="0.5" max="30" step="0.1">
+  </div>
+  <div class="row">
+    <label>β <b id="vBe"></b></label>
+    <input id="Be" type="range" min="0.1" max="6" step="0.01">
+  </div>
+  <div id="fpInfo"></div>
+
+  <h2>轨道</h2>
+  <div class="row">
+    <label>轨道条数 <b id="vN"></b></label>
+    <input id="N" type="range" min="0.30103" max="3" step="0.01">
+  </div>
+  <div class="row">
+    <label>起点间距 ε <b id="vE"></b></label>
+    <input id="E" type="range" min="-13" max="-1" step="0.5">
+  </div>
+  <div class="presets"><span style="align-self:center;color:#8b93a8">起点：</span>
+    <button id="mEps">ε 小球（蝴蝶效应）</button><button id="mSpread">大范围随机（看不动点）</button></div>
+  <small>ε 小球：先让一条参考轨道跑 40 个时间单位落到吸引子上，其余轨道放在离它 ε 的随机方向上。大范围随机：所有起点撒在整个视野里，用来看轨道最后去了哪里。</small>
+
+  <h2>积分</h2>
+  <div class="row">
+    <label>步长 dt（RK4） <b id="vDt"></b></label>
+    <input id="Dt" type="range" min="0.001" max="0.02" step="0.001">
+  </div>
+  <div class="row">
+    <label>每帧步数 <b id="vV"></b></label>
+    <input id="V" type="range" min="1" max="100" step="1">
+  </div>
+  <div class="row">
+    <label>尾迹长度（步） <b id="vL"></b></label>
+    <input id="L" type="range" min="100" max="20000" step="100">
+    <small>参考轨道（白色）用全长；其余轨道的尾迹总点数限制在 15 万以内</small>
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button></div>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="fp" type="checkbox"> 显示不动点</label>
+    <label><input id="rot" type="checkbox"> 自动旋转</label>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small id="err"></small>
+  <small style="margin-top:8px">拖动旋转 · 滚轮缩放 · 双击复位视角</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><canvas id="pl"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- presets ----------
+const PRESETS = {
+  classic: { name: '经典 ρ = 28', rho: 28, n: 200, mode: 'eps' },
+  pair: { name: '两条轨道', rho: 28, n: 2, mode: 'eps', trail: 6000 },
+  swarm: { name: '1000 条轨道', rho: 28, n: 1000, mode: 'eps' },
+  origin: { name: 'ρ = 0.5 流向原点', rho: 0.5, n: 300, mode: 'spread' },
+  fixed: { name: 'ρ = 10 两个稳定不动点', rho: 10, n: 300, mode: 'spread' },
+  transient: { name: 'ρ = 20 瞬态混沌', rho: 20, n: 300, mode: 'spread' },
+  coexist: { name: 'ρ = 24.5 混沌与不动点共存', rho: 24.5, n: 300, mode: 'spread' },
+  w100: { name: 'ρ = 99.65 周期窗口', rho: 99.65, n: 200, mode: 'eps' },
+  w160: { name: 'ρ = 160 周期窗口', rho: 160, n: 200, mode: 'eps' },
+  w350: { name: 'ρ = 350 大 ρ 周期轨道', rho: 350, n: 200, mode: 'eps', dt: 0.002 },
+};
+const DEF = { sigma: 10, beta: 8 / 3, eps: -9, dt: 0.005, speed: 4, trail: 4000 };
+const LIM = {   // every slider range; URL params are clamped to these
+  rho: [0, 400], sigma: [0.5, 30], beta: [0.1, 6], n: [2, 1000], eps: [-13, -1],
+  dt: [0.001, 0.02], speed: [1, 100], trail: [100, 20000], yaw: [-Math.PI, Math.PI], pitch: [-1.5, 1.5], zoom: [0.2, 20], t: [0, 200],
+};
+const STEP_BUDGET = 2.5e5;     // RK4 steps per frame summed over all trajectories
+const FF_BUDGET = 8e5;         // same, while fast-forwarding to ?t=
+const DRAW_BUDGET = 1.5e5;     // tail points drawn per frame for the non-reference trajectories
+const BURN_IN = 40;            // time units the reference runs before the ensemble is seeded (lands in a typical window: slope 0.91)
+const SAMPLE_DT = 0.05, T_MAX = 120, HMAX = Math.ceil(T_MAX / SAMPLE_DT) + 2;
+const LAMBDA_REF = 0.9056;     // largest Lyapunov exponent at σ=10, ρ=28, β=8/3 (Sprott 2003)
+
+const P = { preset: 'classic', rho: 28, sigma: DEF.sigma, beta: DEF.beta, n: 200, eps: DEF.eps, mode: 'eps',
+  dt: DEF.dt, speed: DEF.speed, trail: DEF.trail, fp: true, rot: false };
+const HOME = { yaw: -0.6, pitch: 0.18, zoom: 1 };
+const view = { ...HOME };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+
+const $ = id => document.getElementById(id);
+
+function rng(seed) {   // mulberry32: same seed, same ensemble
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+
+// ---------- fixed points and their eigenvalues ----------
+// real roots of the monic cubic λ³ + a λ² + b λ + c by bisection, then the remaining quadratic
+function cubicRoots(a, b, c) {
+  const f = x => ((x + a) * x + b) * x + c;
+  const M = 1 + Math.abs(a) + Math.abs(b) + Math.abs(c);
+  let lo = -M, hi = M;
+  for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (f(m) < 0) lo = m; else hi = m; }
+  const r = (lo + hi) / 2;
+  return [r, ...quadRoots(a + r, b + r * (a + r))];
+}
+function quadRoots(p, q) {   // λ² + p λ + q = 0, complex roots as [re, im]
+  const d = p * p / 4 - q;
+  if (d >= 0) return [-p / 2 + Math.sqrt(d), -p / 2 - Math.sqrt(d)];
+  return [[-p / 2, Math.sqrt(-d)], [-p / 2, -Math.sqrt(-d)]];
+}
+const re = z => Array.isArray(z) ? z[0] : z;
+const fmtEig = z => Array.isArray(z) ? `${z[0].toFixed(3)} ${z[1] < 0 ? '−' : '+'} ${Math.abs(z[1]).toFixed(3)}i` : z.toFixed(3);
+// Hopf bifurcation of C±: the complex pair crosses the imaginary axis at ρ_H = σ(σ+β+3)/(σ−β−1)
+const rhoHopf = () => P.sigma > P.beta + 1 ? P.sigma * (P.sigma + P.beta + 3) / (P.sigma - P.beta - 1) : Infinity;
+function fixedPoints() {
+  const { sigma: s, rho: r, beta: b } = P;
+  const O = { name: 'O', p: [0, 0, 0], eig: [-b, ...quadRoots(s + 1, s * (1 - r))] };
+  const pts = [O];
+  if (r > 1) {
+    const q = Math.sqrt(b * (r - 1));
+    // at C± the Jacobian's characteristic polynomial is λ³ + (σ+β+1)λ² + β(σ+ρ)λ + 2σβ(ρ−1)
+    const eig = cubicRoots(s + b + 1, b * (s + r), 2 * s * b * (r - 1));
+    pts.push({ name: 'C+', p: [q, q, r - 1], eig }, { name: 'C−', p: [-q, -q, r - 1], eig });
+  }
+  for (const f of pts) f.stable = f.eig.every(z => re(z) < 0);
+  return pts;
+}
+let FP = [];
+
+function regimeText() {
+  const r = P.rho, std = Math.abs(P.sigma - 10) < 1e-9 && Math.abs(P.beta - 8 / 3) < 1e-6, rh = rhoHopf();
+  if (r < 1) return 'ρ < 1：原点是唯一的不动点，而且稳定，所有轨道都流向它';
+  if (std) {
+    if (r < 13.926) return '1 < ρ < 13.93：原点失稳，所有轨道落到 C+ 或 C−';
+    if (r < 24.06) return '13.93 < ρ < 24.06：先乱跳一阵（瞬态混沌），最终仍落到 C±';
+    if (r < rh) return '24.06 < ρ < 24.74：混沌吸引子与稳定的 C± 共存，看起点落在哪边';
+    if (r > 99.524 && r < 100.795) return 'ρ ≈ 99.5–100.8：周期窗口，混沌让位给一条稳定的周期轨道';
+    if (r > 145 && r < 166) return 'ρ ≈ 145–166：周期窗口';
+    if (r > 313) return 'ρ > 313：只剩一条稳定的周期轨道';
+    return `ρ > ρ_H = ${rh.toFixed(2)}：C± 也失稳，轨道落到混沌吸引子上`;
+  }
+  return r < rh ? `1 < ρ < ρ_H = ${rh.toFixed(2)}：C± 稳定` : `ρ > ρ_H = ${rh.toFixed(2)}：C± 失稳`;
+}
+function showFixedPoints() {
+  FP = fixedPoints();
+  const lines = FP.slice(0, 2).map(f => {
+    const nm = f.name === 'O' ? 'O = (0, 0, 0)' : `C± = (±${f.p[0].toFixed(2)}, ±${f.p[1].toFixed(2)}, ${f.p[2].toFixed(2)})`;
+    return `${nm}  ${f.stable ? '稳定' : '不稳定'}\n  λ = ${f.eig.map(fmtEig).join(',  ')}`;
+  });
+  const rh = rhoHopf();
+  lines.push(`Hopf 分岔 ρ_H = σ(σ+β+3)/(σ−β−1) = ${Number.isFinite(rh) ? rh.toFixed(4) : '∞（σ ≤ β+1）'}`);
+  $('fpInfo').textContent = lines.join('\n');
+  $('regime').textContent = regimeText();
+}
+
+// ---------- simulation state ----------
+// S: positions of all trajectories, [x0,y0,z0, x1,y1,z1, ...]; trajectory 0 is the reference.
+// D: tangent vector carried along the reference (Benettin's method, an independent estimate of λ₁).
+let N = 0, S = null, D = new Float64Array(3), simT = 0, steps = 0, blown = false;
+let Tr = null, To = null, Lt = 1, rec = 0;            // trail rings: reference (length P.trail) and others (length Lt)
+let HT, HM, HLo, HHi, hn = 0;                          // history of ln d: time, mean, min, max
+let lnSum = 0, tB = 0, ffT = 0, running = true, colors = [];
+
+// rough radius of the attractor, used for framing; above ρ = 28 it grows about like ρ^0.68 (measured from screenshots)
+const scaleR = () => P.rho <= 28 ? Math.max(3, 0.9 * P.rho) : 25.2 * (P.rho / 28) ** 0.68;
+const zCentre = () => P.rho > 1 ? P.rho - 1 : 0;
+
+// one RK4 step of the Lorenz system for trajectories i0..N-1
+function stepEnsemble(h, i0) {
+  const s = P.sigma, r = P.rho, b = P.beta, h2 = h / 2, h6 = h / 6;
+  for (let i = i0; i < N; i++) {
+    const k = 3 * i, x = S[k], y = S[k + 1], z = S[k + 2];
+    const ax = s * (y - x), ay = x * (r - z) - y, az = x * y - b * z;
+    let X = x + h2 * ax, Y = y + h2 * ay, Z = z + h2 * az;
+    const bx = s * (Y - X), by = X * (r - Z) - Y, bz = X * Y - b * Z;
+    X = x + h2 * bx; Y = y + h2 * by; Z = z + h2 * bz;
+    const cx = s * (Y - X), cy = X * (r - Z) - Y, cz = X * Y - b * Z;
+    X = x + h * cx; Y = y + h * cy; Z = z + h * cz;
+    const dx = s * (Y - X), dy = X * (r - Z) - Y, dz = X * Y - b * Z;
+    const nx = x + h6 * (ax + 2 * bx + 2 * cx + dx), ny = y + h6 * (ay + 2 * by + 2 * cy + dy), nz = z + h6 * (az + 2 * bz + 2 * cz + dz);
+    if (!(Math.abs(nx) + Math.abs(ny) + Math.abs(nz) < 1e7)) blown = true;
+    S[k] = nx; S[k + 1] = ny; S[k + 2] = nz;
+  }
+}
+// reference trajectory together with its tangent vector: δ' = J(x) δ, J the Jacobian of the Lorenz field
+function stepRef(h) {
+  const s = P.sigma, r = P.rho, b = P.beta;
+  const f = (x, y, z, u, v, w) => [s * (y - x), x * (r - z) - y, x * y - b * z,
+    s * (v - u), (r - z) * u - v - x * w, y * u + x * v - b * w];
+  const q = [S[0], S[1], S[2], D[0], D[1], D[2]];
+  const k1 = f(...q);
+  const k2 = f(...q.map((v, j) => v + h / 2 * k1[j]));
+  const k3 = f(...q.map((v, j) => v + h / 2 * k2[j]));
+  const k4 = f(...q.map((v, j) => v + h * k3[j]));
+  for (let j = 0; j < 6; j++) {
+    const v = q[j] + h / 6 * (k1[j] + 2 * k2[j] + 2 * k3[j] + k4[j]);
+    if (j < 3) S[j] = v; else D[j - 3] = v;
+  }
+  if (!(Math.abs(S[0]) + Math.abs(S[1]) + Math.abs(S[2]) < 1e7)) blown = true;
+}
+function renormTangent() {
+  const n = Math.hypot(D[0], D[1], D[2]) || 1e-300;
+  D[0] /= n; D[1] /= n; D[2] /= n;
+  return Math.log(n);
+}
+
+function allocTrails() {
+  Lt = Math.max(1, Math.min(P.trail, Math.floor(DRAW_BUDGET / Math.max(1, N - 1))));
+  Tr = new Float32Array(P.trail * 3); To = new Float32Array(N * Lt * 3); rec = 0;
+}
+function record() {
+  const a = (rec % P.trail) * 3;
+  Tr[a] = S[0]; Tr[a + 1] = S[1]; Tr[a + 2] = S[2];
+  const o = (rec % Lt) * 3;
+  for (let i = 1; i < N; i++) { const k = 3 * i, j = i * Lt * 3 + o; To[j] = S[k]; To[j + 1] = S[k + 1]; To[j + 2] = S[k + 2]; }
+  rec++;
+}
+
+function clearHistory() {
+  HT = new Float64Array(HMAX); HM = new Float64Array(HMAX); HLo = new Float64Array(HMAX); HHi = new Float64Array(HMAX);
+  hn = 0; simT = 0; steps = 0; lnSum = 0; tB = 0;
+}
+function sample() {
+  lnSum += renormTangent(); tB = simT;
+  if (hn >= HMAX || N < 2) return;
+  let sum = 0, lo = Infinity, hi = -Infinity;
+  for (let i = 1; i < N; i++) {
+    const k = 3 * i, d = Math.hypot(S[k] - S[0], S[k + 1] - S[1], S[k + 2] - S[2]);
+    const l = Math.log(Math.max(d, 1e-300));
+    sum += l; if (l < lo) lo = l; if (l > hi) hi = l;
+  }
+  HT[hn] = simT; HM[hn] = sum / (N - 1); HLo[hn] = lo; HHi[hn] = hi; hn++;
+}
+
+// place trajectories 1..N-1 around the reference: each a distance ε away in a random direction
+function seedEps() {
+  const rand = rng(99), e = 10 ** P.eps;
+  for (let i = 1; i < N; i++) {
+    const u = 2 * rand() - 1, th = 2 * Math.PI * rand(), w = Math.sqrt(1 - u * u), k = 3 * i;
+    S[k] = S[0] + e * w * Math.cos(th); S[k + 1] = S[1] + e * w * Math.sin(th); S[k + 2] = S[2] + e * u;
+  }
+}
+
+// full restart: new ensemble, burn-in for ε mode, empty trails and history
+function restart() {
+  N = Math.round(P.n); S = new Float64Array(3 * N); blown = false; $('err').textContent = '';
+  colors = [];
+  // golden-ratio hue steps: neighbouring indices get far-apart colours, so draw order does not hide any hue
+  for (let i = 0; i < N; i++) colors.push(`hsl(${((20 + 360 * 0.618034 * (i - 1)) % 360).toFixed(1)},85%,62%)`);
+  D[0] = 1; D[1] = 0; D[2] = 0;
+  if (P.mode === 'eps') {
+    S[0] = 1; S[1] = 1; S[2] = 1;
+    const nb = Math.ceil(BURN_IN / P.dt);
+    for (let k = 0; k < nb && !blown; k++) { stepRef(P.dt); if (k % 20 === 0) renormTangent(); }
+    seedEps();
+  } else {
+    const rand = rng(7), R = scaleR(), zc = zCentre();
+    for (let i = 0; i < N; i++) {
+      S[3 * i] = (2 * rand() - 1) * R; S[3 * i + 1] = (2 * rand() - 1) * R; S[3 * i + 2] = zc + (2 * rand() - 1) * R;
+    }
+  }
+  allocTrails(); clearHistory(); record();
+  if (blown) failBlown();
+}
+// σ, ρ or β changed: keep the current states (so the change is visible live), restart the measurement
+function paramsChanged() {
+  showFixedPoints();
+  if (P.mode === 'eps') seedEps();
+  D[0] = 1; D[1] = 0; D[2] = 0;
+  clearHistory();
+}
+function failBlown() {
+  running = false; syncUI();
+  $('err').textContent = '数值发散：步长 dt 对当前参数太大。调小 dt 后点“重新开始”。';
+}
+
+function advance(nSteps) {
+  const every = Math.max(1, Math.round(SAMPLE_DT / P.dt));
+  for (let k = 0; k < nSteps; k++) {
+    stepRef(P.dt); stepEnsemble(P.dt, 1);
+    steps++; simT = steps * P.dt;
+    if (steps % every === 0) sample();
+    if (blown) { failBlown(); return; }
+    record();
+  }
+}
+
+// ---------- slope fit ----------
+// least squares on the mean ln d over the straight part: after t = 2 (the perturbation first has to turn
+// into the unstable direction) and before d saturates at the attractor size or hits the float precision floor
+function fitSlope() {
+  if (P.mode !== 'eps' || hn < 10) return null;
+  const up = Math.log(0.02 * scaleR()), floor = Math.log(1e-15 * scaleR());
+  let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0, t0 = 0, t1 = 0;
+  for (let i = 0; i < hn; i++) {
+    const t = HT[i], y = HM[i];
+    if (y >= up || y <= floor) break;
+    if (t < 2) continue;
+    if (!n) t0 = t;
+    t1 = t; n++; sx += t; sy += y; sxx += t * t; sxy += t * y;
+  }
+  if (n < 10) return null;
+  const k = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  return { k, b: (sy - k * sx) / n, t0, t1 };
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d'), pl = $('pl'), pctx = pl.getContext('2d');
+let W = 1, H = 1, PW = 1, PH = 1;
+
+function camera() {
+  const sc = 0.42 * Math.min(W, H) / scaleR() * view.zoom, R = scaleR(), zc = zCentre();
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+  // yaw turns about the vertical z axis, pitch tilts the camera up or down; mild perspective for depth
+  return (x, y, z, out) => {
+    const a = x * cy - y * sy, b = x * sy + y * cy, zz = z - zc;
+    const v = zz * cp - b * sp, d = zz * sp + b * cp;
+    const f = sc / (1 + Math.min(d, 3 * R) / (6 * R));
+    out[0] = W / 2 + a * f; out[1] = H / 2 - v * f;
+  };
+}
+
+const pt = [0, 0];
+function drawScene() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0b0e16'; ctx.fillRect(0, 0, W, H);
+  const proj = camera(), dpr = devicePixelRatio;
+  ctx.lineJoin = 'round';
+
+  // reference trail, older parts fainter (drawn in chunks with increasing alpha)
+  const m = Math.min(rec, P.trail), start = rec - m, CH = 12;
+  ctx.lineWidth = 1 * dpr; ctx.strokeStyle = '#dfe6ff';
+  for (let c = 0; c < CH; c++) {
+    const a = start + Math.floor(m * c / CH), b = start + Math.floor(m * (c + 1) / CH);
+    if (b - a < 1) continue;
+    ctx.globalAlpha = 0.06 + 0.5 * (c + 1) / CH;
+    ctx.beginPath();
+    for (let j = Math.max(start, a - 1); j < b; j++) {
+      const o = (j % P.trail) * 3; proj(Tr[o], Tr[o + 1], Tr[o + 2], pt);
+      j === Math.max(start, a - 1) ? ctx.moveTo(pt[0], pt[1]) : ctx.lineTo(pt[0], pt[1]);
+    }
+    ctx.stroke();
+  }
+
+  // the other trajectories: coloured tails and heads
+  const mt = Math.min(rec, Lt), st = rec - mt;
+  ctx.globalAlpha = N > 100 ? 0.45 : 0.75; ctx.lineWidth = (N > 100 ? 1 : 1.4) * dpr;
+  if (mt > 1) for (let i = 1; i < N; i++) {
+    ctx.strokeStyle = colors[i]; ctx.beginPath();
+    const base = i * Lt * 3;
+    for (let j = st; j < rec; j++) {
+      const o = base + (j % Lt) * 3; proj(To[o], To[o + 1], To[o + 2], pt);
+      j === st ? ctx.moveTo(pt[0], pt[1]) : ctx.lineTo(pt[0], pt[1]);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  const hs = (N > 300 ? 2 : 3) * dpr;
+  for (let i = 1; i < N; i++) {
+    proj(S[3 * i], S[3 * i + 1], S[3 * i + 2], pt);
+    ctx.fillStyle = colors[i]; ctx.fillRect(pt[0] - hs / 2, pt[1] - hs / 2, hs, hs);
+  }
+  proj(S[0], S[1], S[2], pt);
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pt[0], pt[1], 3.5 * dpr, 0, 7); ctx.fill();
+
+  if (P.fp) for (const f of FP) {
+    proj(f.p[0], f.p[1], f.p[2], pt);
+    const col = f.stable ? '#7fe08a' : '#ff8f8f', r = 6 * dpr;
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
+    ctx.moveTo(pt[0] - r, pt[1]); ctx.lineTo(pt[0] + r, pt[1]); ctx.moveTo(pt[0], pt[1] - r); ctx.lineTo(pt[0], pt[1] + r);
+    if (!f.stable) { ctx.moveTo(pt[0] + r, pt[1]); ctx.arc(pt[0], pt[1], r, 0, 7); }
+    ctx.stroke();
+    ctx.fillStyle = col; ctx.font = `${12 * dpr}px -apple-system, sans-serif`; ctx.textBaseline = 'bottom';
+    ctx.fillText(f.name, pt[0] + r + 2 * dpr, pt[1] - 2 * dpr);
+  }
+  drawGizmo();
+}
+
+// small x/y/z axis triad so the rotation is readable
+function drawGizmo() {
+  const dpr = devicePixelRatio, L = 26 * dpr, ox = 40 * dpr, oy = H - 70 * dpr;
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+  const axes = [['x', 1, 0, 0, '#ff8a7a'], ['y', 0, 1, 0, '#8ee08a'], ['z', 0, 0, 1, '#8ab4ff']];
+  ctx.lineWidth = 1.5 * dpr; ctx.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; ctx.textBaseline = 'middle';
+  for (const [nm, x, y, z, c] of axes) {
+    const a = x * cy - y * sy, b = x * sy + y * cy, v = z * cp - b * sp;
+    ctx.strokeStyle = ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + a * L, oy - v * L); ctx.stroke();
+    ctx.fillText(nm, ox + a * L * 1.25 - 3 * dpr, oy - v * L * 1.25);
+  }
+}
+
+// ln d against t: mean over the ensemble (yellow), min–max band, fitted line (red, dashed)
+function drawPlot() {
+  pl.style.display = P.mode === 'eps' && N >= 2 ? '' : 'none';
+  if (pl.style.display) return;
+  const dpr = devicePixelRatio, c = pctx;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.fillStyle = 'rgba(11,14,22,.88)'; c.fillRect(0, 0, PW, PH);
+  const ml = 40 * dpr, mr = 10 * dpr, mt = 22 * dpr, mb = 24 * dpr;
+  const tMax = Math.min(T_MAX, Math.max(30, Math.ceil((hn ? HT[hn - 1] : 0) / 10) * 10));
+  let yLo = P.eps * Math.LN10 - 4, yHi = Math.log(scaleR()) + 1.5;
+  for (let i = 0; i < hn; i++) if (HLo[i] < yLo) yLo = HLo[i];
+  yLo = Math.max(yLo, -80);
+  const X = t => ml + (t / tMax) * (PW - ml - mr), Y = v => mt + (yHi - v) / (yHi - yLo) * (PH - mt - mb);
+  c.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; c.fillStyle = '#8b93a8'; c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 1;
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  const yStep = (yHi - yLo) > 40 ? 10 : 5;
+  for (let v = Math.ceil(yLo / yStep) * yStep; v <= yHi; v += yStep) {
+    c.beginPath(); c.moveTo(ml, Y(v)); c.lineTo(PW - mr, Y(v)); c.stroke(); c.fillText(v, ml - 4 * dpr, Y(v));
+  }
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  const tStep = tMax > 60 ? 20 : 10;
+  for (let t = 0; t <= tMax; t += tStep) { c.beginPath(); c.moveTo(X(t), mt); c.lineTo(X(t), PH - mb); c.stroke(); c.fillText(t, X(t), PH - mb + 4 * dpr); }
+  c.textAlign = 'left'; c.fillStyle = '#cdd4e4'; c.font = `${11 * dpr}px -apple-system, sans-serif`;
+  c.fillText('ln d  对  t（d = 到白色参考轨道的距离）', ml, 5 * dpr);
+
+  if (hn > 1) {
+    c.fillStyle = 'rgba(255,211,138,.15)'; c.beginPath();
+    for (let i = 0; i < hn; i++) i ? c.lineTo(X(HT[i]), Y(HHi[i])) : c.moveTo(X(HT[i]), Y(HHi[i]));
+    for (let i = hn - 1; i >= 0; i--) c.lineTo(X(HT[i]), Y(Math.max(HLo[i], yLo)));
+    c.fill();
+    c.strokeStyle = '#ffd38a'; c.lineWidth = 1.6 * dpr; c.beginPath();
+    for (let i = 0; i < hn; i++) i ? c.lineTo(X(HT[i]), Y(HM[i])) : c.moveTo(X(HT[i]), Y(HM[i]));
+    c.stroke();
+  }
+  const fit = fitSlope();
+  if (fit) {
+    c.strokeStyle = '#ff6b6b'; c.lineWidth = 1.5 * dpr; c.setLineDash([5 * dpr, 4 * dpr]); c.beginPath();
+    const a = Math.max(0, fit.t0 - 2), b = Math.min(tMax, fit.t1 + 3);
+    c.moveTo(X(a), Y(fit.b + fit.k * a)); c.lineTo(X(b), Y(fit.b + fit.k * b)); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#ff8f8f'; c.textAlign = 'right';
+    c.fillText(`斜率 ${fit.k.toFixed(3)}`, PW - mr, 5 * dpr);
+  }
+}
+
+function drawStat() {
+  const fit = fitSlope(), parts = [`t = ${simT.toFixed(2)}`, `${N} 条轨道`];
+  if (P.mode === 'eps') {
+    if (hn) parts.push(`平均 d = ${Math.exp(HM[hn - 1]).toExponential(2)}`);
+    parts.push(`拟合斜率 ${fit ? fit.k.toFixed(3) : '—'}`);
+    if (tB > 5) parts.push(`切向量法 λ₁ ≈ ${(lnSum / tB).toFixed(3)}`);
+  } else {
+    const tol = 0.02 * scaleR(), cnt = FP.map(() => 0);
+    for (let i = 0; i < N; i++) FP.forEach((f, j) => {
+      if (Math.hypot(S[3 * i] - f.p[0], S[3 * i + 1] - f.p[1], S[3 * i + 2] - f.p[2]) < tol) cnt[j]++;
+    });
+    parts.push(FP.map((f, j) => `${f.name} 附近 ${cnt[j]}`).join(' · '));
+  }
+  if (!running) parts.push('已暂停');
+  $('stat').textContent = parts.join(' · ');
+  window.__lorenz = { t: simT, n: N, rho: P.rho, slope: fit ? fit.k : null, fit, lyapTangent: tB > 0 ? lnSum / tB : null,
+    meanLnD: hn ? HM[hn - 1] : null, samples: hn, blown, mode: P.mode, eps: P.eps, dt: P.dt, view: { ...view } };
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('R').value = P.rho; $('S').value = P.sigma; $('Be').value = P.beta; $('N').value = Math.log10(P.n);
+  $('E').value = P.eps; $('Dt').value = P.dt; $('V').value = P.speed; $('L').value = P.trail;
+  $('vR').textContent = P.rho.toFixed(2); $('vS').textContent = P.sigma.toFixed(1); $('vBe').textContent = P.beta.toFixed(3);
+  $('vN').textContent = Math.round(P.n); $('vE').textContent = `1e${P.eps}`; $('vDt').textContent = P.dt.toFixed(3);
+  $('vV').textContent = P.speed; $('vL').textContent = P.trail;
+  $('fp').checked = P.fp; $('rot').checked = P.rot;
+  $('mEps').classList.toggle('on', P.mode === 'eps'); $('mSpread').classList.toggle('on', P.mode === 'spread');
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+const custom = () => { P.preset = ''; };
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, sigma: DEF.sigma, beta: DEF.beta, eps: DEF.eps, dt: p.dt ?? DEF.dt, trail: p.trail ?? DEF.trail,
+    rho: p.rho, n: p.n, mode: p.mode });
+  running = true; showFixedPoints(); syncUI(); restart();
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+
+const param = (id, key) => { $(id).oninput = e => { P[key] = +e.target.value; custom(); syncUI(); paramsChanged(); }; };
+param('R', 'rho'); param('S', 'sigma'); param('Be', 'beta');
+$('N').oninput = e => { P.n = Math.round(10 ** +e.target.value); custom(); syncUI(); restart(); };
+$('E').oninput = e => { P.eps = +e.target.value; custom(); syncUI(); restart(); };
+$('Dt').oninput = e => { P.dt = +e.target.value; syncUI(); clearHistory(); };
+$('V').oninput = e => { P.speed = +e.target.value; syncUI(); };
+$('L').oninput = e => { P.trail = +e.target.value; syncUI(); allocTrails(); record(); };
+$('mEps').onclick = () => { P.mode = 'eps'; custom(); syncUI(); restart(); };
+$('mSpread').onclick = () => { P.mode = 'spread'; custom(); syncUI(); restart(); };
+$('fp').onchange = e => { P.fp = e.target.checked; };
+$('rot').onchange = e => { P.rot = e.target.checked; };
+$('play').onclick = () => { running = !running; syncUI(); };
+$('restart').onclick = () => { running = true; syncUI(); restart(); };
+
+// rotate / zoom
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  view.yaw = wrap(view.yaw + (e.clientX - drag[0]) * 0.008);
+  view.pitch = clamp(view.pitch + (e.clientY - drag[1]) * 0.008, LIM.pitch);
+  drag = [e.clientX, e.clientY];
+});
+cv.addEventListener('pointerup', () => { drag = null; cv.style.cursor = ''; });
+cv.addEventListener('dblclick', () => Object.assign(view, HOME));
+cv.addEventListener('wheel', e => {
+  e.preventDefault(); view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0015), LIM.zoom);
+}, { passive: false });
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+function resize() {
+  const r = cv.getBoundingClientRect(), q = pl.getBoundingClientRect(), dpr = devicePixelRatio;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+  PW = pl.width = Math.max(1, Math.round(q.width * dpr)); PH = pl.height = Math.max(1, Math.round(q.height * dpr));
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=swarm&t=30  or  ?r=99.65&n=50&e=-6&yaw=1&pitch=0.3&z=1.5&m=spread&run=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const pk = q.get('p');
+if (pk !== null && Object.hasOwn(PRESETS, pk)) {
+  const p = PRESETS[pk];
+  Object.assign(P, { preset: pk, rho: p.rho, n: p.n, mode: p.mode, dt: p.dt ?? DEF.dt, trail: p.trail ?? DEF.trail });
+}
+const urlKeys = { r: 'rho', s: 'sigma', b: 'beta', n: 'n', e: 'eps', dt: 'dt', v: 'speed', L: 'trail' };
+for (const [k, key] of Object.entries(urlKeys)) num(k, x => { P[key] = clamp(x, LIM[key]); custom(); });
+P.n = Math.round(P.n); P.speed = Math.round(P.speed); P.trail = Math.round(P.trail / 100) * 100;
+P.eps = Math.round(P.eps * 2) / 2; P.dt = Math.round(P.dt * 1000) / 1000;
+if (q.has('m')) { const m = q.get('m'); if (m === 'eps' || m === 'spread') { P.mode = m; custom(); } }
+if (pk !== null && Object.hasOwn(PRESETS, pk) && [...q.keys()].every(k => ['p', 't', 'yaw', 'pitch', 'z', 'run', 'fp', 'rot'].includes(k))) P.preset = pk;
+num('yaw', x => view.yaw = clamp(x, LIM.yaw)); num('pitch', x => view.pitch = clamp(x, LIM.pitch)); num('z', x => view.zoom = clamp(x, LIM.zoom));
+num('t', x => ffT = clamp(x, LIM.t));
+if (q.get('fp') === '0') P.fp = false;
+if (q.get('rot') === '1') P.rot = true;
+if (q.get('run') === '0') running = false;
+
+resize(); showFixedPoints(); syncUI(); restart();
+
+(function loop() {
+  if (!blown) {
+    const perTraj = Math.max(1, N);
+    if (simT < ffT - 1e-9) {          // fast-forward to ?t= without drawing every step
+      advance(Math.min(Math.ceil((ffT - simT) / P.dt), Math.max(1, Math.floor(FF_BUDGET / perTraj))));
+    } else if (running) {
+      advance(Math.min(P.speed, Math.max(1, Math.floor(STEP_BUDGET / perTraj))));
+    }
+  }
+  if (P.rot && !drag) view.yaw = wrap(view.yaw + 0.003);
+  drawScene(); drawPlot(); drawStat();
+  if (simT >= ffT - 1e-9 || blown) window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -75,6 +75,8 @@
     <nav class="jump">
       <a href="#shell">贝壳<b>1</b></a>
       <a href="#fractal">分形<b>3</b></a>
+      <a href="#pattern">图案<b>2</b></a>
+      <a href="#motion">运动与波<b>2</b></a>
     </nav>
   </div>
 </header>
@@ -136,6 +138,68 @@
           <div class="actions">
             <a class="btn primary" href="examples/ifs-fern/index.html">打开页面 →</a>
             <a class="btn ghost" href="examples/ifs-fern/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="pattern">
+    <div class="sec-head"><h2>图案</h2><span>自然界的自组织</span></div>
+    <p class="sec-intro">没有设计图，只有一条局部的规则：每颗种子转同一个角度，或者两种物质一边反应一边扩散。整体的秩序是自己长出来的。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/phyllotaxis/index.html"><img src="examples/phyllotaxis/images/card.png" alt="黄金角向日葵花盘"></a>
+        <div class="body">
+          <h3>向日葵叶序 · 黄金角</h3>
+          <p>每长一颗种子就转一个固定角度。取 137.5° 时种子铺得又密又匀，螺线条数正好是相邻的 Fibonacci 数；差 0.5° 就变成一根根直辐条。</p>
+          <div class="tags"><i>黄金比例</i><i>连分数</i><i>Fibonacci 数</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/phyllotaxis/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/phyllotaxis/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/turing-patterns/index.html"><img src="examples/turing-patterns/images/card.png" alt="Gray-Scott 反应扩散的迷宫状斑图"></a>
+        <div class="body">
+          <h3>图灵斑图 · 反应扩散</h3>
+          <p>两种化学物质一边反应、一边扩散，只要扩散得一快一慢，均匀的混合就会自己长出斑点和条纹。改两个参数 F、k，画面在豹纹、斑马纹、珊瑚和会分裂的“细胞”之间切换。</p>
+          <div class="tags"><i>反应扩散</i><i>图灵失稳</i><i>线性稳定性</i><i>WebGL</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/turing-patterns/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/turing-patterns/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="motion">
+    <div class="sec-head"><h2>运动与波</h2><span>随时间演化</span></div>
+    <p class="sec-intro">把时间也放进公式：确定的方程可以走出不可预测的轨道，一串匀速转动的圆可以画出任何一条闭合曲线。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/lorenz-attractor/index.html"><img src="examples/lorenz-attractor/images/card.png" alt="1000 条起点只差 10⁻⁹ 的轨道散满 Lorenz 吸引子"></a>
+        <div class="body">
+          <h3>Lorenz 吸引子 · 蝴蝶效应</h3>
+          <p>1000 条起点只差 10⁻⁹ 的轨道一起跑，二十几个时间单位后就散满整只“蝴蝶”。距离对数随时间的直线斜率就是最大 Lyapunov 指数 λ₁ ≈ 0.9；拖动 ρ 还能看到原点、两个不动点和混沌依次登场。</p>
+          <div class="tags"><i>微分方程</i><i>Lyapunov 指数</i><i>Hopf 分岔</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/lorenz-attractor/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/lorenz-attractor/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/fourier-epicycles/index.html"><img src="examples/fourier-epicycles/images/card.png" alt="圆叠圆画出手写的 π"></a>
+        <div class="body">
+          <h3>傅里叶本轮 · 圆叠圆画曲线</h3>
+          <p>把一条闭合曲线拆成一串匀速旋转的圆，按半径从大到小首尾相接，最后一个笔尖就画出原曲线，连手写的 π 和你用鼠标画的线也行。圆越多越像，只有曲线跳变的地方会冲出约 9%：Gibbs 现象。</p>
+          <div class="tags"><i>傅里叶级数</i><i>离散傅里叶变换</i><i>Gibbs 现象</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/fourier-epicycles/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/fourier-epicycles/README.md">原理说明</a>
           </div>
         </div>
       </article>
