@@ -29,6 +29,9 @@
 { "imports": {
   "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}, "integrity": {
+  "https://unpkg.com/three@0.160.0/build/three.module.js": "sha384-61S/Nu32S3E5+n+KpCOTb2eRYps6fVKm+9Gz1QBvSePFthb46f063Aa/qe/lykFZ",
+  "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js": "sha384-qlO/ZugKPxAQUAvTlQoo0QECzxJIJySZmCF/DHdb2Xn/hHndFwX/vfUAC9Hbk6LP"
 } }
 </script>
 </head>
@@ -523,7 +526,11 @@ document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
 
 // URL params let you share a shape, e.g. shell.html?W=2&D=0.15&T=1.6&E=1.4&R=20&S=3&H=0.2&cut=1
 const q = new URLSearchParams(location.search);
-for (const k of ['W', 'D', 'T', 'N', 'E', 'R', 'S', 'H', 'O', 'A', 'E0', 'R0', 'S0', 'C', 'RN', 'RA', 'GN', 'GA', 'SP']) if (q.has(k)) P[k] = +q.get(k);
+for (const k of ['W', 'D', 'T', 'N', 'E', 'R', 'S', 'H', 'O', 'A', 'E0', 'R0', 'S0', 'C', 'RN', 'RA', 'GN', 'GA', 'SP']) {
+  // clamp to the slider's range: a bad link such as ?SP=-1 would otherwise loop forever in septaThetas
+  const x = +q.get(k), el = $(k), [lo, hi] = k === 'W' ? [s2w(+el.min), s2w(+el.max)] : [+el.min, +el.max];
+  if (q.has(k) && Number.isFinite(x)) P[k] = Math.min(hi, Math.max(lo, x));
+}
 if (P.SP) lastSP = P.SP;
 if (q.has('SI')) P.SI = q.get('SI') === '1';
 if (q.has('G')) P.G = q.get('G') === '1';
