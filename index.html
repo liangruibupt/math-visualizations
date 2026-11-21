@@ -76,7 +76,9 @@
       <a href="#shell">贝壳<b>1</b></a>
       <a href="#fractal">分形<b>3</b></a>
       <a href="#pattern">图案<b>2</b></a>
-      <a href="#motion">运动与波<b>2</b></a>
+      <a href="#motion">运动与波<b>4</b></a>
+      <a href="#geom">几何与拓扑<b>1</b></a>
+      <a href="#prob">概率<b>1</b></a>
     </nav>
   </div>
 </header>
@@ -203,8 +205,70 @@
           </div>
         </div>
       </article>
+      <article class="card">
+        <a class="thumb" href="examples/brachistochrone/index.html"><img src="examples/brachistochrone/images/card.png" alt="五条轨道赛跑，金色的摆线最先到达 B"></a>
+        <div class="body">
+          <h3>最速降线 · 摆线赛跑</h3>
+          <p>珠子只受重力从 A 滑到 B，直线、圆弧、抛物线和你手画的轨道都跑不过摆线，数值积分出的用时和闭式解 √(a/g)·θ 分毫不差。B 很平时，最快的路要先沉到 B 下面再爬上来；把摆线倒过来当碗，从任意高度放下的珠子同时到底。</p>
+          <div class="tags"><i>变分法</i><i>摆线</i><i>等时曲线</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/brachistochrone/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/brachistochrone/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <a class="thumb" href="examples/logistic-map/index.html"><img src="examples/logistic-map/images/card.png" alt="Logistic 映射的分岔图：周期 1 → 2 → 4 → 8 后进入混沌，下方是 Lyapunov 指数"></a>
+        <div class="body">
+          <h3>Logistic 映射 · 倍周期分岔</h3>
+          <p>一行 x → r·x(1 − x)，r 增大时周期 1 → 2 → 4 → 8 越分越快，相邻分岔间距之比收敛到 Feigenbaum 常数 δ ≈ 4.669。分岔图可以点选、拖框放大，蛛网图、Lyapunov 指数和周期 3 窗口一起看，它其实就是 Mandelbrot 集沿实轴的那一条。</p>
+          <div class="tags"><i>倍周期分岔</i><i>Feigenbaum 常数</i><i>Lyapunov 指数</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/logistic-map/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/logistic-map/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
     </div>
   </section>
+  <section id="geom">
+    <div class="sec-head"><h2>几何与拓扑</h2><span>形状、对称与空间</span></div>
+    <p class="sec-intro">有的铺砖永远不重复，有的曲面只有一面，四维的立方体也能转给你看。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/penrose-tiling/index.html"><img src="examples/penrose-tiling/images/card.png" alt="带红蓝匹配弧线的 Penrose 粗细菱形镶嵌"></a>
+        <div class="body">
+          <h3>Penrose 镶嵌 · 永不重复的铺砖</h3>
+          <p>只用 72° 和 36° 两种菱形，一代代切成更小的砖，就能铺满平面却永不周期重复。粗细砖块之比收敛到黄金比例 φ，中心的五重对称恰好是任何晶格都不可能有的对称。</p>
+          <div class="tags"><i>非周期镶嵌</i><i>自相似</i><i>晶体学限制</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/penrose-tiling/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/penrose-tiling/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="prob">
+    <div class="sec-head"><h2>概率</h2><span>随机中的规律</span></div>
+    <p class="sec-intro">单次结果无法预测，大量重复以后却精确地服从定律。</p>
+    <div class="grid">
+      <article class="card">
+        <a class="thumb" href="examples/galton-board/index.html"><img src="examples/galton-board/images/card.png" alt="24 排钉子的 Galton 板，小球落下堆出钟形曲线"></a>
+        <div class="body">
+          <h3>Galton 板 · 中心极限定理</h3>
+          <p>小球在每颗钉子上随机左右弹，几千个球堆出二项分布，排数一多就贴上正态曲线。换成均匀、指数、骰子等任意分布，n 项之和同样变成钟形，距离按 1/√n 缩小；只有方差无穷的柯西分布例外。</p>
+          <div class="tags"><i>二项分布</i><i>中心极限定理</i><i>大数定律</i><i>Canvas</i></div>
+          <div class="actions">
+            <a class="btn primary" href="examples/galton-board/index.html">打开页面 →</a>
+            <a class="btn ghost" href="examples/galton-board/README.md">原理说明</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
 </main>
 
 <footer class="wrap">

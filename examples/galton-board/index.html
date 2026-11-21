@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Galton 板 · 中心极限定理</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #12100c; color: #e8e4dc;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(33,29,23,.93); border: 1px solid #4a4032; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #d6c29a; border-top: 1px solid #4a4032; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #9d9484; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #3a3226; color: #e8e4dc; border: 1px solid #54483a;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #473d2f; }
+  button.on { background: #7a5a2a; border-color: #a8803f; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #bdb3a2; margin-top: 4px; white-space: pre-line; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(18,16,12,.8); color: #d8d0c2; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Galton 板 · 中心极限定理</h1>
+  <small>小球每碰到一颗钉子，就以概率 p 向右、1 − p 向左。落到第 k 格要在 n 排里恰好向右 k 次，概率是二项分布 <span class="mono">C(n,k) pᵏ(1−p)ⁿ⁻ᵏ</span>。排数一多，格子里堆出的形状就是正态分布的钟形曲线。</small>
+
+  <h2>模式</h2>
+  <div class="presets"><button id="mG">Galton 板（二项分布）</button><button id="mC">一般分布的 n 项和</button></div>
+
+  <div id="secG">
+    <h2>Galton 板</h2>
+    <div class="row">
+      <label>排数 n <b id="vRows"></b></label>
+      <input id="Rows" type="range" min="1" max="40" step="1">
+    </div>
+    <div class="row">
+      <label>向右的概率 p <b id="vProb"></b></label>
+      <input id="Prob" type="range" min="0.05" max="0.95" step="0.01">
+    </div>
+    <div class="row">
+      <label>每帧放球 <b id="vV"></b></label>
+      <input id="V" type="range" min="1" max="50" step="1">
+    </div>
+    <div class="row">
+      <label>放球总数 <b id="vNb"></b></label>
+      <input id="Nb" type="range" min="2" max="4.69897" step="0.01">
+    </div>
+    <div class="presets"><button id="gPlay">⏸ 暂停</button><button id="gRestart">↺ 重新开始</button><button id="gAdd">＋1000 球（跳过动画）</button></div>
+    <div class="checks">
+      <label><input id="pascal" type="checkbox"> 钉子上标出杨辉三角</label>
+      <label><input id="showB" type="checkbox"> 二项分布</label>
+      <label><input id="showN" type="checkbox"> 正态近似</label>
+    </div>
+    <div class="info" id="gInfo"></div>
+    <small>白色台阶是精确的二项分布 B(n, p)，橙色曲线是均值 np、方差 np(1−p) 的正态密度。右上角是二项分布到正态分布的 Kolmogorov 距离随排数 n 的变化。</small>
+  </div>
+
+  <div id="secC">
+    <h2>X 的分布</h2>
+    <div class="presets" id="dists"></div>
+    <div class="row">
+      <label>每个样本加起来的项数 n <b id="vN"></b></label>
+      <input id="N" type="range" min="1" max="100" step="1">
+    </div>
+    <div class="presets"><span style="align-self:center;color:#9d9484">横轴：</span>
+      <button id="sZ">标准化和 Z</button><button id="sM">样本均值 X̄</button></div>
+    <small>Z = (Sₙ − nμ) / (σ√n) 看中心极限定理：形状变成标准正态。X̄ = Sₙ / n 看大数定律：宽度按 σ/√n 收窄到 μ。</small>
+    <div class="row">
+      <label>样本数 M <b id="vM"></b></label>
+      <input id="M" type="range" min="3" max="5.30103" step="0.01">
+    </div>
+    <div class="row">
+      <label>每帧样本 <b id="vB"></b></label>
+      <input id="B" type="range" min="1" max="3.69897" step="0.01">
+    </div>
+    <div class="presets"><button id="cPlay">⏸ 暂停</button><button id="cRestart">↺ 重新开始</button></div>
+    <div class="info" id="cInfo"></div>
+    <small>青色柱是样本直方图，白色台阶是 Sₙ 的精确分布（数值卷积或闭式），橙色是正态曲线。右上角：精确分布到正态分布的 Kolmogorov 距离 sup|F − Φ| 随 n 的变化（对数坐标）。</small>
+  </div>
+
+  <h2>随机数</h2>
+  <div class="row">
+    <label>种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+    <small>同一个种子、同样的参数，画面完全相同</small>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+const LIM = {   // every slider range; URL params are clamped to these
+  rows: [1, 40], prob: [0.05, 0.95], v: [1, 50], nb: [100, 50000], k: [0, 50000],
+  n: [1, 100], M: [1000, 200000], b: [10, 5000], seed: [1, 999],
+};
+const FLY_MAX = 4000;          // balls in flight at once
+const FRAMES_PER_ROW = 6;      // animation frames for a ball to fall one row
+const BALL_CAP = 150000;       // total balls on the board (animated + skipped)
+const DRAW_BUDGET = 2e5;       // random draws per frame in the CLT mode
+const NMAX = 100;              // largest n in the CLT mode
+let UB = 80, U0 = -4, UW = 0.1;             // display histogram on the axis u ∈ [-4, 4]: UB bins of width UW from U0
+const FB = 1600, F0 = -8, FW = 0.01;        // fine histogram of Z for the empirical KS distance
+
+// X distributions. mu, sd are the mean and standard deviation of one draw (Cauchy: location 0, scale 1).
+const BM = { w: 0.25, a: 0, b: 3, s: 0.5 };  // skewed bimodal: 0.75·N(0, 0.5²) + 0.25·N(3, 0.5²)
+const DISTS = {
+  uniform: { name: '均匀 U(0, 1)', mu: 0.5, sd: Math.sqrt(1 / 12), lo: -0.25, hi: 1.25,
+    pdf: x => x >= 0 && x <= 1 ? 1 : 0 },
+  exp: { name: '指数 Exp(1)', mu: 1, sd: 1, lo: -0.5, hi: 6, pdf: x => x >= 0 ? Math.exp(-x) : 0 },
+  bimodal: { name: '偏斜双峰', mu: BM.w * BM.b + (1 - BM.w) * BM.a,
+    sd: Math.sqrt(BM.s * BM.s + BM.w * (1 - BM.w) * (BM.b - BM.a) ** 2), lo: -1.5, hi: 4.5,
+    pdf: x => ((1 - BM.w) * Math.exp(-((x - BM.a) ** 2) / (2 * BM.s * BM.s)) + BM.w * Math.exp(-((x - BM.b) ** 2) / (2 * BM.s * BM.s))) / (BM.s * Math.sqrt(2 * Math.PI)) },
+  die: { name: '骰子 1–6', mu: 3.5, sd: Math.sqrt(35 / 12), lo: 0.3, hi: 6.7, discrete: true },
+  cauchy: { name: '柯西（无方差）', mu: 0, sd: 1, lo: -6, hi: 6, pdf: x => 1 / (Math.PI * (1 + x * x)), noVar: true },
+};
+
+const PRESETS = {
+  g12: { name: 'Galton 12 排', mode: 'galton', rows: 12, prob: 0.5, v: 8, nb: 3000 },
+  pascal: { name: '6 排 · 杨辉三角', mode: 'galton', rows: 6, prob: 0.5, v: 2, nb: 1000, pascal: true },
+  skew: { name: '30 排 · p = 0.2', mode: 'galton', rows: 30, prob: 0.2, v: 20, nb: 20000 },
+  g40: { name: '40 排 · 5 万球', mode: 'galton', rows: 40, prob: 0.5, v: 50, nb: 50000 },
+  uni2: { name: '均匀 n = 2', mode: 'clt', dist: 'uniform', n: 2, stat: 'z' },
+  uni12: { name: '均匀 n = 12', mode: 'clt', dist: 'uniform', n: 12, stat: 'z' },
+  exp1: { name: '指数 n = 1', mode: 'clt', dist: 'exp', n: 1, stat: 'z' },
+  exp30: { name: '指数 n = 30', mode: 'clt', dist: 'exp', n: 30, stat: 'z' },
+  die3: { name: '骰子 n = 3', mode: 'clt', dist: 'die', n: 3, stat: 'z' },
+  bim10: { name: '双峰 n = 10', mode: 'clt', dist: 'bimodal', n: 10, stat: 'z' },
+  lln: { name: '大数定律 指数 X̄', mode: 'clt', dist: 'exp', n: 50, stat: 'mean' },
+  cauchy: { name: '柯西 n = 50：失效', mode: 'clt', dist: 'cauchy', n: 50, stat: 'z' },
+};
+
+const P = { preset: 'g12', mode: 'galton', rows: 12, prob: 0.5, v: 8, nb: 3000, pascal: false, showB: true, showN: true,
+  dist: 'exp', n: 1, stat: 'z', M: 20000, b: 200, seed: 1 };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+
+function rng(seed) {   // mulberry32: same seed, same balls
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+let rand = rng(1), spare = null;
+function gauss() {   // Box–Muller, the second value is kept for the next call
+  if (spare !== null) { const g = spare; spare = null; return g; }
+  const u = 1 - rand(), v = rand(), r = Math.sqrt(-2 * Math.log(u));
+  spare = r * Math.sin(2 * Math.PI * v); return r * Math.cos(2 * Math.PI * v);
+}
+function drawX(key) {
+  switch (key) {
+    case 'uniform': return rand();
+    case 'exp': return -Math.log(1 - rand());
+    case 'bimodal': return rand() < BM.w ? BM.b + BM.s * gauss() : BM.a + BM.s * gauss();
+    case 'die': return 1 + Math.floor(6 * rand());
+    default: return Math.tan(Math.PI * (rand() - 0.5));
+  }
+}
+
+// ---------- exact distributions ----------
+// erfc with fractional error < 1.2e-7 (Numerical Recipes, Chebyshev fit)
+function erfc(x) {
+  const z = Math.abs(x), t = 1 / (1 + 0.5 * z);
+  const r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 +
+    t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+  return x >= 0 ? r : 2 - r;
+}
+const Phi = z => 0.5 * erfc(-z / Math.SQRT2);
+const phi = z => Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI);
+const logFact = (() => { const a = [0]; for (let i = 1; i <= 200; i++) a.push(a[i - 1] + Math.log(i)); return a; })();
+const binomPmf = (n, p) => Array.from({ length: n + 1 }, (_, k) =>
+  Math.exp(logFact[n] - logFact[k] - logFact[n - k] + k * Math.log(p) + (n - k) * Math.log(1 - p)));
+
+// Distribution of Z = (S_n − nμ)/(σ√n). Lattice laws return atoms (z, pmf); continuous laws return a CDF F(z).
+const UM = 200;   // U(0,1) is replaced by 200 equal atoms; the CDF is interpolated linearly between atoms
+const uniLast = { n: 0, a: null };
+function exactZ(key, n) {
+  const D = DISTS[key], sn = D.sd * Math.sqrt(n);
+  if (key === 'die') {
+    let a = [1];
+    for (let k = 0; k < n; k++) {
+      const b = new Array(a.length + 5).fill(0);
+      for (let i = 0; i < a.length; i++) for (let f = 0; f < 6; f++) b[i + f] += a[i] / 6;
+      a = b;
+    }
+    return { atoms: a.map((_, i) => (n + i - 3.5 * n) / sn), pmf: a };
+  }
+  if (key === 'uniform') {
+    // keep the last lattice law, so computing n = 1, 2, …, 100 in a row costs one convolution per step
+    let a = uniLast.n && uniLast.n <= n ? uniLast.a : new Float64Array(UM).fill(1 / UM);
+    for (let k = uniLast.n && uniLast.n <= n ? uniLast.n : 1; k < n; k++) {   // convolve with the box of UM atoms using prefix sums
+      const L = a.length, pre = new Float64Array(L + 1), b = new Float64Array(L + UM - 1);
+      for (let i = 0; i < L; i++) pre[i + 1] = pre[i] + a[i];
+      for (let j = 0; j < b.length; j++) b[j] = (pre[Math.min(j, L - 1) + 1] - pre[Math.max(0, j - UM + 1)]) / UM;
+      a = b;
+    }
+    uniLast.n = n; uniLast.a = a;
+    const cum = new Float64Array(a.length); let c = 0;
+    for (let i = 0; i < a.length; i++) { c += a[i]; cum[i] = c; }
+    // atom j sits at (j + n/2)/UM; the CDF passes through (atom + 1/(2UM), cum[j])
+    return { F: z => {
+      const t = (n / 2 + z * sn) * UM - n / 2 - 0.5, j = Math.floor(t);
+      if (j < -1) return 0; if (j >= cum.length - 1) return 1;
+      const c0 = j < 0 ? 0 : cum[j]; return c0 + (cum[j + 1] - c0) * (t - j);
+    } };
+  }
+  if (key === 'exp') {   // S_n ~ Gamma(n, 1): P(S ≤ x) = 1 − e^{−x} Σ_{k<n} x^k / k!
+    return { F: z => {
+      const x = n + z * sn; if (x <= 0) return 0;
+      let term = Math.exp(-x), q = term;
+      for (let k = 1; k < n; k++) { term *= x / k; q += term; }
+      return Math.max(0, 1 - q);
+    } };
+  }
+  if (key === 'bimodal') {   // k of the n draws come from the right bump: a mixture of normals
+    const w = binomPmf(n, BM.w), s = BM.s * Math.sqrt(n), mu = D.mu;
+    return { F: z => {
+      const x = n * mu + z * sn; let f = 0;
+      for (let k = 0; k <= n; k++) if (w[k] > 1e-16) f += w[k] * Phi((x - k * BM.b - (n - k) * BM.a) / s);
+      return f;
+    } };
+  }
+  // Cauchy: S_n / n is again standard Cauchy, so Z = S_n/√n is Cauchy with scale √n
+  return { F: z => 0.5 + Math.atan(z / Math.sqrt(n)) / Math.PI };
+}
+
+// Kolmogorov distance sup |F − Φ|: exact at the atoms of a lattice law, on a 0.01 grid otherwise
+function ksToNormal(E) {
+  let d = 0;
+  if (E.atoms) {
+    let c = 0;
+    for (let i = 0; i < E.atoms.length; i++) {
+      const ph = Phi(E.atoms[i]); d = Math.max(d, Math.abs(c - ph)); c += E.pmf[i]; d = Math.max(d, Math.abs(c - ph));
+    }
+    return d;
+  }
+  for (let i = 0; i <= 1600; i++) { const z = -8 + i * 0.01; d = Math.max(d, Math.abs(E.F(z) - Phi(z))); }
+  return d;
+}
+// TV distance between B(n,p) and the normal with continuity correction (mass of N(np, npq) on [k−½, k+½])
+function tvBinomNormal(n, p) {
+  const b = binomPmf(n, p), mu = n * p, s = Math.sqrt(n * p * (1 - p));
+  let tv = Phi((-0.5 - mu) / s) + 1 - Phi((n + 0.5 - mu) / s);
+  for (let k = 0; k <= n; k++) tv += Math.abs(b[k] - (Phi((k + 0.5 - mu) / s) - Phi((k - 0.5 - mu) / s)));
+  return tv / 2;
+}
+const binomZ = (n, p) => { const s = Math.sqrt(n * p * (1 - p));
+  return { atoms: Array.from({ length: n + 1 }, (_, k) => (k - n * p) / s), pmf: binomPmf(n, p) }; };
+
+// KS(n) curves, cached per (distribution) and per (p)
+const ksCache = {};
+function ksCurve() {
+  const key = P.mode === 'galton' ? 'g' + P.prob.toFixed(2) : P.dist;
+  if (!ksCache[key]) {
+    const c = [NaN];
+    if (P.mode === 'galton') for (let n = 1; n <= LIM.rows[1]; n++) c.push(ksToNormal(binomZ(n, P.prob)));
+    else for (let n = 1; n <= NMAX; n++) c.push(ksToNormal(exactZ(P.dist, n)));
+    ksCache[key] = c;
+  }
+  return ksCache[key];
+}
+
+// ---------- Galton board state ----------
+const G = { counts: new Float64Array(LIM.rows[1] + 1), total: 0, spawned: 0, nfly: 0,
+  fr: new Int8Array(FLY_MAX), fk: new Int8Array(FLY_MAX), fd: new Int8Array(FLY_MAX), fph: new Float32Array(FLY_MAX) };
+let gRun = true, cRun = true, pmf = [];
+function gReset() {
+  G.counts.fill(0); G.total = 0; G.spawned = 0; G.nfly = 0;
+  rand = rng(P.seed); spare = null; pmf = binomPmf(P.rows, P.prob); window.__done = false;
+}
+function gDropInstant(m) {   // whole path at once: the number of right turns in n rows
+  m = Math.min(m, BALL_CAP - G.total - G.nfly);
+  for (let i = 0; i < m; i++) { let k = 0; for (let r = 0; r < P.rows; r++) if (rand() < P.prob) k++; G.counts[k]++; }
+  if (m > 0) { G.total += m; G.spawned += m; }
+}
+function gStep() {
+  if (!gRun) return;
+  const want = Math.min(P.v, FLY_MAX - G.nfly, Math.max(0, P.nb - G.spawned), BALL_CAP - G.total - G.nfly);
+  for (let i = 0; i < want; i++) {   // a new ball starts in the funnel above the top peg
+    const j = G.nfly++; G.fr[j] = -1; G.fk[j] = 0; G.fd[j] = 0; G.fph[j] = 0; G.spawned++;
+  }
+  for (let j = 0; j < G.nfly; j++) {
+    G.fph[j] += 1 / FRAMES_PER_ROW;
+    if (G.fph[j] < 1) continue;
+    G.fph[j] -= 1; G.fr[j]++; G.fk[j] += G.fd[j];
+    if (G.fr[j] >= P.rows) {   // landed: count it and swap the last ball into this slot
+      G.counts[G.fk[j]]++; G.total++;
+      const l = --G.nfly; G.fr[j] = G.fr[l]; G.fk[j] = G.fk[l]; G.fd[j] = G.fd[l]; G.fph[j] = G.fph[l]; j--;
+    } else G.fd[j] = rand() < P.prob ? 1 : 0;   // hits peg (row, k): right with probability p
+  }
+  if (G.spawned >= P.nb && G.nfly === 0) window.__done = true;
+}
+function gStats() {
+  let s = 0, s2 = 0;
+  for (let k = 0; k <= P.rows; k++) { s += k * G.counts[k]; s2 += k * k * G.counts[k]; }
+  const m = G.total ? s / G.total : NaN, v = G.total > 1 ? (s2 - G.total * m * m) / (G.total - 1) : NaN;
+  let ks = NaN;
+  if (G.total) {
+    const sd = Math.sqrt(P.rows * P.prob * (1 - P.prob)); let c = 0; ks = 0;
+    for (let k = 0; k <= P.rows; k++) {
+      const ph = Phi((k - P.rows * P.prob) / sd); ks = Math.max(ks, Math.abs(c - ph)); c += G.counts[k] / G.total; ks = Math.max(ks, Math.abs(c - ph));
+    }
+  }
+  return { mean: m, var: v, ks };
+}
+
+// ---------- CLT state ----------
+const C = { hist: new Float64Array(512), fine: new Float64Array(FB + 2), m: 0, sz: 0, sz2: 0, out: 0, last: [], exact: null, expBins: null };
+function cReset() {
+  C.hist.fill(0); C.fine.fill(0); C.m = 0; C.sz = 0; C.sz2 = 0; C.out = 0; C.last = [];
+  rand = rng(P.seed); spare = null; window.__done = false;
+  setBins(); C.exact = exactZ(P.dist, P.n); C.expBins = expectedBins();
+}
+// Bins of 0.1 on [-4, 4]; for X̄ the curve has width 1/√n, so bins shrink to keep about 5 per standard deviation.
+// The die's Sₙ lives on a lattice: each bin holds a whole number of atoms, centred, or most bins would be empty.
+function setBins() {
+  const tw = P.stat === 'mean' ? Math.min(0.1, 0.2 / Math.sqrt(P.n)) : 0.1;
+  if (P.dist !== 'die') { UW = tw; U0 = -4; UB = Math.round(8 / tw); return; }
+  const D = DISTS.die, sp = 1 / (D.sd * Math.sqrt(P.n) * uScale()), k = Math.ceil(tw / sp - 1e-9);
+  UW = k * sp;
+  const s0 = Math.floor(3.5 * P.n - 4 / sp);          // first sum value whose bin reaches −4
+  U0 = (s0 - 0.5 - 3.5 * P.n) * sp;
+  UB = Math.min(C.hist.length, Math.ceil((4 - U0) / UW));
+}
+const uScale = () => P.stat === 'z' ? 1 : Math.sqrt(P.n);   // display axis u: z itself, or (X̄ − μ)/σ = z/√n
+function expectedBins() {   // probability of each display bin under the exact law of S_n
+  const e = new Float64Array(UB), E = C.exact, sc = uScale();
+  if (E.atoms) {   // assign each atom with the same floor() as the samples, so atoms on bin edges agree
+    E.atoms.forEach((z, i) => { const b = Math.floor((z / sc - U0) / UW); if (b >= 0 && b < UB) e[b] += E.pmf[i]; });
+  } else for (let b = 0; b < UB; b++) e[b] = E.F((U0 + (b + 1) * UW) * sc) - E.F((U0 + b * UW) * sc);
+  return e;
+}
+function cStep() {
+  if (!cRun || C.m >= P.M) return;
+  const D = DISTS[P.dist], sn = D.sd * Math.sqrt(P.n), sc = uScale();
+  const todo = Math.min(P.b, P.M - C.m, Math.max(1, Math.floor(DRAW_BUDGET / P.n)));
+  for (let i = 0; i < todo; i++) {
+    let s = 0; const keep = i === todo - 1;
+    if (keep) C.last = [];
+    for (let j = 0; j < P.n; j++) { const x = drawX(P.dist); s += x; if (keep) C.last.push(x); }
+    const z = (s - P.n * D.mu) / sn;
+    C.sz += z; C.sz2 += z * z;
+    const b = Math.floor((z / sc - U0) / UW);
+    if (b >= 0 && b < UB) C.hist[b]++; else C.out++;
+    const f = Math.floor((z - F0) / FW);
+    C.fine[f < 0 ? 0 : f >= FB ? FB + 1 : f + 1]++;   // slot 0: below −8, slot FB+1: above +8
+  }
+  C.m += todo;
+  if (C.m >= P.M) window.__done = true;
+}
+function cKsEmp() {   // empirical CDF at the fine-bin edges against Φ
+  if (!C.m) return NaN;
+  let c = C.fine[0], d = 0;
+  for (let e = 0; e <= FB; e++) { d = Math.max(d, Math.abs(c / C.m - Phi(F0 + e * FW))); if (e < FB) c += C.fine[e + 1]; }
+  return d;
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dpr = 1;
+const COL = { bg: '#12100c', peg: '#8a7a62', ball: '#ffd38a', bar: '#4fb3a4', barEdge: '#7fd8c8', binom: '#ffffff', normal: '#ff8a5c', grid: 'rgba(255,255,255,.07)', text: '#a99f8e' };
+const font = (px, mono) => `${px * dpr}px ${mono ? 'ui-monospace, Menlo, monospace' : '-apple-system, "PingFang SC", sans-serif'}`;
+
+function galtonLayout() {
+  const n = P.rows, pad = 24 * dpr, top = 34 * dpr;
+  const s = Math.min(64 * dpr, (W - 2 * pad) / (n + 1.5));
+  const boardH = (H - top - 78 * dpr) * 0.5;
+  const dy = Math.min(s * 0.9, boardH / (n + 1));
+  const y0 = top + 1.5 * dy, cx = W / 2;
+  return { n, s, dy, y0, cx, yH0: y0 + n * dy + 14 * dpr, yH1: H - 52 * dpr,
+    px: (r, k) => r < 0 ? cx : cx + (k - r / 2) * s, py: r => y0 + r * dy };
+}
+
+function drawGalton() {
+  const L = galtonLayout(), { n, s, dy, cx, yH0, yH1 } = L;
+  const pegR = Math.max(1.2 * dpr, Math.min(4 * dpr, s * 0.1, dy * 0.18));
+  const ballR = Math.max(1.5 * dpr, Math.min(6 * dpr, s * 0.22, dy * 0.32));
+  // funnel
+  ctx.strokeStyle = COL.peg; ctx.lineWidth = 2 * dpr; ctx.beginPath();
+  const fy = L.py(-1) - dy * 0.3, fw = Math.max(s * 1.2, 30 * dpr);
+  ctx.moveTo(cx - fw, fy - 18 * dpr); ctx.lineTo(cx - ballR * 1.6, fy); ctx.moveTo(cx + fw, fy - 18 * dpr); ctx.lineTo(cx + ballR * 1.6, fy); ctx.stroke();
+  // pegs, optionally labelled with C(r, j) = the number of paths that reach them
+  const label = P.pascal && s > 22 * dpr && dy > 16 * dpr;
+  ctx.fillStyle = COL.peg;
+  for (let r = 0; r < n; r++) for (let j = 0; j <= r; j++) {
+    ctx.beginPath(); ctx.arc(L.px(r, j), L.py(r) + pegR + ballR, pegR, 0, 7); ctx.fill();
+  }
+  if (label) {
+    ctx.font = font(Math.min(13, s / dpr * 0.32), true); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillStyle = '#ffd38a';
+    for (let r = 0; r < n; r++) for (let j = 0; j <= r; j++) ctx.fillText(choose(r, j), L.px(r, j), L.py(r) + ballR - 1 * dpr);
+    ctx.fillStyle = COL.peg;
+  }
+  // balls in flight: straight across, with a small hop off each peg
+  ctx.fillStyle = COL.ball;
+  for (let j = 0; j < G.nfly; j++) {
+    const r = G.fr[j], k = G.fk[j], f = G.fph[j], d = G.fd[j];
+    const x = L.px(r, k) + (L.px(r + 1, k + d) - L.px(r, k)) * f;
+    const y = L.py(r) + dy * f - Math.sin(Math.PI * f) * dy * (r < 0 ? 0 : 0.55);
+    ctx.beginPath(); ctx.arc(x, y, ballR, 0, 7); ctx.fill();
+  }
+  // histogram in frequency units, so empirical bars and the two laws share one scale
+  const freq = k => G.total ? G.counts[k] / G.total : 0;
+  const sd = Math.sqrt(n * P.prob * (1 - P.prob)), mu = n * P.prob;
+  let top = Math.max(...pmf, phi(0) / sd);
+  for (let k = 0; k <= n; k++) top = Math.max(top, freq(k));
+  top *= 1.08;
+  const Y = v => yH1 - v / top * (yH1 - yH0), bx = k => cx + (k - n / 2) * s;
+  ctx.strokeStyle = 'rgba(138,122,98,.35)'; ctx.lineWidth = 1 * dpr; ctx.beginPath();
+  for (let k = 0; k <= n + 1; k++) { const x = bx(k) - s / 2; ctx.moveTo(x, yH0 - 6 * dpr); ctx.lineTo(x, yH1); }
+  ctx.moveTo(bx(0) - s / 2, yH1); ctx.lineTo(bx(n) + s / 2, yH1); ctx.stroke();
+  for (let k = 0; k <= n; k++) {
+    const h = freq(k); if (!h) continue;
+    ctx.fillStyle = COL.bar; ctx.fillRect(bx(k) - s * 0.42, Y(h), s * 0.84, yH1 - Y(h));
+  }
+  if (P.showB) {   // exact binomial as a step outline
+    ctx.strokeStyle = COL.binom; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
+    for (let k = 0; k <= n; k++) { const y = Y(pmf[k]); k ? ctx.lineTo(bx(k) - s / 2, y) : ctx.moveTo(bx(k) - s / 2, y); ctx.lineTo(bx(k) + s / 2, y); }
+    ctx.stroke();
+  }
+  if (P.showN) {   // normal density with the same mean and variance
+    ctx.strokeStyle = COL.normal; ctx.lineWidth = 2 * dpr; ctx.beginPath();
+    const x0 = bx(0) - s / 2, x1 = bx(n) + s / 2, steps = 400;
+    for (let i = 0; i <= steps; i++) {
+      const x = x0 + (x1 - x0) * i / steps, k = (x - cx) / s + n / 2;
+      const y = Y(phi((k - mu) / sd) / sd); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+  // mean markers: np (white) and the sample mean (gold)
+  const st = gStats();
+  ctx.lineWidth = 1.5 * dpr; ctx.setLineDash([4 * dpr, 3 * dpr]);
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.moveTo(bx(mu), yH0); ctx.lineTo(bx(mu), yH1); ctx.stroke();
+  if (G.total) { ctx.strokeStyle = COL.ball; ctx.beginPath(); ctx.moveTo(bx(st.mean), yH0); ctx.lineTo(bx(st.mean), yH1); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // bin labels
+  ctx.fillStyle = COL.text; ctx.font = font(11, true); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const every = Math.max(1, Math.ceil(22 * dpr / s));
+  for (let k = 0; k <= n; k += every) ctx.fillText(k, bx(k), yH1 + 5 * dpr);
+  drawLegend([[COL.bar, '样本频率'], [COL.binom, `二项 B(${n}, ${P.prob.toFixed(2)})`], [COL.normal, `正态 N(${fmtN(mu)}, ${fmtN(sd * sd)})`]], 14 * dpr, 14 * dpr);
+  drawKs(ksCurve(), n, st.ks, G.total, LIM.rows[1], 'KS(二项, 正态) 对排数 n');
+}
+
+const choose = (n, k) => Math.round(Math.exp(logFact[n] - logFact[k] - logFact[n - k]));
+const fmtN = x => Number.isFinite(x) ? (Math.abs(x - Math.round(x)) < 1e-9 ? String(Math.round(x)) : x.toFixed(2)) : '—';
+
+function drawLegend(items, x, y) {
+  ctx.font = font(12); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  items.forEach(([c, t], i) => {
+    const yy = y + i * 18 * dpr; ctx.fillStyle = c; ctx.fillRect(x, yy - 2 * dpr, 16 * dpr, 4 * dpr);
+    ctx.fillStyle = '#d8d0c2'; ctx.fillText(t, x + 22 * dpr, yy);
+  });
+}
+
+// log–log plot of the exact KS distance to the normal against n, with the current n and the sample's KS
+function drawKs(curve, n, ksEmp, m, nmax, title) {
+  const w = 300 * dpr, h = 176 * dpr, x0 = W - w - 12 * dpr, y0 = 12 * dpr;
+  ctx.fillStyle = 'rgba(18,16,12,.88)'; ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = '#4a4032'; ctx.lineWidth = 1 * dpr; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+  const ml = 44 * dpr, mr = 10 * dpr, mt = 24 * dpr, mb = 22 * dpr;
+  const vals = curve.slice(1).filter(v => v > 0);
+  let lo = Math.floor(Math.log10(Math.min(...vals, Number.isFinite(ksEmp) && ksEmp > 0 ? ksEmp : 1))), hi = 0;
+  lo = Math.max(-5, Math.min(lo, -1));
+  const X = k => x0 + ml + Math.log(k) / Math.log(nmax) * (w - ml - mr), Y = v => y0 + mt + (hi - Math.log10(v)) / (hi - lo) * (h - mt - mb);
+  ctx.font = font(10, true); ctx.fillStyle = COL.text; ctx.strokeStyle = COL.grid; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let e = lo; e <= hi; e++) { ctx.beginPath(); ctx.moveTo(x0 + ml, Y(10 ** e)); ctx.lineTo(x0 + w - mr, Y(10 ** e)); ctx.stroke(); ctx.fillText(e ? `1e${e}` : '1', x0 + ml - 4 * dpr, Y(10 ** e)); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const k of [1, 2, 5, 10, 20, nmax === 40 ? 40 : 50, 100]) if (k <= nmax) {
+    ctx.beginPath(); ctx.moveTo(X(k), y0 + mt); ctx.lineTo(X(k), y0 + h - mb); ctx.stroke(); ctx.fillText(k, X(k), y0 + h - mb + 3 * dpr);
+  }
+  ctx.save(); ctx.beginPath(); ctx.rect(x0 + ml, y0 + mt, w - ml - mr, h - mt - mb); ctx.clip();
+  // reference slopes through the n = 1 value
+  const ref = (pow, dash, lab) => {
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.setLineDash(dash); ctx.lineWidth = 1 * dpr; ctx.beginPath();
+    ctx.moveTo(X(1), Y(curve[1])); ctx.lineTo(X(nmax), Y(curve[1] * nmax ** -pow)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillText(lab, X(nmax) - 2 * dpr, Y(curve[1] * nmax ** -pow) + 3 * dpr);
+  };
+  if (P.dist !== 'cauchy' || P.mode === 'galton') { ref(0.5, [5 * dpr, 4 * dpr], '∝ 1/√n'); if (P.mode === 'clt') ref(1, [2 * dpr, 3 * dpr], '∝ 1/n'); }
+  if (m > 0) {   // sampling noise of the empirical KS: median of the Kolmogorov law, 0.83/√M
+    ctx.strokeStyle = 'rgba(79,179,164,.5)'; ctx.setLineDash([2 * dpr, 2 * dpr]); ctx.beginPath();
+    ctx.moveTo(X(1), Y(0.83 / Math.sqrt(m))); ctx.lineTo(X(nmax), Y(0.83 / Math.sqrt(m))); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.strokeStyle = '#ffd38a'; ctx.lineWidth = 1.8 * dpr; ctx.beginPath();
+  for (let k = 1; k <= nmax; k++) k > 1 ? ctx.lineTo(X(k), Y(curve[k])) : ctx.moveTo(X(k), Y(curve[k]));
+  ctx.stroke();
+  ctx.fillStyle = '#ffd38a'; ctx.beginPath(); ctx.arc(X(n), Y(curve[n]), 4 * dpr, 0, 7); ctx.fill();
+  if (Number.isFinite(ksEmp) && ksEmp > 0) {
+    ctx.strokeStyle = COL.barEdge; ctx.lineWidth = 1.8 * dpr; ctx.beginPath(); ctx.arc(X(n), Y(ksEmp), 4.5 * dpr, 0, 7); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.font = font(11); ctx.fillStyle = '#d8d0c2'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(title, x0 + 8 * dpr, y0 + 6 * dpr);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#ffd38a';
+  ctx.fillText(`n = ${n}: ${curve[n].toExponential(2)}`, x0 + w - 8 * dpr, y0 + 6 * dpr);
+}
+
+function drawClt() {
+  const D = DISTS[P.dist], sc = uScale();
+  const ml = 54 * dpr, mr = 24 * dpr, top = 214 * dpr, bot = H - 58 * dpr;
+  const X = u => ml + (u + 4) / 8 * (W - ml - mr);
+  // density units on the display axis u
+  const dens = b => C.m ? C.hist[b] / (C.m * UW) : 0, nd = u => sc * phi(u * sc);
+  let ymax = nd(0);
+  for (let b = 0; b < UB; b++) ymax = Math.max(ymax, dens(b), C.expBins[b] / UW);
+  ymax *= 1.08;
+  const Y = v => bot - v / ymax * (bot - top);
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1 * dpr; ctx.font = font(11, true); ctx.fillStyle = COL.text;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  // ticks: integers of Z, or round values of X̄ (the axis spans μ ± 4σ of one draw)
+  const ticks = P.stat === 'z' ? [-4, -3, -2, -1, 0, 1, 2, 3, 4].map(u => [u, String(u).replace('-', '−')]) : niceTicks(D.mu - 4 * D.sd, D.mu + 4 * D.sd)
+    .map(x => [(x - D.mu) / D.sd, fmtAxis(x)]);
+  for (const [u, t] of ticks) {
+    ctx.beginPath(); ctx.moveTo(X(u), top); ctx.lineTo(X(u), bot); ctx.stroke(); ctx.fillText(t, X(u), bot + 6 * dpr);
+  }
+  ctx.textAlign = 'right';
+  ctx.fillText(P.stat === 'z' ? 'Z = (Sₙ − nμ) / (σ√n)' : 'X̄ = Sₙ / n', X(4), bot + 22 * dpr);
+  ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.moveTo(X(-4), bot); ctx.lineTo(X(4), bot); ctx.stroke();
+  ctx.save(); ctx.beginPath(); ctx.rect(X(-4), 0, X(4) - X(-4), H); ctx.clip();
+  ctx.fillStyle = COL.bar;
+  const bw = X(UW) - X(0), gap = bw > 6 * dpr ? 1 * dpr : 0;
+  for (let b = 0; b < UB; b++) { const v = dens(b); if (v) ctx.fillRect(X(U0 + b * UW) + gap / 2, Y(v), bw - gap, bot - Y(v)); }
+  ctx.strokeStyle = COL.binom; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
+  for (let b = 0; b < UB; b++) { const y = Y(C.expBins[b] / UW), xa = X(U0 + b * UW), xb = X(U0 + (b + 1) * UW); b ? ctx.lineTo(xa, y) : ctx.moveTo(xa, y); ctx.lineTo(xb, y); }
+  ctx.stroke();
+  ctx.strokeStyle = COL.normal; ctx.lineWidth = 2 * dpr; ctx.beginPath();
+  for (let i = 0; i <= 800; i++) { const u = -4 + i * 0.01, y = Y(nd(u)); i ? ctx.lineTo(X(u), y) : ctx.moveTo(X(u), y); }
+  ctx.stroke(); ctx.restore();
+  if (C.m && C.out / C.m > 0.001) {
+    ctx.fillStyle = '#ff8f8f'; ctx.font = font(12); ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillText(`${(100 * C.out / C.m).toFixed(1)}% 的样本落在 ±4 之外`, X(4), top + 4 * dpr);
+  }
+  drawSource();
+  drawLegend([[COL.bar, '样本直方图'], [COL.binom, 'Sₙ 的精确分布'], [COL.normal, (P.stat === 'z' ? '标准正态 N(0, 1)' : 'N(μ, σ²/n)') + (D.noVar ? '（假装 μ = 0、σ = 1）' : '')]], 300 * dpr, 30 * dpr);
+  drawKs(ksCurve(), P.n, cKsEmp(), C.m, NMAX, 'KS(Sₙ, 正态) 对项数 n');
+}
+function niceTicks(a, b) {
+  const raw = (b - a) / 8, e = 10 ** Math.floor(Math.log10(raw)), st = [1, 2, 2.5, 5, 10].map(m => m * e).find(v => v >= raw);
+  const out = []; for (let x = Math.ceil(a / st) * st; x <= b + 1e-9 && out.length < 20; x += st) out.push(Math.round(x / st) * st);
+  return out;
+}
+const fmtAxis = x => Math.abs(x) < 1e-9 ? '0' : String(+x.toFixed(Math.abs(x) >= 10 ? 0 : 2)).replace('-', '−');
+
+// inset: the law of one draw X, with the n draws of the latest sample marked underneath
+function drawSource() {
+  const D = DISTS[P.dist], x0 = 12 * dpr, y0 = 12 * dpr, w = 268 * dpr, h = 176 * dpr;
+  ctx.fillStyle = 'rgba(18,16,12,.88)'; ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = '#4a4032'; ctx.lineWidth = 1 * dpr; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+  const pl = x0 + 12 * dpr, pr = x0 + w - 12 * dpr, pt = y0 + 44 * dpr, pb = y0 + h - 34 * dpr;
+  const X = x => pl + (x - D.lo) / (D.hi - D.lo) * (pr - pl);
+  ctx.fillStyle = 'rgba(255,211,138,.35)'; ctx.strokeStyle = '#ffd38a'; ctx.lineWidth = 1.5 * dpr;
+  if (D.discrete) {
+    for (let f = 1; f <= 6; f++) { const y = pb - (pb - pt) * 0.8; ctx.fillRect(X(f) - 8 * dpr, y, 16 * dpr, pb - y); }
+  } else {
+    let fm = 0; const N = 300;
+    for (let i = 0; i <= N; i++) fm = Math.max(fm, D.pdf(D.lo + (D.hi - D.lo) * i / N));
+    ctx.beginPath(); ctx.moveTo(X(D.lo), pb);
+    for (let i = 0; i <= N; i++) { const x = D.lo + (D.hi - D.lo) * i / N; ctx.lineTo(X(x), pb - D.pdf(x) / fm * (pb - pt)); }
+    ctx.lineTo(X(D.hi), pb); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.moveTo(pl, pb); ctx.lineTo(pr, pb); ctx.stroke();
+  // last sample: its n draws as ticks, their mean as a white bar
+  ctx.strokeStyle = 'rgba(127,216,200,.8)'; ctx.lineWidth = 1 * dpr; ctx.beginPath();
+  let s = 0;
+  for (const x of C.last) { s += x; const xx = X(clamp(x, [D.lo, D.hi])); ctx.moveTo(xx, pb + 3 * dpr); ctx.lineTo(xx, pb + 11 * dpr); }
+  ctx.stroke();
+  if (C.last.length) {
+    const m = s / C.last.length; ctx.fillStyle = '#fff'; ctx.fillRect(X(clamp(m, [D.lo, D.hi])) - 1.5 * dpr, pb + 2 * dpr, 3 * dpr, 12 * dpr);
+  }
+  ctx.font = font(12); ctx.fillStyle = '#d8d0c2'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`一次抽样 X：${D.name}`, x0 + 8 * dpr, y0 + 6 * dpr);
+  ctx.font = font(11, true); ctx.fillStyle = COL.text;
+  ctx.fillText(D.noVar ? 'E|X| = ∞，均值和方差都不存在' : `μ = ${fmtN(D.mu)}   σ² = ${fmtVar(D.sd)}`, x0 + 8 * dpr, y0 + 24 * dpr);
+  ctx.fillText(`下方刻度：最新样本的 ${C.last.length} 个数，白条是均值`, x0 + 8 * dpr, pb + 16 * dpr);
+}
+const fmtVar = sd => { const v = sd * sd; return Math.abs(v * 12 - 1) < 1e-9 ? '1/12' : Math.abs(v * 12 - 35) < 1e-9 ? '35/12' : fmtN(v); };
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = COL.bg; ctx.fillRect(0, 0, W, H);
+  if (P.mode === 'galton') drawGalton(); else drawClt();
+}
+
+// ---------- read-outs ----------
+const f3 = x => Number.isFinite(x) ? (Math.abs(x) >= 1e5 ? x.toExponential(2) : x.toFixed(3)) : '—';
+function info() {
+  if (P.mode === 'galton') {
+    const st = gStats(), n = P.rows, p = P.prob, curve = ksCurve();
+    $('gInfo').textContent =
+      `理论均值 np = ${f3(n * p)}       样本均值 = ${f3(st.mean)}\n` +
+      `理论方差 np(1−p) = ${f3(n * p * (1 - p))}   样本方差 = ${f3(st.var)}\n` +
+      `KS(二项, 正态) = ${curve[n].toFixed(4)}   TV = ${tvBinomNormal(n, p).toFixed(4)}\n` +
+      `KS(样本, 正态) = ${Number.isFinite(st.ks) ? st.ks.toFixed(4) : '—'}`;
+    $('stat').textContent = `已落下 ${G.total.toLocaleString()} 个球 · 在途 ${G.nfly}` + (gRun ? '' : ' · 已暂停');
+    window.__galton = { rows: n, p, total: G.total, inFlight: G.nfly, mean: st.mean, var: st.var, ksSample: st.ks,
+      ksExact: curve[n], tv: tvBinomNormal(n, p), counts: Array.from(G.counts.slice(0, n + 1)) };
+  } else {
+    const D = DISTS[P.dist], m = C.m, mz = m ? C.sz / m : NaN, vz = m > 1 ? (C.sz2 - m * mz * mz) / (m - 1) : NaN;
+    const curve = ksCurve(), ke = cKsEmp(), sc = Math.sqrt(P.n);
+    const lines = P.stat === 'z'
+      ? [`Z 的样本均值 = ${f3(mz)}   （理论 0）`, `Z 的样本方差 = ${f3(vz)}   （理论 1）`]
+      : [`X̄ 的样本均值 = ${f3(D.mu + D.sd * mz / sc)}   （μ = ${D.noVar ? '不存在' : f3(D.mu)}）`,
+         `X̄ 的样本方差 = ${f3(D.sd * D.sd * vz / P.n)}   （σ²/n = ${D.noVar ? '不存在' : f3(D.sd * D.sd / P.n)}）`];
+    if (D.noVar) lines.push('柯西：Z 按 μ = 0、σ = 1 硬算，其实 Sₙ/√n 的尺度是 √n');
+    lines.push(`KS(精确, 正态) = ${curve[P.n].toFixed(4)}`, `KS(样本, 正态) = ${Number.isFinite(ke) ? ke.toFixed(4) : '—'}   噪声约 0.83/√M = ${(0.83 / Math.sqrt(Math.max(1, m))).toFixed(4)}`);
+    $('cInfo').textContent = lines.join('\n');
+    $('stat').textContent = `${D.name} · n = ${P.n} · 已抽 ${m.toLocaleString()} / ${P.M.toLocaleString()} 个样本` + (cRun ? '' : ' · 已暂停');
+    window.__clt = { dist: P.dist, n: P.n, stat: P.stat, m, meanZ: mz, varZ: vz, ksExact: curve[P.n], ksSample: ke, outside: m ? C.out / m : 0,
+      curve: curve.slice(1) };
+  }
+}
+
+// ---------- UI ----------
+const fmtK = x => x >= 1000 ? (x % 1000 ? (x / 1000).toFixed(1) : x / 1000) + 'k' : String(x);
+function syncUI() {
+  $('Rows').value = P.rows; $('Prob').value = P.prob; $('V').value = P.v; $('Nb').value = Math.log10(P.nb);
+  $('N').value = P.n; $('M').value = Math.log10(P.M); $('B').value = Math.log10(P.b); $('Seed').value = P.seed;
+  $('vRows').textContent = P.rows; $('vProb').textContent = P.prob.toFixed(2); $('vV').textContent = P.v; $('vNb').textContent = fmtK(P.nb);
+  $('vN').textContent = P.n; $('vM').textContent = fmtK(P.M); $('vB').textContent = P.b; $('vSeed').textContent = P.seed;
+  $('pascal').checked = P.pascal; $('showB').checked = P.showB; $('showN').checked = P.showN;
+  $('mG').classList.toggle('on', P.mode === 'galton'); $('mC').classList.toggle('on', P.mode === 'clt');
+  $('secG').style.display = P.mode === 'galton' ? '' : 'none'; $('secC').style.display = P.mode === 'clt' ? '' : 'none';
+  $('sZ').classList.toggle('on', P.stat === 'z'); $('sM').classList.toggle('on', P.stat === 'mean');
+  $('gPlay').textContent = gRun ? '⏸ 暂停' : '▶ 继续'; $('cPlay').textContent = cRun ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-d]').forEach(b => b.classList.toggle('on', b.dataset.d === P.dist));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+const restart = () => { if (P.mode === 'galton') gReset(); else cReset(); };
+const changed = (resetIt = true) => { P.preset = ''; syncUI(); if (resetIt) restart(); };
+
+function applyPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, mode: p.mode });
+  if (p.mode === 'galton') Object.assign(P, { rows: p.rows, prob: p.prob, v: p.v, nb: p.nb, pascal: !!p.pascal });
+  else Object.assign(P, { dist: p.dist, n: p.n, stat: p.stat });
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => { applyPreset(key); gRun = cRun = true; syncUI(); restart(); };
+  $('pre').appendChild(b);
+}
+for (const [key, d] of Object.entries(DISTS)) {
+  const b = document.createElement('button');
+  b.textContent = d.name; b.dataset.d = key; b.onclick = () => { P.dist = key; changed(); };
+  $('dists').appendChild(b);
+}
+$('mG').onclick = () => { P.mode = 'galton'; changed(); };
+$('mC').onclick = () => { P.mode = 'clt'; changed(); };
+$('Rows').oninput = e => { P.rows = +e.target.value; changed(); };
+$('Prob').oninput = e => { P.prob = +e.target.value; changed(); };
+$('V').oninput = e => { P.v = +e.target.value; changed(false); };
+$('Nb').oninput = e => { P.nb = Math.round(10 ** +e.target.value / 100) * 100; changed(false); window.__done = false; };
+$('N').oninput = e => { P.n = +e.target.value; changed(); };
+$('M').oninput = e => { P.M = Math.round(10 ** +e.target.value / 1000) * 1000; changed(false); window.__done = C.m >= P.M; };
+$('B').oninput = e => { P.b = Math.round(10 ** +e.target.value); changed(false); };
+$('Seed').oninput = e => { P.seed = +e.target.value; changed(); };
+$('sZ').onclick = () => { P.stat = 'z'; changed(); };
+$('sM').onclick = () => { P.stat = 'mean'; changed(); };
+$('pascal').onchange = e => { P.pascal = e.target.checked; };
+$('showB').onchange = e => { P.showB = e.target.checked; };
+$('showN').onchange = e => { P.showN = e.target.checked; };
+$('gPlay').onclick = () => { gRun = !gRun; syncUI(); };
+$('cPlay').onclick = () => { cRun = !cRun; syncUI(); };
+$('gRestart').onclick = () => { gRun = true; syncUI(); gReset(); };
+$('cRestart').onclick = () => { cRun = true; syncUI(); cReset(); };
+$('gAdd').onclick = () => gDropInstant(1000);
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=skew  or  ?m=clt&d=exp&n=30&s=mean&M=50000&seed=7&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const pk = q.get('p');
+if (pk !== null && Object.hasOwn(PRESETS, pk)) applyPreset(pk);
+const pick = (k, list, f) => { const v = q.get(k); if (v !== null && list.includes(v)) f(v); };
+pick('m', ['galton', 'clt'], v => { if (v !== P.mode) P.preset = ''; P.mode = v; });
+{ const v = q.get('d'); if (v !== null && Object.hasOwn(DISTS, v)) { P.dist = v; P.preset = ''; } }
+pick('s', ['z', 'mean'], v => { P.stat = v; P.preset = ''; });
+const urlKeys = { r: 'rows', prob: 'prob', v: 'v', nb: 'nb', n: 'n', M: 'M', b: 'b', seed: 'seed' };
+for (const [k, key] of Object.entries(urlKeys)) num(k, x => { P[key] = clamp(x, LIM[key]); if (k !== 'seed') P.preset = ''; });
+for (const key of ['rows', 'v', 'nb', 'n', 'M', 'b', 'seed']) P[key] = Math.round(P[key]);
+P.prob = Math.round(P.prob * 100) / 100;
+let instant = 0; num('k', x => instant = Math.round(clamp(x, LIM.k)));
+if (q.get('pascal') === '1') P.pascal = true;
+if (q.get('bin') === '0') P.showB = false;
+if (q.get('norm') === '0') P.showN = false;
+if (q.get('run') === '0') gRun = cRun = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI(); restart();
+if (P.mode === 'galton' && instant) gDropInstant(instant);
+
+(function loop() {
+  if (P.mode === 'galton') gStep(); else cStep();
+  draw(); info();
+  window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

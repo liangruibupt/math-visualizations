@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Logistic 映射 · 倍周期分岔</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0e16; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(22,27,40,.93); border: 1px solid #323a52; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a4b4d8; border-top: 1px solid #323a52; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8b93a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #283047; color: #e6e6e6; border: 1px solid #3a4462;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #333d5a; }
+  button.on { background: #3f5a8a; border-color: #5f7fb8; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #info, #feig { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #a9b2c8; margin-top: 4px; white-space: pre; overflow-x: auto; }
+  #regime { color: #ffd38a; margin-top: 4px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #stat { position: absolute; left: 10px; bottom: 6px; padding: 3px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(11,14,22,.8); color: #cdd4e4; font-size: 12px; font-variant-numeric: tabular-nums; max-width: calc(100% - 20px); }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Logistic 映射 · 倍周期分岔</h1>
+  <small>只有一行：<span class="mono">x → r·x(1 − x)</span>。左上是蛛网图，右上是 x 随步数的变化，下面是分岔图：每个 r 迭代很多步以后 x 落在哪些值上。r 增大时周期 1 → 2 → 4 → 8 → … 越分越快，在 r∞ ≈ 3.5699 进入混沌。最下面的 Lyapunov 指数 λ &gt; 0 就是混沌。</small>
+
+  <h2>参数</h2>
+  <div class="row">
+    <label>r <b id="vR"></b></label>
+    <input id="R" type="range" min="2.5" max="4" step="0.0001">
+    <small id="regime"></small>
+  </div>
+  <div class="row">
+    <label>起点 x₀ <b id="vX"></b></label>
+    <input id="X" type="range" min="0.001" max="0.999" step="0.001">
+  </div>
+  <div class="row">
+    <label>步数 <b id="vN"></b></label>
+    <input id="N" type="range" min="10" max="400" step="1">
+  </div>
+  <div class="row">
+    <label><span>蛛网图上叠画 f<sup>k</sup></span> <b id="vK"></b></label>
+    <input id="K" type="range" min="1" max="8" step="1">
+    <small>f² 与对角线的交点就是 2-周期点，f⁴ 的就是 4-周期点；周期 3 窗口里用 k = 3</small>
+  </div>
+  <div class="presets"><button id="play">▶ 扫描 r</button><button id="home">⤢ 复位视野</button></div>
+  <div id="info"></div>
+
+  <h2>倍周期分岔点与 Feigenbaum 常数</h2>
+  <div id="feig"></div>
+  <small>r<sub>n</sub>：周期 2<sup>n−1</sup> 的轨道失稳（乘子 = −1），分裂成周期 2<sup>n</sup>。δ<sub>n</sub> = (r<sub>n</sub> − r<sub>n−1</sub>) / (r<sub>n+1</sub> − r<sub>n</sub>)，相邻两段分岔间距之比。</small>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="bp" type="checkbox"> 标出分岔点</label>
+    <label><input id="ly" type="checkbox"> Lyapunov 指数</label>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">分岔图上：单击设定 r · 拖框放大 · 滚轮缩放 · 双击复位<br>蛛网图上单击设定 x₀ · 按 h 隐藏面板</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- presets and limits ----------
+const FULL = { r0: 2.5, r1: 4, y0: 0, y1: 1 };
+const PRESETS = {
+  p1: { name: 'r = 2.8 不动点', r: 2.8, k: 1 },
+  p2: { name: 'r = 3.2 周期 2', r: 3.2, k: 2 },
+  p4: { name: 'r = 3.5 周期 4', r: 3.5, k: 4 },
+  p8: { name: 'r = 3.5546 周期 8', r: 3.5546, k: 8, view: { r0: 3.4, r1: 3.6, y0: 0.3, y1: 0.92 } },
+  self: { name: '自相似放大', r: 3.5667, k: 1, view: { r0: 3.5440, r1: 3.5702, y0: 0.872, y1: 0.896 } },
+  chaos: { name: 'r = 3.7 混沌', r: 3.7, k: 1 },
+  w3: { name: '周期 3 窗口', r: 3.835, k: 3, view: { r0: 3.82, r1: 3.86, y0: 0, y1: 1 } },
+  inter: { name: '阵发混沌 r = 3.82835', r: 3.82835, k: 3, n: 400, view: { r0: 3.82, r1: 3.86, y0: 0, y1: 1 } },
+  full: { name: 'r = 4 满混沌', r: 4, k: 1 },
+};
+const LIM = { r: [2.5, 4], x0: [0.001, 0.999], n: [10, 400], k: [1, 8], y: [0, 1] };
+const MIN_RSPAN = 1e-6, MIN_YSPAN = 1e-5;
+const DEF = { r: 3.5, x0: 0.2, n: 60, k: 1 };
+const PERIOD_MAX = 64;
+const BIF_BUDGET = 4e7;          // map iterations for one redraw of the bifurcation diagram
+const LY_RANGE = [-2, 1];        // λ axis of the Lyapunov strip; values below are clipped
+
+const P = { preset: '', r: DEF.r, x0: DEF.x0, n: DEF.n, k: DEF.k, bp: true, ly: true };
+const view = { ...FULL };
+let sweeping = false, hoverR = null, sel = null;
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+const f = (r, x) => r * x * (1 - x);
+
+// ---------- Feigenbaum: superstable parameters R_n and bifurcation points r_n ----------
+// R_n: the critical point 1/2 lies on a 2^n-cycle, f^{2^n}(1/2) = 1/2. Newton in r, dx/dr carried along.
+function superstable(n, guess) {
+  const p = 2 ** n; let r = guess;
+  for (let it = 0; it < 60; it++) {
+    let x = 0.5, d = 0;
+    for (let i = 0; i < p; i++) { d = x * (1 - x) + r * (1 - 2 * x) * d; x = r * x * (1 - x); }
+    const step = (x - 0.5) / d; r -= step;
+    if (!(Math.abs(step) > 1e-15)) break;
+  }
+  return r;
+}
+// multiplier (f^p)' of the p-cycle through the point found by Newton on f^p(x) = x, started at 1/2
+function cycleMultiplier(r, p) {
+  let x = 0.5;
+  for (let it = 0; it < 60; it++) {
+    let y = x, d = 1;
+    for (let i = 0; i < p; i++) { d *= r * (1 - 2 * y); y = r * y * (1 - y); }
+    const step = (y - x) / (d - 1); x -= step;
+    if (!(Math.abs(step) > 1e-15)) break;
+  }
+  let y = x, m = 1;
+  for (let i = 0; i < p; i++) { m *= r * (1 - 2 * y); y = r * y * (1 - y); }
+  return m;
+}
+// r_n lies between R_{n−1} (multiplier 0) and R_n (multiplier < −1); bisect on multiplier = −1
+function feigenbaum(nMax) {
+  const R = [2, 1 + Math.sqrt(5)];
+  for (let n = 2; n <= nMax; n++) R.push(superstable(n, R[n - 1] + (R[n - 1] - R[n - 2]) / 4.67));
+  const r = [];
+  for (let n = 1; n <= nMax; n++) {
+    let lo = R[n - 1], hi = R[n];
+    for (let i = 0; i < 70; i++) { const m = (lo + hi) / 2; if (cycleMultiplier(m, 2 ** (n - 1)) > -1) lo = m; else hi = m; }
+    r.push((lo + hi) / 2);
+  }
+  const delta = r.map((_, i) => i > 0 && i < r.length - 1 ? (r[i] - r[i - 1]) / (r[i + 1] - r[i]) : null);
+  const dR = R.map((_, i) => i > 0 && i < R.length - 1 ? (R[i] - R[i - 1]) / (R[i + 1] - R[i]) : null);
+  const dl = delta[r.length - 2], rInf = r[r.length - 1] + (r[r.length - 1] - r[r.length - 2]) / (dl - 1);
+  return { r, R, delta, dR, rInf };
+}
+const FEIG = feigenbaum(9);
+const R3 = 1 + Math.sqrt(8);     // tangent bifurcation that opens the period-3 window
+
+function showFeig() {
+  const sub = n => String(n).replace(/\d/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
+  const lines = [' n   周期        r_n             δ_n'];
+  FEIG.r.forEach((v, i) => {
+    const n = i + 1, per = `${2 ** i} → ${2 ** n}`;
+    lines.push(`${String(n).padStart(2)}   ${per.padEnd(9)}  ${v.toFixed(10)}  ${FEIG.delta[i] ? FEIG.delta[i].toFixed(5) : ''}`);
+  });
+  lines.push(`r∞ ≈ ${FEIG.rInf.toFixed(7)}（按最后一个 δ 外推）`);
+  lines.push(`超稳定点 R${sub(FEIG.R.length - 1)} 给出 δ = ${FEIG.dR[FEIG.R.length - 2].toFixed(5)}`);
+  lines.push(`周期 3 窗口：1 + √8 = ${R3.toFixed(7)}`);
+  $('feig').textContent = lines.join('\n');
+}
+
+// ---------- the current r: period and Lyapunov exponent ----------
+function analyse(r) {
+  let x = 0.2;
+  for (let i = 0; i < 20000; i++) x = f(r, x);
+  const x0 = x; let period = 0;
+  for (let p = 1; p <= PERIOD_MAX; p++) { x = f(r, x); if (Math.abs(x - x0) < 1e-7) { period = p; break; } }
+  x = x0; let s = 0;
+  const NL = 100000;
+  for (let i = 0; i < NL; i++) { s += Math.log(Math.abs(r * (1 - 2 * x)) + 1e-300); x = f(r, x); }
+  return { period, lyap: s / NL };
+}
+let A = { period: 0, lyap: 0 };
+
+function regimeText() {
+  const r = P.r, rs = FEIG.r;
+  if (r < rs[0]) return 'r < 3：不动点 x* = 1 − 1/r 稳定，所有起点都收敛到它';
+  if (r < rs[1]) return '3 < r < 1 + √6：不动点失稳，出现稳定的 2-周期';
+  if (r < rs[2]) return `r₂ < r < r₃：周期 4`;
+  if (r < FEIG.rInf) return 'r₃ < r < r∞：周期 8、16、32 … 分岔间距按 1/δ 缩小';
+  if (r >= R3 && r < 3.8568) return '周期 3 窗口：1 + √8 ≈ 3.8284 处切分岔生出稳定 3-周期，随后又倍周期 3 → 6 → 12 …';
+  if (r > R3 - 0.002 && r < R3) return 'r 略小于 1 + √8：阵发混沌，长段近似周期 3 被短暂的混沌爆发打断';
+  return A.lyap > 0 ? 'r > r∞：混沌区，夹杂着无数周期窗口' : 'r > r∞：周期窗口';
+}
+function showInfo() {
+  A = analyse(P.r);
+  const r = P.r, xs = 1 - 1 / r, c = r / 2 - r * r / 4;
+  const per = A.period ? `周期 ${A.period}${Math.abs(A.lyap) < 3e-3 ? '（λ ≈ 0，接近分岔点，检测可能不准）' : ''}` : (A.lyap > 1e-3 ? '非周期（混沌）' : `未检测到 ≤ ${PERIOD_MAX} 的周期（接近分岔点，收敛很慢）`);
+  $('info').textContent = [
+    `${per}`,
+    `λ = ${A.lyap.toFixed(4)}  （λ < 0 稳定，λ > 0 混沌）`,
+    `不动点 x* = 1 − 1/r = ${xs.toFixed(4)}`,
+    `f′(x*) = 2 − r = ${(2 - r).toFixed(4)}  ${Math.abs(2 - r) < 1 ? '|f′| < 1 稳定' : '|f′| > 1 不稳定'}`,
+    `Mandelbrot 实轴 c = r/2 − r²/4 = ${c.toFixed(5)}`,
+  ].join('\n');
+  $('regime').textContent = regimeText();
+}
+
+// ---------- layout (device pixels) ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dpr = 1, L = {};
+function layout() {
+  const pad = 12 * dpr, axL = 44 * dpr, axB = 20 * dpr, gap = 14 * dpr, title = 18 * dpr;
+  const statH = document.body.classList.contains('noui') ? 0 : 24 * dpr;
+  const topH = Math.round((H - statH) * 0.36);
+  const cs = Math.max(40 * dpr, Math.min(topH - title - axB - pad, (W - axL * 2 - pad * 3) * 0.42));
+  const cob = { x: axL + pad, y: pad + title, w: cs, h: cs };
+  const ts = { x: cob.x + cs + axL, y: cob.y, w: Math.max(40 * dpr, W - (cob.x + cs + axL) - pad - 4 * dpr), h: cs };
+  const bTop = cob.y + cs + axB + gap + title, bBot = H - statH - axB - pad;
+  const lyH = P.ly ? Math.round((bBot - bTop) * 0.24) : 0;
+  const bif = { x: axL + pad, y: bTop, w: Math.max(40 * dpr, W - axL - 2 * pad - 4 * dpr), h: Math.max(40 * dpr, bBot - bTop - (lyH ? lyH + 6 * dpr : 0)) };
+  const lya = { x: bif.x, y: bif.y + bif.h + 6 * dpr, w: bif.w, h: lyH };
+  for (const R of [cob, ts, bif, lya]) for (const k in R) R[k] = Math.round(R[k]);
+  L = { cob, ts, bif, lya };
+}
+
+// ---------- bifurcation diagram: per-column histogram of x after a transient ----------
+let bifImg = null, lyaCol = null, bifDirty = true, bifInfo = {};
+function computeBif() {
+  const { w, h } = L.bif, { r0, r1, y0, y1 } = view;
+  const rs = r1 - r0, ys = y1 - y0;
+  const K = Math.round(Math.min(6000, 1500 / Math.sqrt(ys)));
+  let T = Math.round(Math.min(20000, 1000 * (1.5 / rs) ** 0.35));
+  T = Math.max(200, Math.min(T, Math.floor(BIF_BUDGET / w) - K));
+  const hits = new Uint32Array(w * h); lyaCol = new Float64Array(w);
+  const sy = h / ys;
+  for (let i = 0; i < w; i++) {
+    const r = r0 + (i + 0.5) / w * rs;
+    let x = 0.3141, s = 0;
+    for (let t = 0; t < T; t++) x = r * x * (1 - x);
+    for (let t = 0; t < K; t++) {
+      x = r * x * (1 - x);
+      s += Math.log(Math.abs(r * (1 - 2 * x)) + 1e-300);
+      const row = Math.floor((y1 - x) * sy);
+      if (row >= 0 && row < h) hits[row * w + i]++;
+    }
+    lyaCol[i] = s / K;
+  }
+  bifImg = new ImageData(w, h);
+  const d = bifImg.data, ln = Math.log(1 + K / 6), bg = [15, 19, 31], fg = [255, 214, 140];
+  for (let j = 0; j < w * h; j++) {
+    const a = hits[j], v = a ? Math.min(1, 0.18 + 0.82 * Math.log(1 + a) / ln) : 0;
+    d[4 * j] = bg[0] + (fg[0] - bg[0]) * v; d[4 * j + 1] = bg[1] + (fg[1] - bg[1]) * v;
+    d[4 * j + 2] = bg[2] + (fg[2] - bg[2]) * v; d[4 * j + 3] = 255;
+  }
+  bifInfo = { T, K, w, h };
+  bifDirty = false;
+}
+
+// ---------- drawing helpers ----------
+function niceStep(span, target) {
+  const raw = span / target, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p;
+  return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+}
+const decimals = step => Math.max(0, Math.ceil(-Math.log10(step) - 1e-9));
+function font(px, mono) { ctx.font = `${px * dpr}px ${mono ? 'ui-monospace, Menlo, monospace' : '-apple-system, "PingFang SC", sans-serif'}`; }
+function frame(R) { ctx.strokeStyle = '#323a52'; ctx.lineWidth = 1; ctx.strokeRect(R.x + 0.5, R.y + 0.5, R.w - 1, R.h - 1); }
+function title(R, text) { font(12); ctx.fillStyle = '#cdd4e4'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(text, R.x, R.y - 4 * dpr); }
+// axis ticks: horizontal along the bottom edge (axis 'x') or vertical along the left edge (axis 'y')
+function ticks(R, axis, lo, hi, target, grid) {
+  const step = niceStep(hi - lo, target), dec = decimals(step);
+  font(10, true); ctx.fillStyle = '#8b93a8'; ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1;
+  const n0 = Math.ceil(lo / step - 1e-9), n1 = Math.floor(hi / step + 1e-9);
+  for (let n = n0; n <= n1 && n - n0 < 50; n++) {
+    const v = n * step;
+    if (axis === 'x') {
+      const px = R.x + (v - lo) / (hi - lo) * R.w;
+      if (grid) { ctx.beginPath(); ctx.moveTo(px, R.y); ctx.lineTo(px, R.y + R.h); ctx.stroke(); }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(v.toFixed(dec), px, R.y + R.h + 4 * dpr);
+    } else {
+      const py = R.y + (hi - v) / (hi - lo) * R.h;
+      if (grid) { ctx.beginPath(); ctx.moveTo(R.x, py); ctx.lineTo(R.x + R.w, py); ctx.stroke(); }
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(v.toFixed(dec), R.x - 4 * dpr, py);
+    }
+  }
+}
+
+// ---------- cobweb ----------
+function drawCobweb() {
+  const R = L.cob, X = x => R.x + x * R.w, Y = y => R.y + (1 - y) * R.h, r = P.r;
+  ctx.fillStyle = '#0f1320'; ctx.fillRect(R.x, R.y, R.w, R.h);
+  ticks(R, 'x', 0, 1, 4, true); ticks(R, 'y', 0, 1, 4, true);
+  title(R, `蛛网图  xₙ₊₁ = f(xₙ)，r = ${P.r.toFixed(4)}`);
+  ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
+  ctx.strokeStyle = '#59627a'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(1), Y(1)); ctx.stroke();
+  const S = 300;
+  if (P.k > 1) {
+    ctx.strokeStyle = '#c792ea'; ctx.lineWidth = 1.3 * dpr; ctx.beginPath();
+    for (let i = 0; i <= S * 2; i++) {
+      const x = i / (S * 2); let y = x;
+      for (let j = 0; j < P.k; j++) y = f(r, y);
+      i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y));
+    }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#7fd4ff'; ctx.lineWidth = 1.6 * dpr; ctx.beginPath();
+  for (let i = 0; i <= S; i++) { const x = i / S; i ? ctx.lineTo(X(x), Y(f(r, x))) : ctx.moveTo(X(x), Y(f(r, x))); }
+  ctx.stroke();
+  // the cobweb itself: older steps fainter
+  let x = P.x0, px = X(x), py = Y(0);
+  ctx.lineWidth = 1 * dpr; ctx.strokeStyle = '#ffd38a';
+  for (let i = 0; i < P.n; i++) {
+    const y = f(r, x);
+    ctx.globalAlpha = 0.15 + 0.85 * (i + 1) / P.n;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(X(x), Y(y)); ctx.lineTo(X(y), Y(y)); ctx.stroke();
+    px = X(y); py = Y(y); x = y;
+  }
+  ctx.globalAlpha = 1;
+  const xs = 1 - 1 / r;
+  ctx.strokeStyle = Math.abs(2 - r) < 1 ? '#7fe08a' : '#ff8f8f'; ctx.lineWidth = 1.5 * dpr;
+  ctx.beginPath(); ctx.arc(X(xs), Y(xs), 4 * dpr, 0, 7); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(X(P.x0), Y(0) - 3 * dpr, 3 * dpr, 0, 7); ctx.fill();
+  ctx.restore(); frame(R);
+  font(11); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#7fd4ff'; ctx.fillText('f(x)', R.x + 6 * dpr, R.y + 5 * dpr);
+  if (P.k > 1) { ctx.fillStyle = '#c792ea'; ctx.fillText(`f${String(P.k).replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d])}(x)`, R.x + 6 * dpr, R.y + 20 * dpr); }
+}
+
+// ---------- time series ----------
+function drawSeries() {
+  const R = L.ts, n = P.n, X = i => R.x + i / n * R.w, Y = y => R.y + (1 - y) * R.h;
+  ctx.fillStyle = '#0f1320'; ctx.fillRect(R.x, R.y, R.w, R.h);
+  ticks(R, 'x', 0, n, 6, true); ticks(R, 'y', 0, 1, 4, true);
+  title(R, `时间序列  xₙ 对 n，x₀ = ${P.x0.toFixed(3)}`);
+  ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
+  let x = P.x0;
+  // long series: dots carry the picture (a period-p stretch shows as p flat bands), lines only hint the order
+  const dense = n > 150;
+  ctx.strokeStyle = dense ? 'rgba(255,211,138,.12)' : 'rgba(255,211,138,.55)'; ctx.lineWidth = 1 * dpr; ctx.beginPath();
+  for (let i = 0; i <= n; i++) { i ? ctx.lineTo(X(i), Y(x)) : ctx.moveTo(X(i), Y(x)); x = f(P.r, x); }
+  ctx.stroke();
+  x = P.x0; ctx.fillStyle = '#ffd38a';
+  for (let i = 0; i <= n; i++) { ctx.beginPath(); ctx.arc(X(i), Y(x), (dense ? 1.4 : 2) * dpr, 0, 7); ctx.fill(); x = f(P.r, x); }
+  ctx.restore(); frame(R);
+}
+
+// ---------- bifurcation diagram and Lyapunov strip ----------
+const rToX = r => L.bif.x + (r - view.r0) / (view.r1 - view.r0) * L.bif.w;
+function drawBif() {
+  const B = L.bif, Ly = L.lya;
+  if (bifDirty) computeBif();
+  ctx.putImageData(bifImg, B.x, B.y);
+  ticks(B, 'y', view.y0, view.y1, 5, false);
+  if (!P.ly) ticks(B, 'x', view.r0, view.r1, 8, false);
+  title(B, `分岔图  每个 r 先迭代 ${bifInfo.T} 步，再画后 ${bifInfo.K} 步落在哪里`);
+
+  if (P.ly && Ly.h > 0) {
+    ctx.fillStyle = '#0f1320'; ctx.fillRect(Ly.x, Ly.y, Ly.w, Ly.h);
+    const [lo, hi] = LY_RANGE, Y = v => Ly.y + (hi - clamp(v, LY_RANGE)) / (hi - lo) * Ly.h, y0 = Y(0);
+    ticks(Ly, 'x', view.r0, view.r1, 8, false);
+    font(10, true); ctx.fillStyle = '#8b93a8'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [-2, -1, 0, 1]) ctx.fillText(String(v), Ly.x - 4 * dpr, Y(v));
+    ctx.save(); ctx.beginPath(); ctx.rect(Ly.x, Ly.y, Ly.w, Ly.h); ctx.clip();
+    const area = new Path2D(); area.moveTo(Ly.x, y0);
+    for (let i = 0; i < lyaCol.length; i++) area.lineTo(Ly.x + i + 0.5, Y(lyaCol[i]));
+    area.lineTo(Ly.x + Ly.w, y0); area.closePath();
+    ctx.save(); ctx.beginPath(); ctx.rect(Ly.x, Ly.y, Ly.w, y0 - Ly.y); ctx.clip(); ctx.fillStyle = 'rgba(255,107,107,.75)'; ctx.fill(area); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(Ly.x, y0, Ly.w, Ly.y + Ly.h - y0); ctx.clip(); ctx.fillStyle = 'rgba(110,160,255,.55)'; ctx.fill(area); ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Ly.x, y0); ctx.lineTo(Ly.x + Ly.w, y0); ctx.stroke();
+    ctx.restore(); frame(Ly);
+    font(11); ctx.fillStyle = '#cdd4e4'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('Lyapunov 指数 λ(r)', Ly.x + 6 * dpr, Ly.y + 4 * dpr);
+  }
+  const top = B.y, bot = P.ly && Ly.h ? Ly.y + Ly.h : B.y + B.h;
+
+  // bifurcation points r_n and 1 + √8, labels skipped where they would collide
+  if (P.bp) {
+    const marks = FEIG.r.map((v, i) => [v, `r${'₁₂₃₄₅₆₇₈₉'[i]}`]).concat([[FEIG.rInf, 'r∞'], [R3, '1+√8']]);
+    let lastX = -1e9;
+    font(12, true); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.setLineDash([3 * dpr, 3 * dpr]); ctx.lineWidth = 1;
+    for (const [v, nm] of marks) {
+      if (v < view.r0 || v > view.r1) continue;
+      const px = rToX(v);
+      ctx.strokeStyle = nm === 'r∞' ? 'rgba(255,143,143,.75)' : 'rgba(199,146,234,.6)';
+      ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bot); ctx.stroke();
+      if (Math.abs(px - lastX) > 26 * dpr || nm === '1+√8') {
+        ctx.fillStyle = nm === 'r∞' ? '#ff8f8f' : '#c792ea'; ctx.fillText(nm, px, top + 3 * dpr);
+        if (nm !== '1+√8') lastX = px;
+      }
+    }
+    ctx.setLineDash([]);
+  }
+  // hover line and current r
+  if (hoverR !== null && !sel) {
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; const px = Math.round(rToX(hoverR)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bot); ctx.stroke();
+  }
+  if (P.r >= view.r0 && P.r <= view.r1) {
+    const px = rToX(P.r);
+    ctx.strokeStyle = '#7fd4ff'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bot); ctx.stroke();
+    ctx.fillStyle = '#7fd4ff'; ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px - 5 * dpr, top - 7 * dpr); ctx.lineTo(px + 5 * dpr, top - 7 * dpr); ctx.fill();
+  }
+  frame(B);
+  if (sel) {
+    ctx.strokeStyle = '#fff'; ctx.setLineDash([4 * dpr, 3 * dpr]); ctx.lineWidth = 1;
+    ctx.strokeRect(Math.min(sel.x0, sel.x1), Math.min(sel.y0, sel.y1), Math.abs(sel.x1 - sel.x0), Math.abs(sel.y1 - sel.y0));
+    ctx.setLineDash([]);
+  }
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0b0e16'; ctx.fillRect(0, 0, W, H);
+  drawCobweb(); drawSeries(); drawBif();
+  drawStat();
+}
+function drawStat() {
+  const per = A.period ? `周期 ${A.period}${Math.abs(A.lyap) < 3e-3 ? '（λ ≈ 0，接近分岔点，检测可能不准）' : ''}` : A.lyap > 1e-3 ? '混沌' : '周期未定';
+  const dec = Math.max(3, decimals(niceStep(view.r1 - view.r0, 8)) + 2);
+  const parts = [`r = ${P.r.toFixed(6)}`, per, `λ = ${A.lyap.toFixed(4)}`,
+    `视野 r ∈ [${view.r0.toFixed(dec)}, ${view.r1.toFixed(dec)}]，x ∈ [${view.y0.toFixed(4)}, ${view.y1.toFixed(4)}]`];
+  if (hoverR !== null) parts.push(`光标 r = ${hoverR.toFixed(dec)}`);
+  if (sweeping) parts.push('扫描中');
+  $('stat').textContent = parts.join(' · ');
+  window.__logistic = { r: P.r, x0: P.x0, n: P.n, k: P.k, period: A.period, lyap: A.lyap, view: { ...view },
+    feig: FEIG, bif: { ...bifInfo }, lyaCol: lyaCol ? Array.from(lyaCol) : null, layout: L, preset: P.preset };
+}
+let dirty = true;
+
+// ---------- UI ----------
+function syncUI() {
+  $('R').value = P.r; $('X').value = P.x0; $('N').value = P.n; $('K').value = P.k;
+  $('vR').textContent = P.r.toFixed(6); $('vX').textContent = P.x0.toFixed(3); $('vN').textContent = P.n; $('vK').textContent = `k = ${P.k}`;
+  $('bp').checked = P.bp; $('ly').checked = P.ly;
+  $('play').textContent = sweeping ? '⏸ 停止扫描' : '▶ 扫描 r';
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+function setR(r) { P.r = clamp(r, LIM.r); showInfo(); syncUI(); dirty = true; }
+function setView(v) { Object.assign(view, fitView(v)); bifDirty = dirty = true; }
+// keep a window inside [2.5, 4] × [0, 1] with at least the minimum span
+function fitSpan(a, b, [lo, hi], min) {
+  if (!(b - a >= min)) { const c = (a + b) / 2; a = c - min / 2; b = c + min / 2; }
+  const s = Math.min(b - a, hi - lo);
+  a = clamp(a, [lo, hi - s]); return [a, a + s];
+}
+function fitView(v) {
+  const [r0, r1] = fitSpan(v.r0, v.r1, LIM.r, MIN_RSPAN), [y0, y1] = fitSpan(v.y0, v.y1, LIM.y, MIN_YSPAN);
+  return { r0, r1, y0, y1 };
+}
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, r: p.r, k: p.k ?? DEF.k, n: p.n ?? DEF.n, x0: DEF.x0 });
+  sweeping = false; setView(p.view ?? FULL); showInfo(); syncUI();
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = p.name; b.dataset.p = key; b.onclick = () => loadPreset(key);
+  $('pre').appendChild(b);
+}
+const custom = () => { P.preset = ''; };
+$('R').oninput = e => { custom(); setR(+e.target.value); };
+$('X').oninput = e => { P.x0 = +e.target.value; custom(); syncUI(); dirty = true; };
+$('N').oninput = e => { P.n = +e.target.value; custom(); syncUI(); dirty = true; };
+$('K').oninput = e => { P.k = +e.target.value; custom(); syncUI(); dirty = true; };
+$('bp').onchange = e => { P.bp = e.target.checked; dirty = true; };
+$('ly').onchange = e => { P.ly = e.target.checked; layout(); bifDirty = dirty = true; };
+$('play').onclick = () => { sweeping = !sweeping; if (sweeping && P.r >= view.r1) setR(view.r0); syncUI(); };
+$('home').onclick = () => { custom(); syncUI(); setView(FULL); };
+addEventListener('keydown', e => {
+  if (e.key === 'h' && e.target === document.body) { document.body.classList.toggle('noui'); resize(); }
+});
+
+// pointer: click sets r (diagram) or x₀ (cobweb); drag on the diagram zooms to the box
+const inside = (R, x, y) => R.h > 0 && x >= R.x && x <= R.x + R.w && y >= R.y && y <= R.y + R.h;
+const devXY = e => { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * dpr, (e.clientY - b.top) * dpr]; };
+const xToR = px => view.r0 + clamp((px - L.bif.x) / L.bif.w, [0, 1]) * (view.r1 - view.r0);
+const yToX = py => view.y1 - clamp((py - L.bif.y) / L.bif.h, [0, 1]) * (view.y1 - view.y0);
+let down = null;
+cv.addEventListener('pointerdown', e => {
+  const [x, y] = devXY(e);
+  if (inside(L.cob, x, y)) { P.x0 = clamp((x - L.cob.x) / L.cob.w, LIM.x0); custom(); syncUI(); dirty = true; return; }
+  if (inside(L.bif, x, y) || inside(L.lya, x, y)) { down = { x, y, lya: inside(L.lya, x, y) }; cv.setPointerCapture(e.pointerId); }
+});
+cv.addEventListener('pointermove', e => {
+  const [x, y] = devXY(e);
+  hoverR = inside(L.bif, x, y) || inside(L.lya, x, y) ? xToR(x) : null;
+  if (down && (Math.abs(x - down.x) > 5 * dpr || Math.abs(y - down.y) > 5 * dpr)) {
+    const clampX = v => clamp(v, [L.bif.x, L.bif.x + L.bif.w]), clampY = v => clamp(v, [L.bif.y, L.bif.y + L.bif.h]);
+    sel = down.lya ? { x0: clampX(down.x), x1: clampX(x), y0: L.bif.y, y1: L.bif.y + L.bif.h }
+      : { x0: clampX(down.x), x1: clampX(x), y0: clampY(down.y), y1: clampY(y) };
+  }
+  dirty = true;
+});
+cv.addEventListener('pointerup', e => {
+  if (!down) return;
+  if (sel && Math.abs(sel.x1 - sel.x0) > 4 * dpr) {
+    const ra = xToR(Math.min(sel.x0, sel.x1)), rb = xToR(Math.max(sel.x0, sel.x1));
+    const ya = yToX(Math.max(sel.y0, sel.y1)), yb = yToX(Math.min(sel.y0, sel.y1));
+    custom(); syncUI();
+    setView(Math.abs(sel.y1 - sel.y0) > 4 * dpr ? { r0: ra, r1: rb, y0: ya, y1: yb } : { ...view, r0: ra, r1: rb });
+  } else if (!sel) { custom(); setR(xToR(down.x)); }
+  down = null; sel = null; dirty = true;
+});
+cv.addEventListener('pointerleave', () => { hoverR = null; dirty = true; });
+cv.addEventListener('dblclick', e => {
+  const [x, y] = devXY(e);
+  if (inside(L.bif, x, y) || inside(L.lya, x, y)) { custom(); syncUI(); setView(FULL); }
+});
+cv.addEventListener('wheel', e => {
+  const [x, y] = devXY(e), inB = inside(L.bif, x, y);
+  if (!inB && !inside(L.lya, x, y)) return;
+  e.preventDefault();
+  const k = Math.exp(e.deltaY * 0.0015), rc = xToR(x), v = { ...view };
+  v.r0 = rc - (rc - view.r0) * k; v.r1 = rc + (view.r1 - rc) * k;
+  if (inB) { const yc = yToX(y); v.y0 = yc - (yc - view.y0) * k; v.y1 = yc + (view.y1 - yc) * k; }
+  custom(); syncUI(); setView(v);
+}, { passive: false });
+
+function resize() {
+  const b = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(b.width * dpr)); H = cv.height = Math.max(1, Math.round(b.height * dpr));
+  layout(); bifDirty = dirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=w3  or  ?r=3.83&x=0.2&n=200&k=3&r0=3.8&r1=3.87&y0=0&y1=1&bp=0&ly=0&ui=0&run=1
+// Every numeric param must be finite and is clamped to its slider range; p is matched against the preset table.
+const q = new URLSearchParams(location.search);
+const num = (k, fn) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) fn(x); } };
+const pk = q.get('p');
+if (pk !== null && Object.hasOwn(PRESETS, pk)) {
+  const p = PRESETS[pk];
+  Object.assign(P, { preset: pk, r: p.r, k: p.k ?? DEF.k, n: p.n ?? DEF.n });
+  Object.assign(view, p.view ?? FULL);
+}
+num('r', x => { P.r = clamp(x, LIM.r); custom(); });
+num('x', x => { P.x0 = clamp(x, LIM.x0); custom(); });
+num('n', x => { P.n = Math.round(clamp(x, LIM.n)); custom(); });
+num('k', x => { P.k = Math.round(clamp(x, LIM.k)); custom(); });
+const v = { ...view };
+num('r0', x => { v.r0 = clamp(x, LIM.r); custom(); }); num('r1', x => { v.r1 = clamp(x, LIM.r); custom(); });
+num('y0', x => { v.y0 = clamp(x, LIM.y); custom(); }); num('y1', x => { v.y1 = clamp(x, LIM.y); custom(); });
+if (!(v.r1 - v.r0 >= MIN_RSPAN)) { v.r0 = view.r0; v.r1 = view.r1; }
+if (!(v.y1 - v.y0 >= MIN_YSPAN)) { v.y0 = view.y0; v.y1 = view.y1; }
+Object.assign(view, fitView(v));
+if (q.get('bp') === '0') P.bp = false;
+if (q.get('ly') === '0') P.ly = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+if (q.get('run') === '1') sweeping = true;
+
+showFeig(); showInfo(); syncUI(); resize();
+
+(function loop() {
+  if (sweeping) {
+    let r = P.r + (view.r1 - view.r0) / 900;
+    if (r > view.r1) r = view.r0;
+    setR(r);
+  }
+  if (dirty) { dirty = false; draw(); window.__ready = true; }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

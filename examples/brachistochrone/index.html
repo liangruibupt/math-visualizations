@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>最速降线 · 摆线赛跑</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #100f16; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(30,27,40,.93); border: 1px solid #3c3652; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #c4b4e2; border-top: 1px solid #3c3652; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #938da8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2e2a40; color: #e6e6e6; border: 1px solid #443d5e;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #3b3552; }
+  button.on { background: #5a4a8a; border-color: #7f6bb8; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  #info { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #b0aac4; margin-top: 6px; white-space: pre-wrap; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  body.noui #panel { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>最速降线 · 摆线赛跑</h1>
+  <small>1696 年 Johann Bernoulli 问：一颗珠子只受重力、无摩擦地从 A 滑到较低的 B，走哪条轨道最快？答案不是直线，而是一段<b>摆线</b>：圆在直线上滚动时，圆周上一点画出的曲线。每条轨道的用时由 <span class="mono">T = ∫ ds / √(2g·y)</span> 数值积分得到。</small>
+
+  <h2>模式</h2>
+  <div class="presets" id="modes"></div>
+
+  <div id="raceUI">
+    <h2>终点 B（A 在原点，y 向下为深度，单位 m）</h2>
+    <div class="row">
+      <label><span>水平距离 x<sub>B</sub></span> <b id="vbx"></b></label>
+      <input id="bx" type="range" min="0.5" max="4" step="0.01">
+    </div>
+    <div class="row">
+      <label><span>下落深度 y<sub>B</sub></span> <b id="vby"></b></label>
+      <input id="by" type="range" min="0.1" max="2.5" step="0.01">
+    </div>
+    <h2>轨道</h2>
+    <div class="checks" id="tracks"></div>
+    <div class="presets"><button id="clear">清除手画轨道</button></div>
+    <small>在画布上拖动 B 点改变终点；在别处按住鼠标拖动，画一条你自己的轨道（自动从 A 接起、接到 B）。</small>
+  </div>
+
+  <div id="tautoUI">
+    <h2>等时降落</h2>
+    <div class="row">
+      <label>珠子个数 <b id="vn"></b></label>
+      <input id="n" type="range" min="2" max="8" step="1">
+    </div>
+    <div class="presets" id="bowls"></div>
+    <small>珠子从碗壁不同高度同时静止释放。摆线碗里它们同时到达碗底；作为对照，曲率相同的圆碗里，放得越高到得越晚。</small>
+  </div>
+
+  <h2>动画</h2>
+  <div class="row">
+    <label>播放速度 <b id="vspd"></b></label>
+    <input id="spd" type="range" min="0.05" max="1" step="0.05">
+    <small>1 = 实时（g = 9.81 m/s²）。整场比赛不到 2 秒，默认慢放。</small>
+  </div>
+  <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button></div>
+  <div class="checks">
+    <label><input id="strobe" type="checkbox"> 频闪（每 0.05 s 一个点）</label>
+    <label><input id="lay" type="checkbox"> 速度分层 v = √(2gy)</label>
+  </div>
+  <div id="info"></div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">按 h 隐藏 / 显示面板</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas></div>
+
+<script>
+const G = 9.81, TAU = 2 * Math.PI;
+const NP = 512;          // Gauss–Legendre panels per track
+const NPATH = 400;       // samples for drawing a smooth track
+const MAX_RAW = 2000;    // most mouse points kept for one drawn track
+const MAX_DOTS = 400;    // most strobe dots per track
+const STROBE = 0.05;     // seconds between strobe dots
+const A_TAUTO = 1;       // cycloid parameter of the tautochrone bowl, m
+const RANGE = { bx: [0.5, 4], by: [0.1, 2.5], spd: [0.05, 1], n: [2, 8] };
+
+const MODES = { race: '最速降线赛跑', tauto: '等时降落' };
+const BOWLS = { cyc: '摆线碗', circ: '圆碗（对照）' };
+const TRACKS = {
+  line: { name: '直线', color: '#a3abc2' },
+  arc: { name: '圆弧', color: '#6fb3ff' },
+  par: { name: '抛物线', color: '#7cd67a' },
+  cub: { name: '三次曲线', color: '#c792ea' },
+  cyc: { name: '摆线', color: '#ffd38a' },
+  draw: { name: '手画', color: '#ff8fd8' },
+};
+const BEAD_COLORS = ['#ff7a6b', '#ffb36b', '#ffd38a', '#b7e07a', '#6fd6c4', '#6fb3ff', '#a990ff', '#ff8fd8'];
+const PRESETS = {
+  dip: { name: '先下沉再上来', mode: 'race', bx: 3, by: 1 },
+  bottom: { name: 'B 正好在摆线最低点', mode: 'race', bx: Math.PI, by: 2 },
+  flat: { name: '几乎水平', mode: 'race', bx: 4, by: 0.3 },
+  steep: { name: '很陡', mode: 'race', bx: 0.8, by: 2.4 },
+  tauto: { name: '摆线碗：同时到底', mode: 'tauto', bowl: 'cyc' },
+  circ: { name: '圆碗：不同时', mode: 'tauto', bowl: 'circ' },
+};
+
+const P = { preset: 'dip', mode: 'race', bx: 3, by: 1, spd: 0.25, n: 5, bowl: 'cyc', strobe: true, lay: false,
+  show: { line: true, arc: true, par: true, cub: true, cyc: true, draw: true } };
+let drawn = null;               // normalised drawn track: points [x / xB, y / yB], from A to B
+let race = [], tauto = [], cyc = null;
+let simT = 0, running = true, drawing = null, dragB = false;
+
+const $ = id => document.getElementById(id);
+
+// ---------- travel time ----------
+// T = ∫ ds / √(2g·h), h = depth below the release point. With u = w² the 1/√h singularity at the start
+// becomes a smooth integrand, so composite 5-point Gauss–Legendre in w converges fast.
+const GL_X = [-0.906179845938664, -0.5384693101056831, 0, 0.5384693101056831, 0.906179845938664];
+const GL_W = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891];
+
+// pos(u), der(u) for u in [0, 1]; returns the cumulative time at w = i / NP and a position lookup by time
+function smoothTrack(pos, der) {
+  const y0 = pos(0)[1], cum = new Float64Array(NP + 1);
+  for (let i = 0; i < NP; i++) {
+    let s = 0;
+    for (let j = 0; j < 5; j++) {
+      const w = (i + 0.5 + 0.5 * GL_X[j]) / NP, u = w * w, d = der(u), h = pos(u)[1] - y0;
+      s += GL_W[j] * (h > 0 ? 2 * w * Math.hypot(d[0], d[1]) / Math.sqrt(2 * G * h) : Infinity);
+    }
+    cum[i + 1] = cum[i] + s * 0.5 / NP;
+  }
+  const T = cum[NP], path = [];
+  for (let i = 0; i <= NPATH; i++) path.push(pos(i / NPATH));
+  const at = t => {
+    if (!(t > 0) || !Number.isFinite(T)) return pos(0);
+    if (t >= T) return pos(1);
+    let lo = 0, hi = NP;
+    for (let k = 0; k < 16 && hi - lo > 1; k++) { const m = (lo + hi) >> 1; if (cum[m] <= t) lo = m; else hi = m; }
+    const w = (lo + (t - cum[lo]) / (cum[hi] - cum[lo])) / NP;
+    return pos(w * w);
+  };
+  return { T, at, path };
+}
+
+// a polyline: on a straight piece the acceleration is constant, so its time is exactly 2ℓ / (v₀ + v₁)
+function polyTrack(pts) {
+  const n = pts.length, cum = [0], v = pts.map(p => Math.sqrt(2 * G * Math.max(0, p[1])));
+  let ok = n >= 2;
+  for (let i = 1; i < n && ok; i++) {
+    if (!(pts[i][1] > 0)) { ok = false; break; }   // at or above A: the bead never gets there
+    cum.push(cum[i - 1] + 2 * Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]) / (v[i - 1] + v[i]));
+  }
+  const T = ok ? cum[n - 1] : Infinity;
+  const at = t => {
+    if (!ok || !(t > 0)) return pts[0];
+    if (t >= T) return pts[n - 1];
+    let lo = 0, hi = n - 1;
+    for (let k = 0; k < 16 && hi - lo > 1; k++) { const m = (lo + hi) >> 1; if (cum[m] <= t) lo = m; else hi = m; }
+    const dt = cum[hi] - cum[lo], tau = t - cum[lo], acc = (v[hi] - v[lo]) / dt;
+    const len = Math.hypot(pts[hi][0] - pts[lo][0], pts[hi][1] - pts[lo][1]);
+    const f = len > 0 ? Math.min(1, (v[lo] * tau + 0.5 * acc * tau * tau) / len) : 0;
+    return [pts[lo][0] + (pts[hi][0] - pts[lo][0]) * f, pts[lo][1] + (pts[hi][1] - pts[lo][1]) * f];
+  };
+  return { T, at, path: pts };
+}
+
+// cycloid through A with its cusp at A: x = a(θ − sin θ), y = a(1 − cos θ).
+// (θ − sin θ)/(1 − cos θ) rises from 0 to ∞ on (0, 2π), so bisection finds the one θ_B with ratio x_B / y_B.
+function solveCycloid(bx, by) {
+  const r = bx / by;
+  let lo = 1e-9, hi = TAU - 1e-9;
+  for (let i = 0; i < 100; i++) {
+    const m = (lo + hi) / 2;
+    if ((m - Math.sin(m)) / (1 - Math.cos(m)) < r) lo = m; else hi = m;
+  }
+  const th = (lo + hi) / 2, a = by / (1 - Math.cos(th));
+  return { th, a, T: Math.sqrt(a / G) * th, low: th > Math.PI ? 2 * a : by };
+}
+
+// a(1 − cos t) written as 2a·sin²(t/2): no cancellation near the cusp, where the depth decides the integrand
+const vers = (a, t) => 2 * a * Math.sin(t / 2) ** 2;
+
+function buildRace() {
+  const { bx, by } = P;
+  cyc = solveCycloid(bx, by);
+  const { a, th } = cyc, c = (bx * bx + by * by) / (2 * bx), ph = Math.atan2(by, c - bx);
+  const defs = {
+    line: [u => [bx * u, by * u], () => [bx, by]],
+    // circle through A and B whose tangent at A is vertical (centre on the x-axis)
+    arc: [u => [c - c * Math.cos(ph * u), c * Math.sin(ph * u)], u => [c * ph * Math.sin(ph * u), c * ph * Math.cos(ph * u)]],
+    // parabola x = x_B (y / y_B)², vertical at A
+    par: [u => [bx * u * u, by * u], u => [2 * bx * u, by]],
+    // cubic Bézier A, (0, y_B), (x_B / 2, y_B), B: vertical at A, horizontal at B
+    cub: [u => [bx * (1.5 * u * u - 0.5 * u ** 3), by * (1 - (1 - u) ** 3)], u => [bx * (3 * u - 1.5 * u * u), 3 * by * (1 - u) ** 2]],
+    cyc: [u => [a * (th * u - Math.sin(th * u)), vers(a, th * u)], u => [a * th * (1 - Math.cos(th * u)), a * th * Math.sin(th * u)]],
+  };
+  race = Object.entries(defs).map(([key, [pos, der]]) => ({ key, ...smoothTrack(pos, der) }));
+  if (drawn) race.push({ key: 'draw', ...polyTrack(drawn.map(([x, y]) => [x * bx, y * by])) });
+}
+
+// complete elliptic integral of the first kind, K(k) = π / (2·AGM(1, √(1 − k²)))
+function ellipK(k) {
+  let x = 1, y = Math.sqrt(1 - k * k);
+  for (let i = 0; i < 40 && Math.abs(x - y) > 1e-15 * x; i++) [x, y] = [(x + y) / 2, Math.sqrt(x * y)];
+  return Math.PI / (2 * x);
+}
+
+// beads released on the left wall; each track runs from the release point down to the bottom
+function buildTauto() {
+  const a = A_TAUTO, R = 4 * a, xm = Math.PI * a, n = P.n;   // R = radius of curvature of the cycloid at its bottom
+  tauto = [];
+  for (let k = 0; k < n; k++) {
+    const th0 = Math.PI * k / n, h = 2 * a - vers(a, th0);
+    let tr, closed;
+    if (P.bowl === 'cyc') {
+      const d = Math.PI - th0;
+      tr = smoothTrack(u => { const t = th0 + d * u; return [a * (t - Math.sin(t)), vers(a, t)]; },
+        u => { const t = th0 + d * u; return [a * d * (1 - Math.cos(t)), a * d * Math.sin(t)]; });
+      closed = Math.PI * Math.sqrt(a / G);
+    } else {
+      const al = Math.acos(1 - h / R);   // angle from the bottom
+      tr = smoothTrack(u => { const t = al * (1 - u); return [xm - R * Math.sin(t), 2 * a - R + R * Math.cos(t)]; },
+        u => { const t = al * (1 - u); return [R * al * Math.cos(t), R * al * Math.sin(t)]; });
+      closed = Math.sqrt(R / G) * ellipK(Math.sin(al / 2));
+    }
+    tauto.push({ ...tr, h, closed, color: BEAD_COLORS[k % BEAD_COLORS.length] });
+  }
+}
+// periodic motion: down (0..T), up the right wall (T..2T), back (2T..3T, 3T..4T); the bowl is symmetric about x = πa
+function tautoAt(b, t) {
+  const T = b.T, tau = ((t % (4 * T)) + 4 * T) % (4 * T), mir = p => [TAU * A_TAUTO - p[0], p[1]];
+  if (tau < T) return b.at(tau);
+  if (tau < 2 * T) return mir(b.at(2 * T - tau));
+  if (tau < 3 * T) return mir(b.at(tau - 2 * T));
+  return b.at(4 * T - tau);
+}
+function tautoPath() {
+  const a = A_TAUTO, pts = [];
+  for (let i = 0; i <= NPATH; i++) {
+    const t = TAU * i / NPATH;
+    if (P.bowl === 'cyc') pts.push([a * (t - Math.sin(t)), a * (1 - Math.cos(t))]);
+    else { const al = (Math.PI / 3) * (2 * i / NPATH - 1); pts.push([Math.PI * a + 4 * a * Math.sin(al), -2 * a + 4 * a * Math.cos(al)]); }
+  }
+  return pts;
+}
+
+function rebuild() { if (P.mode === 'race') buildRace(); else buildTauto(); simT = 0; syncUI(); drawInfo(); }
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1;
+const WORLD = { race: [-0.3, -0.45, 4.3, 2.95], tauto: [-0.45, -0.35, TAU + 0.45, 2.25] };
+function layout() {
+  const dpr = devicePixelRatio, LW = Math.min(340 * dpr, W * 0.36), [x0, y0, x1, y1] = WORLD[P.mode];
+  const Hm = P.mode === 'tauto' ? Math.round(H * 0.56) : H;   // tautochrone: time plot underneath
+  const pad = 16 * dpr, ww = W - LW, sc = Math.min((ww - 2 * pad) / (x1 - x0), (Hm - 2 * pad) / (y1 - y0));
+  return { LW, Hm, sc, ox: (ww - sc * (x1 + x0)) / 2, oy: (Hm - sc * (y1 + y0)) / 2 };
+}
+const visible = () => race.filter(r => P.show[r.key]);
+const font = (px, bold) => `${bold ? 'bold ' : ''}${px * devicePixelRatio}px -apple-system, "PingFang SC", sans-serif`;
+
+function draw() {
+  const dpr = devicePixelRatio, L = layout(), X = x => L.ox + x * L.sc, Y = y => L.oy + y * L.sc;
+  ctx.fillStyle = '#100f16'; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W - L.LW, L.Hm); ctx.clip();
+  const [wx0, wy0, wx1, wy1] = WORLD[P.mode];
+
+  if (P.lay) {   // speed layers: brighter = faster
+    const vmax = Math.sqrt(2 * G * wy1);
+    for (let i = 0; i < 24; i++) {
+      const ya = wy1 * i / 24, yb = wy1 * (i + 1) / 24, v = Math.sqrt(2 * G * (ya + yb) / 2);
+      ctx.fillStyle = `rgba(120,150,255,${(0.03 + 0.2 * v / vmax).toFixed(3)})`;
+      ctx.fillRect(X(wx0), Y(ya), (wx1 - wx0) * L.sc, (yb - ya) * L.sc + 1);
+    }
+    ctx.fillStyle = '#9fb0e0'; ctx.font = font(11); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    for (let y = 0.5; y < wy1; y += 0.5) ctx.fillText(`v = ${Math.sqrt(2 * G * y).toFixed(2)} m/s`, X(wx0) + 4 * dpr, Y(y));
+  }
+  // grid every 0.5 m, y = 0 (the height of A) a bit brighter
+  ctx.lineWidth = 1;
+  for (let x = Math.ceil(wx0 * 2) / 2; x <= wx1; x += 0.5) {
+    ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.beginPath(); ctx.moveTo(X(x), Y(wy0)); ctx.lineTo(X(x), Y(wy1)); ctx.stroke();
+  }
+  for (let y = Math.ceil(wy0 * 2) / 2; y <= wy1; y += 0.5) {
+    ctx.strokeStyle = y === 0 ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.05)';
+    ctx.beginPath(); ctx.moveTo(X(wx0), Y(y)); ctx.lineTo(X(wx1), Y(y)); ctx.stroke();
+  }
+  if (P.mode === 'race') drawRace(X, Y); else drawTauto(X, Y);
+  ctx.restore();
+  if (P.mode === 'tauto') drawTimePlot(L);
+  if (P.mode === 'race') legendRace(L); else legendTauto(L);
+}
+
+function strokePath(pts, X, Y) {
+  ctx.beginPath();
+  for (let i = 0; i < pts.length; i++) i ? ctx.lineTo(X(pts[i][0]), Y(pts[i][1])) : ctx.moveTo(X(pts[i][0]), Y(pts[i][1]));
+  ctx.stroke();
+}
+function dot(x, y, r, c) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
+function strobe(tr, X, Y, at, upto, c) {
+  if (!P.strobe || !Number.isFinite(tr.T)) return;
+  const m = Math.min(MAX_DOTS, Math.floor(Math.min(upto, tr.T) / STROBE));
+  for (let k = 1; k <= m; k++) { const p = at(k * STROBE); dot(X(p[0]), Y(p[1]), 2 * devicePixelRatio, c); }
+}
+
+function drawRace(X, Y) {
+  const dpr = devicePixelRatio, { bx, by } = P;
+  ctx.lineJoin = ctx.lineCap = 'round';
+  // depth of B, to show where the cycloid dips below it
+  ctx.strokeStyle = 'rgba(255,211,138,.3)'; ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.lineWidth = 1 * dpr;
+  ctx.beginPath(); ctx.moveTo(X(-0.3), Y(by)); ctx.lineTo(X(4.3), Y(by)); ctx.stroke(); ctx.setLineDash([]);
+  for (const tr of visible()) {
+    const c = TRACKS[tr.key].color;
+    ctx.strokeStyle = c; ctx.globalAlpha = tr.key === 'cyc' ? 1 : 0.75; ctx.lineWidth = (tr.key === 'cyc' ? 3 : 2) * dpr;
+    strokePath(tr.path, X, Y); ctx.globalAlpha = 1;
+  }
+  if (P.show.cyc && cyc.th > Math.PI) {   // lowest point of the cycloid, θ = π
+    const xl = Math.PI * cyc.a, yl = 2 * cyc.a;
+    dot(X(xl), Y(yl), 3.5 * dpr, '#ffd38a');
+    ctx.fillStyle = '#ffd38a'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(`最低点，比 B 深 ${(yl - by).toFixed(2)} m`, X(xl), Y(yl) + 8 * dpr);
+  }
+  for (const tr of visible()) strobe(tr, X, Y, tr.at, simT, TRACKS[tr.key].color);
+  for (const tr of visible()) {
+    const p = tr.at(simT);
+    dot(X(p[0]), Y(p[1]), 6.5 * dpr, '#100f16'); dot(X(p[0]), Y(p[1]), 5 * dpr, TRACKS[tr.key].color);
+  }
+  if (drawing) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr; strokePath(drawing, X, Y); }
+  // A and the draggable B
+  dot(X(0), Y(0), 5 * dpr, '#ffffff');
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.arc(X(bx), Y(by), 9 * dpr, 0, TAU); ctx.stroke();
+  dot(X(bx), Y(by), 4 * dpr, '#ffffff');
+  ctx.fillStyle = '#ffffff'; ctx.font = font(14, true); ctx.textBaseline = 'bottom';
+  ctx.textAlign = 'right'; ctx.fillText('A', X(0) - 8 * dpr, Y(0) - 4 * dpr);
+  ctx.textAlign = 'left'; ctx.fillText('B', X(bx) + 12 * dpr, Y(by) - 6 * dpr);
+}
+
+function drawTauto(X, Y) {
+  const dpr = devicePixelRatio, a = A_TAUTO;
+  ctx.lineJoin = ctx.lineCap = 'round';
+  ctx.strokeStyle = P.bowl === 'cyc' ? '#ffd38a' : '#6fb3ff'; ctx.lineWidth = 3 * dpr;
+  strokePath(tautoPath(), X, Y);
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.lineWidth = 1 * dpr;
+  ctx.beginPath(); ctx.moveTo(X(Math.PI * a), Y(-0.3)); ctx.lineTo(X(Math.PI * a), Y(2 * a)); ctx.stroke(); ctx.setLineDash([]);
+  for (const b of tauto) {   // release marks
+    const p = b.at(0);
+    ctx.strokeStyle = b.color; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), 7 * dpr, 0, TAU); ctx.stroke();
+  }
+  for (const b of tauto) strobe(b, X, Y, b.at, simT, b.color);
+  for (const b of tauto) {
+    const p = tautoAt(b, simT);
+    dot(X(p[0]), Y(p[1]), 7.5 * dpr, '#100f16'); dot(X(p[0]), Y(p[1]), 6 * dpr, b.color);
+  }
+  ctx.fillStyle = '#cfd0e0'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('碗底', X(Math.PI * a), Y(2 * a) + 10 * dpr);
+}
+
+// horizontal offset from the bottom, x − πa, against time: every zero is a bead passing the bottom
+const PLOT_T = 4.4, PLOT_S = 400;
+function drawTimePlot(L) {
+  const dpr = devicePixelRatio, x0 = 56 * dpr, x1 = W - L.LW - 20 * dpr, y0 = L.Hm + 34 * dpr, y1 = H - 30 * dpr;
+  if (y1 - y0 < 40 * dpr || x1 - x0 < 60 * dpr) return;
+  const xm = Math.PI * A_TAUTO, amp = 3.6 * A_TAUTO, t0 = Math.max(0, simT - PLOT_T);
+  const TX = t => x0 + (t - t0) / PLOT_T * (x1 - x0), VY = v => (y0 + y1) / 2 - v / amp * (y1 - y0) / 2;
+  ctx.fillStyle = '#13121b'; ctx.fillRect(0, L.Hm, W - L.LW, H - L.Hm);
+  ctx.strokeStyle = '#3c3652'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, L.Hm + 0.5); ctx.lineTo(W - L.LW, L.Hm + 0.5); ctx.stroke();
+  text('水平位置 x − πa（0 = 碗底）随时间 t 的变化', x0, L.Hm + 22 * dpr, 12, '#cfd0e0');
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.moveTo(x0, VY(0)); ctx.lineTo(x1, VY(0)); ctx.stroke();
+  if (P.bowl === 'cyc') {   // the cycloid's bottom passages, t = (2j + 1)·π√(a/g)
+    const q = Math.PI * Math.sqrt(A_TAUTO / G);
+    ctx.setLineDash([3 * dpr, 4 * dpr]); ctx.strokeStyle = 'rgba(255,211,138,.4)';
+    for (let j = 0; j < 12; j++) { const t = (2 * j + 1) * q; if (t < t0 || t > t0 + PLOT_T) continue;
+      ctx.beginPath(); ctx.moveTo(TX(t), y0); ctx.lineTo(TX(t), y1); ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
+  for (let s = 0; s <= 4; s++) text(`${(t0 + s * PLOT_T / 4).toFixed(1)} s`, TX(t0 + s * PLOT_T / 4), y1 + 18 * dpr, 11, '#8d89a3', false, 'center');
+  ctx.lineWidth = 1.8 * dpr;
+  for (const b of tauto) {
+    ctx.strokeStyle = b.color; ctx.beginPath();
+    const m = Math.round(PLOT_S * Math.min(1, (simT - t0) / PLOT_T));
+    for (let i = 0; i <= m; i++) { const t = t0 + PLOT_T * i / PLOT_S, v = tautoAt(b, t)[0] - xm;
+      i ? ctx.lineTo(TX(t), VY(v)) : ctx.moveTo(TX(t), VY(v)); }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1 * dpr;
+  ctx.beginPath(); ctx.moveTo(TX(simT), y0); ctx.lineTo(TX(simT), y1); ctx.stroke();
+}
+
+// right-hand column: clock and times, drawn on the canvas so it survives ui=0
+function legendBox(L) {
+  const x0 = W - L.LW;
+  ctx.fillStyle = '#16141f'; ctx.fillRect(x0, 0, L.LW, H);
+  ctx.strokeStyle = '#3c3652'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x0 + 0.5, 0); ctx.lineTo(x0 + 0.5, H); ctx.stroke();
+  return x0 + 16 * devicePixelRatio;
+}
+function text(s, x, y, size, color, bold, align) {
+  ctx.font = font(size, bold); ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(s, x, y);
+}
+const fmtT = T => Number.isFinite(T) ? T.toFixed(4) + ' s' : '到不了';
+
+function legendRace(L) {
+  const dpr = devicePixelRatio, x = legendBox(L), xr = W - 16 * dpr, list = visible().slice().sort((p, q) => p.T - q.T);
+  const tMax = Math.max(1e-9, ...list.filter(r => Number.isFinite(r.T)).map(r => r.T));
+  let y = 30 * dpr;
+  text('最速降线赛跑', x, y, 16, '#ffffff', true);
+  y += 22 * dpr; text(`t = ${Math.min(simT, tMax).toFixed(3)} s   ·   ${P.spd.toFixed(2)} 倍实时速度`, x, y, 13, '#cfd0e0');
+  y += 14 * dpr;
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i], c = TRACKS[r.key].color, done = simT >= r.T;
+    y += 26 * dpr;
+    dot(x + 5 * dpr, y - 5 * dpr, 5 * dpr, c);
+    text(`${i + 1}. ${TRACKS[r.key].name}`, x + 16 * dpr, y, 14, done ? '#ffffff' : '#a9a6bb', i === 0);
+    text(fmtT(r.T) + (done ? ' ✓' : ''), xr, y, 14, c, i === 0, 'right');
+    const bw = (xr - x - 16 * dpr) * (Number.isFinite(r.T) ? Math.min(simT, r.T) / tMax : 0);
+    ctx.fillStyle = c; ctx.globalAlpha = 0.55; ctx.fillRect(x + 16 * dpr, y + 5 * dpr, bw, 3 * dpr); ctx.globalAlpha = 1;
+    if (r.key === 'cyc') { y += 18 * dpr; text(`闭式解 √(a/g)·θ_B = ${cyc.T.toFixed(4)} s`, x + 16 * dpr, y, 11.5, '#d9c08a'); }
+  }
+  y += 34 * dpr;
+  text(`B = (${P.bx.toFixed(2)}, ${P.by.toFixed(2)}) m`, x, y, 12, '#a9a6bb');
+  y += 18 * dpr; text(`摆线 a = ${cyc.a.toFixed(4)} m，θ_B = ${(cyc.th * 180 / Math.PI).toFixed(1)}°`, x, y, 12, '#a9a6bb');
+  y += 18 * dpr; text(cyc.th > Math.PI ? `θ_B > 180°：先下到 ${cyc.low.toFixed(2)} m 深再上来` : 'θ_B ≤ 180°：一路向下', x, y, 12, '#a9a6bb');
+}
+
+function legendTauto(L) {
+  const dpr = devicePixelRatio, x = legendBox(L), xr = W - 16 * dpr, isCyc = P.bowl === 'cyc';
+  let y = 30 * dpr;
+  text(isCyc ? '等时降落 · 摆线碗' : '对照 · 圆碗（半径 4a）', x, y, 16, '#ffffff', true);
+  y += 22 * dpr; text(`t = ${simT.toFixed(3)} s   ·   ${P.spd.toFixed(2)} 倍实时速度`, x, y, 13, '#cfd0e0');
+  y += 18 * dpr; text('释放高度（距碗底）→ 第一次到底', x, y, 12, '#a9a6bb');
+  y += 6 * dpr;
+  for (const b of tauto) {
+    y += 24 * dpr;
+    dot(x + 5 * dpr, y - 5 * dpr, 5 * dpr, b.color);
+    text(`h = ${b.h.toFixed(3)} m`, x + 16 * dpr, y, 14, '#e6e6e6');
+    text(fmtT(b.T) + (simT >= b.T ? ' ✓' : ''), xr, y, 14, b.color, false, 'right');
+  }
+  y += 32 * dpr;
+  const q = Math.PI * Math.sqrt(A_TAUTO / G);
+  if (isCyc) {
+    text(`闭式解 π√(a/g) = ${q.toFixed(4)} s，a = ${A_TAUTO} m`, x, y, 12, '#d9c08a');
+    y += 18 * dpr; text('与释放高度无关', x, y, 12, '#a9a6bb');
+  } else {
+    text('闭式解 √(R/g)·K(sin(α₀/2))，随 h 变长', x, y, 12, '#9fc8ff');
+    y += 18 * dpr; text(`小振幅极限 π√(a/g) = ${q.toFixed(4)} s`, x, y, 12, '#a9a6bb');
+  }
+}
+
+function drawInfo() {
+  let s;
+  if (P.mode === 'race') {
+    const c = race.find(r => r.key === 'cyc'), l = race.find(r => r.key === 'line');
+    const lineClosed = Math.hypot(P.bx, P.by) * Math.sqrt(2 / (G * P.by));
+    s = `摆线 θ_B = ${cyc.th.toFixed(6)} rad，a = ${cyc.a.toFixed(6)} m\n` +
+      `摆线  数值 ${c.T.toFixed(9)} s，闭式 ${cyc.T.toFixed(9)} s，差 ${Math.abs(c.T - cyc.T).toExponential(1)}\n` +
+      `直线  数值 ${l.T.toFixed(9)} s，闭式 ${lineClosed.toFixed(9)} s，差 ${Math.abs(l.T - lineClosed).toExponential(1)}`;
+    const d = race.find(r => r.key === 'draw');
+    if (d) s += `\n手画  ${Number.isFinite(d.T) ? d.T.toFixed(4) + ' s，比摆线慢 ' + (100 * (d.T / c.T - 1)).toFixed(2) + '%' : '到不了：轨道有一处不低于 A'}`;
+  } else {
+    s = tauto.map((b, k) => `#${k + 1} h=${b.h.toFixed(3)}  数值 ${b.T.toFixed(9)}  闭式 ${b.closed.toFixed(9)}`).join('\n');
+  }
+  $('info').textContent = s;
+}
+
+// ---------- UI ----------
+function syncUI() {
+  $('raceUI').style.display = P.mode === 'race' ? '' : 'none';
+  $('tautoUI').style.display = P.mode === 'tauto' ? '' : 'none';
+  $('bx').value = P.bx; $('vbx').textContent = P.bx.toFixed(2) + ' m';
+  $('by').value = P.by; $('vby').textContent = P.by.toFixed(2) + ' m';
+  $('n').value = P.n; $('vn').textContent = P.n;
+  $('spd').value = P.spd; $('vspd').textContent = P.spd.toFixed(2) + '×';
+  $('strobe').checked = P.strobe; $('lay').checked = P.lay;
+  for (const k of Object.keys(TRACKS)) $('t_' + k).checked = P.show[k];
+  $('t_draw').disabled = !drawn;
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  document.querySelectorAll('[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === P.mode));
+  document.querySelectorAll('[data-b]').forEach(b => b.classList.toggle('on', b.dataset.b === P.bowl));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+function button(parent, label, key, val, onclick) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset[key] = val; b.onclick = onclick; $(parent).appendChild(b);
+}
+for (const [k, name] of Object.entries(MODES)) button('modes', name, 'm', k, () => { P.mode = k; P.preset = ''; running = true; rebuild(); });
+for (const [k, name] of Object.entries(BOWLS)) button('bowls', name, 'b', k, () => { P.bowl = k; P.preset = ''; running = true; rebuild(); });
+function applyPreset(key) {
+  const p = PRESETS[key];
+  P.preset = key; P.mode = p.mode;
+  if (p.bx !== undefined) { P.bx = p.bx; P.by = p.by; }
+  if (p.bowl) P.bowl = p.bowl;
+}
+for (const [k, p] of Object.entries(PRESETS)) button('pre', p.name, 'p', k, () => { applyPreset(k); running = true; rebuild(); });
+for (const [k, t] of Object.entries(TRACKS)) {
+  const lab = document.createElement('label'), inp = document.createElement('input');
+  inp.type = 'checkbox'; inp.id = 't_' + k;
+  inp.onchange = () => { P.show[k] = inp.checked; };
+  lab.appendChild(inp); lab.appendChild(document.createTextNode(' ' + t.name));
+  lab.style.color = t.color; $('tracks').appendChild(lab);
+}
+
+const setB = (bx, by) => {
+  P.bx = Math.min(RANGE.bx[1], Math.max(RANGE.bx[0], bx)); P.by = Math.min(RANGE.by[1], Math.max(RANGE.by[0], by));
+  P.preset = ''; running = true; rebuild();
+};
+$('bx').oninput = e => setB(+e.target.value, P.by);
+$('by').oninput = e => setB(P.bx, +e.target.value);
+$('n').oninput = e => { P.n = Math.round(+e.target.value); running = true; rebuild(); };
+$('spd').oninput = e => { P.spd = +e.target.value; syncUI(); };
+$('strobe').onchange = e => { P.strobe = e.target.checked; };
+$('lay').onchange = e => { P.lay = e.target.checked; };
+$('play').onclick = () => { running = !running; syncUI(); };
+$('restart').onclick = () => { simT = 0; running = true; syncUI(); };
+$('clear').onclick = () => { drawn = null; rebuild(); };
+
+// pointer: drag B, or draw a track
+function toWorld(e) {
+  const r = cv.getBoundingClientRect(), dpr = devicePixelRatio, L = layout();
+  return [((e.clientX - r.left) * dpr - L.ox) / L.sc, ((e.clientY - r.top) * dpr - L.oy) / L.sc];
+}
+cv.addEventListener('pointerdown', e => {
+  if (P.mode !== 'race') return;
+  const r = cv.getBoundingClientRect(), L = layout(), dpr = devicePixelRatio;
+  if ((e.clientX - r.left) * dpr > W - L.LW) return;
+  const p = toWorld(e);
+  dragB = Math.hypot(p[0] - P.bx, p[1] - P.by) * L.sc < 16 * dpr;
+  if (!dragB) drawing = [p];
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (dragB) { const p = toWorld(e); setB(p[0], p[1]); return; }
+  if (!drawing || drawing.length >= MAX_RAW) return;
+  const p = toWorld(e), q = drawing[drawing.length - 1];
+  if (Math.hypot(p[0] - q[0], p[1] - q[1]) * layout().sc >= 2 * devicePixelRatio) drawing.push(p);
+});
+const endPointer = () => {
+  if (dragB) { dragB = false; return; }
+  if (!drawing) return;
+  const pts = drawing, sc = layout().sc;
+  drawing = null;
+  let len = 0;
+  for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  if (pts.length < 6 || len * sc < 30 * devicePixelRatio) return;   // a click: keep the old track
+  // stored relative to B so dragging B stretches the drawn track with it
+  drawn = [[0, 0], ...pts.map(([x, y]) => [x / P.bx, y / P.by]), [1, 1]];
+  P.show.draw = true; running = true; rebuild();
+};
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+addEventListener('keydown', e => { if (e.key === 'h' && e.target === document.body) { document.body.classList.toggle('noui'); resize(); } });
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width * devicePixelRatio)); H = Math.max(1, Math.round(r.height * devicePixelRatio));
+  cv.width = W; cv.height = H;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?mode=tauto&bowl=circ&n=6 or ?bx=3&by=1&t=0.4&run=0. Numbers are clamped to the slider ranges.
+const q = new URLSearchParams(location.search);
+const num = (k, lo, hi, f) => { if (q.has(k) && q.get(k).trim() !== '') { const x = Number(q.get(k)); if (Number.isFinite(x)) f(Math.min(hi, Math.max(lo, x))); } };
+const flag = (k, f) => num(k, 0, 1, x => f(Math.round(x) === 1));
+const pick = (k, table, f) => { const v = q.get(k); if (v !== null && Object.hasOwn(table, v)) f(v); };
+pick('p', PRESETS, applyPreset);
+pick('mode', MODES, v => P.mode = v);
+pick('bowl', BOWLS, v => P.bowl = v);
+num('bx', ...RANGE.bx, x => P.bx = x); num('by', ...RANGE.by, x => P.by = x);
+num('spd', ...RANGE.spd, x => P.spd = x); num('n', ...RANGE.n, x => P.n = Math.round(x));
+for (const k of Object.keys(TRACKS)) flag(k, v => P.show[k] = v);
+flag('strobe', v => P.strobe = v); flag('lay', v => P.lay = v); flag('run', v => running = v);
+if (q.get('ui') === '0') document.body.classList.add('noui');
+resize(); rebuild();
+num('t', 0, 60, x => simT = x);
+
+// test hook: read-only views of the state
+window.__bc = { P, simT: () => simT, cycloid: () => ({ ...cyc }),
+  race: () => race.map(r => ({ key: r.key, T: r.T })), tauto: () => tauto.map(b => ({ h: b.h, T: b.T, closed: b.closed })),
+  polyTime: pts => polyTrack(pts).T, solve: solveCycloid, at: (key, t) => race.find(r => r.key === key).at(t) };
+
+let last = performance.now();
+(function loop(now) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  if (running && !drawing && !dragB) {
+    simT += dt * P.spd;
+    if (P.mode === 'race') {   // stop the clock shortly after the last bead arrives
+      const end = Math.max(0, ...race.filter(r => P.show[r.key] && Number.isFinite(r.T)).map(r => r.T));
+      if (simT > end + 0.3) simT = end + 0.3;
+    }
+  }
+  draw(); window.__ready = true;
+  requestAnimationFrame(loop);
+})(last);
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 用可交互的图形直观展现数学的奥妙。每个样例是一个独立的网页，用浏览器直接打开即可，拖动滑块就能看到公式如何变成形状。
 
-从总目录页 [index.html](index.html) 进入，按“贝壳”“分形”“图案”“运动与波”四类导航到各个样例；每个样例页面左上角有“← 全部样例”返回目录。
+从总目录页 [index.html](index.html) 进入，按“贝壳”“分形”“图案”“运动与波”“几何与拓扑”“概率”六类导航到各个样例；每个样例页面左上角有“← 全部样例”返回目录。
 
 ## 样例
 
@@ -16,6 +16,10 @@
 | [图灵斑图 · 反应扩散](examples/turing-patterns/README.md)（[打开页面](examples/turing-patterns/index.html)） | Gray-Scott 方程、图灵失稳与扩散速度之比、均匀态的线性稳定性与鞍结线、(F, k) 参数图；鼠标播种，含斑点（豹纹）、条纹 / 迷宫、珊瑚、细胞分裂、蠕虫、孔洞、混沌等预设 | <img src="examples/turing-patterns/images/maze.png" width="240"> |
 | [Lorenz 吸引子 · 蝴蝶效应](examples/lorenz-attractor/README.md)（[打开页面](examples/lorenz-attractor/index.html)） | 常微分方程与 RK4、不动点与 Jacobian 特征值、叉式分岔与 Hopf 分岔、体积收缩、Lyapunov 指数；2–1000 条起点只差 ε 的轨道同时积分，实时画出 ln d–t 曲线并拟合斜率，ρ 滑条从流向原点、两个稳定不动点一路到混沌和周期窗口，可拖动旋转 3D 视角 | <img src="examples/lorenz-attractor/images/lorenz.png" width="240"> |
 | [傅里叶本轮 · 圆叠圆画曲线](examples/fourier-epicycles/README.md)（[打开页面](examples/fourier-epicycles/index.html)） | 复数傅里叶级数、DFT、Parseval 等式、对称性与系数衰减、Gibbs 现象；按半径排序的 N 个圆首尾相接画出曲线，可用鼠标自己画，含正方形、五角星、心形、三叶线、手写 π/∑ 预设和奇次正弦叠方波 | <img src="examples/fourier-epicycles/images/pi.png" width="240"> |
+| [最速降线 · 摆线赛跑](examples/brachistochrone/README.md)（[打开页面](examples/brachistochrone/index.html)） | Bernoulli 1696 最速降线问题、Snell 折射定律与 Euler–Lagrange（Beltrami 恒等式）、摆线闭式用时 √(a/g)·θ、给定 B 求 a、为何先沉到 B 以下；直线/圆弧/抛物线/三次曲线/摆线/手画轨道实时赛跑（可拖动 B），等时降落与圆碗对照 | <img src="examples/brachistochrone/images/race-end.png" width="240"> |
+| [Logistic 映射 · 倍周期分岔](examples/logistic-map/README.md)（[打开页面](examples/logistic-map/index.html)） | 一维迭代 x → r·x(1 − x)、蛛网图与不动点稳定性、倍周期分岔与 Feigenbaum 常数 δ、Lyapunov 指数、周期 3 窗口与切分岔（Li–Yorke、Sharkovskii）、阵发混沌、与 Mandelbrot 集实轴的共轭 c = r/2 − r²/4；分岔图可单击设 r、拖框放大，数值求出 r₁…r₉ 和 δ | <img src="examples/logistic-map/images/logistic.png" width="240"> |
+| [Galton 板 · 中心极限定理](examples/galton-board/README.md)（[打开页面](examples/galton-board/index.html)） | 伯努利试验与杨辉三角、二项分布的均值 np 与方差 np(1−p)、de Moivre–Laplace 定理、中心极限定理及其条件、Berry–Esseen 与 Edgeworth 收敛速度、柯西分布的反例、大数定律；动画小球落板，叠加精确二项分布与正态曲线，另有均匀、指数、双峰、骰子、柯西五种分布的 n 项和，实时画出 KS 距离随 n 的下降 | <img src="examples/galton-board/images/galton.png" width="240"> |
+| [Penrose 镶嵌 · 永不重复的铺砖](examples/penrose-tiling/README.md)（[打开页面](examples/penrose-tiling/index.html)） | Robinson 三角形收缩替换、粗细菱形个数比沿 Fibonacci 数列收敛到 φ、膨胀与超级砖块、匹配弧线、P2 风筝与飞镖、de Bruijn 五重网格与相位子、晶体学限制（2cos 72° = 1/φ 不是整数）、准晶体与 Shechtman；可逐代收缩，并测量旋转 72°/36° 后的重合度 | <img src="examples/penrose-tiling/images/sun.png" width="240"> |
 
 ## 目录约定
 
