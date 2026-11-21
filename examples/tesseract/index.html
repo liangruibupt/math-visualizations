@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>四维超立方体 · 旋转的 tesseract</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0e0c17; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(27,23,40,.93); border: 1px solid #383152; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #b7a9df; border-top: 1px solid #383152; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #938ca8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2c2742; color: #e6e6e6; border: 1px solid #423a60;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #383152; }
+  button.on { background: #57478c; border-color: #7b68bf; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  /* six rotation planes: name, slider, value, auto checkbox */
+  #planes { display: grid; grid-template-columns: 26px 1fr 46px 44px; gap: 2px 6px; align-items: center; margin-top: 4px; }
+  #planes .nm { font: 12px ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  #planes .nm.w { color: #ff9f6b; }
+  #planes b { color: #ffd38a; font-variant-numeric: tabular-nums; text-align: right; font-weight: normal; }
+  #planes label { font-size: 11px; color: #b0a9c4; white-space: nowrap; }
+  #planes .off { opacity: .35; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #b9b2cc; margin-top: 4px; white-space: pre-line; }
+  .grp[hidden] { display: none; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(14,12,23,.8); color: #d3cde4; font-size: 12px; font-variant-numeric: tabular-nums; max-width: calc(100% - 40px); }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>四维超立方体 · 旋转的 tesseract</h1>
+  <small>把正方形沿第三个方向推一段得到立方体，把立方体沿第四个方向 w 推一段就得到超立方体：16 个顶点、32 条棱、24 个正方形面、8 个立方体胞。我们看不到四维，只能看它投到三维里的影子，或者用三维“切片”去切它。</small>
+
+  <h2>视图</h2>
+  <div class="presets" id="modes"></div>
+
+  <div class="grp" id="gPoly">
+    <h2>多胞体</h2>
+    <div class="presets" id="polys"></div>
+  </div>
+
+  <div class="grp" id="gProj">
+    <h2>4D → 3D 投影</h2>
+    <div class="presets" id="pjs"></div>
+    <div class="row">
+      <label>四维相机距离 D（相机在 w = D） <b id="vD"></b></label>
+      <input id="D" type="range" min="1.2" max="8" step="0.01">
+      <small>透视：<span class="mono">(x, y, z) · (D − ½) / (D − w)</span>，离相机近（w 大）的部分显得大。正交：直接丢掉 w。</small>
+    </div>
+    <div class="row" id="rCell">
+      <label>高亮一个胞 <b id="vCell"></b></label>
+      <div class="presets" id="cells"></div>
+    </div>
+  </div>
+
+  <div class="grp" id="gRot">
+    <h2>旋转平面（角度 °，勾选“自动”让它匀速转）</h2>
+    <div id="planes"></div>
+    <div class="row">
+      <label>自动旋转速度 <b id="vSp"></b></label>
+      <input id="Sp" type="range" min="0" max="120" step="1">
+    </div>
+    <div class="presets"><button id="play">⏸ 暂停</button><button id="zero">全部归零</button></div>
+    <small id="planeNote"></small>
+  </div>
+
+  <div class="grp" id="gSlice">
+    <h2 id="hSlice">截面</h2>
+    <div class="row">
+      <label id="lC">截面位置 <b id="vC"></b></label>
+      <input id="C" type="range" min="-1.05" max="1.05" step="0.001">
+    </div>
+    <div class="checks"><label><input id="sw" type="checkbox"> 来回扫描</label></div>
+    <div class="row">
+      <label>扫描速度（单位/秒） <b id="vSs"></b></label>
+      <input id="Ss" type="range" min="0.02" max="1" step="0.01">
+    </div>
+    <div class="presets" id="aligns"></div>
+    <small id="alignNote"></small>
+    <div class="info" id="secInfo"></div>
+  </div>
+
+  <div class="grp" id="gLadder">
+    <h2>维度阶梯</h2>
+    <div class="row">
+      <label>沿新方向推出的距离 t <b id="vT"></b></label>
+      <input id="T" type="range" min="0" max="1" step="0.01">
+    </div>
+    <div class="checks"><label><input id="lAnim" type="checkbox"> 自动推拉</label></div>
+    <small>n 维立方体 = (n−1) 维立方体复制两份再用棱连起来。所以 k 维面数满足 f<sub>k</sub>(n) = 2·f<sub>k</sub>(n−1) + f<sub>k−1</sub>(n−1)，也就是生成多项式每升一维乘一次 (2 + x)。</small>
+  </div>
+
+  <h2>显示</h2>
+  <div class="checks">
+    <label><input id="vtx" type="checkbox"> 顶点</label>
+    <label><input id="wc" type="checkbox"> 按 w 着色</label>
+    <label><input id="sh" type="checkbox"> 截面模式显示整体影子</label>
+  </div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">拖动旋转三维视角 · 滚轮缩放 · 双击复位视角</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- constants ----------
+const PLANES = [['xy', 0, 1], ['xz', 0, 2], ['xw', 0, 3], ['yz', 1, 2], ['yw', 1, 3], ['zw', 2, 3]];   // rotation order: M = R_xy R_xz R_xw R_yz R_yw R_zw
+const MODES = { proj: '投影', slice: '四维截面', cube: '热身：切立方体', ladder: '维度阶梯' };
+const PROJS = { persp: '透视（立方体套立方体）', ortho: '正交', both: '并排对比' };
+const CELLS = { none: '无', wn: 'w = −½', wp: 'w = +½', xp: 'x = +½', xn: 'x = −½', yp: 'y = +½', zp: 'z = +½' };
+const CELL_AXIS = { wn: [3, -1], wp: [3, 1], xp: [0, 1], xn: [0, -1], yp: [1, 1], zp: [2, 1] };
+const A45 = 45, A35 = Math.atan(1 / Math.SQRT2) * 180 / Math.PI, A30 = 30;   // 35.264°: turns (0, 1, √2) onto an axis
+// slicing orientations: angles that turn a cell / face / edge / vertex direction onto the slicing axis
+const ALIGN4 = { cell: ['胞先 (0,0,0,1)', {}], face: ['面先 (0,0,1,1)', { zw: A45 }], edge: ['棱先 (0,1,1,1)', { zw: A45, yw: A35 }], vert: ['顶点先 (1,1,1,1)', { zw: A45, yw: A35, xw: A30 }] };
+const ALIGN3 = { face: ['面先 (0,0,1)', {}], edge: ['棱先 (0,1,1)', { yz: A45 }], vert: ['顶点先 (1,1,1)', { yz: A45, xz: A35 }] };
+const LIM = { D: [1.2, 8], sp: [0, 120], c: [-1.05, 1.05], ss: [0.02, 1], t: [0, 1], ang: [-180, 180],
+  yaw: [-Math.PI, Math.PI], pitch: [-1.5, 1.5], zoom: [0.2, 6] };
+const HULL_MAX = 64;   // brute-force hull is O(n⁴); sections of these polytopes have at most 24 points (24-cell), so this never bites
+
+const POLYS = {
+  t8: { name: '超立方体（8-胞）', f: [16, 32, 24, 8], verts: () => cubeVerts(4) },
+  c5: { name: '5-胞（单纯形）', f: [5, 10, 10, 5], verts: () => {
+    const a = 1 / Math.sqrt(10), b = 1 / Math.sqrt(6), c = 1 / Math.sqrt(3);
+    return [[a, b, c, 1], [a, b, c, -1], [a, b, -2 * c, 0], [a, -Math.sqrt(1.5), 0, 0], [-2 * Math.sqrt(0.4), 0, 0, 0]]; } },
+  c16: { name: '16-胞（正轴形）', f: [8, 24, 32, 16], verts: () => {
+    const V = []; for (let k = 0; k < 4; k++) for (const s of [1, -1]) { const v = [0, 0, 0, 0]; v[k] = s; V.push(v); } return V; } },
+  c24: { name: '24-胞', f: [24, 96, 96, 24], verts: () => {
+    const V = []; for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) for (const s of [1, -1]) for (const t of [1, -1]) {
+      const v = [0, 0, 0, 0]; v[i] = s; v[j] = t; V.push(v); } return V; } },
+};
+
+const PRESETS = {
+  spin: { name: 'xw 旋转：内外翻转', s: { mode: 'proj', poly: 't8', pj: 'persp', auto: ['xw'], ang: { xy: 0, xz: 0, xw: 0, yz: 0, yw: 0, zw: 0 } } },
+  double: { name: 'xw + yz 双旋转', s: { mode: 'proj', poly: 't8', pj: 'persp', auto: ['xw', 'yz'], ang: {} } },
+  six: { name: '六个平面一起转', s: { mode: 'proj', poly: 't8', pj: 'both', auto: ['xy', 'xz', 'xw', 'yz', 'yw', 'zw'], ang: {} } },
+  inner: { name: '高亮内胞 w = −½', s: { mode: 'proj', poly: 't8', pj: 'persp', auto: ['xw'], ang: {}, cell: 'wn' } },
+  cube: { name: '切立方体：三角形→六边形', s: { mode: 'cube', align: 'vert', c: 0.6, sweep: true, auto: [] } },
+  vslice: { name: '顶点先切超立方体', s: { mode: 'slice', poly: 't8', align: 'vert', c: 0.75, sweep: true, auto: [] } },
+  cslice: { name: '胞先切：一直是立方体', s: { mode: 'slice', poly: 't8', align: 'cell', c: 0.2, sweep: true, auto: [] } },
+  c24: { name: '胞先切 24-胞：立方八面体', s: { mode: 'slice', poly: 'c24', align: 'cell', c: 0, sweep: true, auto: [] } },
+  v24: { name: '顶点先切 24-胞：立方体', s: { mode: 'slice', poly: 'c24', align: 'face', c: 0.6, sweep: true, auto: [] } },
+  ladder: { name: '维度阶梯', s: { mode: 'ladder', t: 1, anim: true } },
+  p5: { name: '5-胞', s: { mode: 'proj', poly: 'c5', pj: 'persp', auto: ['xw', 'yz'], ang: {} } },
+  p16: { name: '16-胞', s: { mode: 'proj', poly: 'c16', pj: 'persp', auto: ['xw', 'yz'], ang: {} } },
+  p24: { name: '24-胞', s: { mode: 'proj', poly: 'c24', pj: 'persp', auto: ['xw', 'yz'], ang: {} } },
+};
+
+const P = { preset: 'spin', mode: 'proj', poly: 't8', pj: 'persp', D: 2, cell: 'none', sp: 25, c: 0.3, sweep: false, ss: 0.2,
+  t: 1, anim: false, vtx: true, wc: true, sh: true,
+  ang: { xy: 0, xz: 0, xw: 0, yz: 0, yw: 0, zw: 0 }, auto: { xy: false, xz: false, xw: true, yz: false, yw: false, zw: false } };
+const HOME = { yaw: -0.55, pitch: 0.32, zoom: 1 };
+const view = { ...HOME };
+let running = true, sweepDir = 1, ladderDir = -1;
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const $ = id => document.getElementById(id);
+const wrapDeg = a => ((a + 180) % 360 + 360) % 360 - 180;
+
+// ---------- polytopes: vertices on the unit sphere, edges = closest pairs ----------
+function cubeVerts(n) {
+  const h = 1 / Math.sqrt(n), V = [];
+  for (let m = 0; m < 1 << n; m++) { const v = [0, 0, 0, 0]; for (let k = 0; k < n; k++) v[k] = m >> k & 1 ? h : -h; V.push(v); }
+  return V;
+}
+function build(V) {
+  const n = V.length, R = Math.hypot(...V[0]);
+  V = V.map(v => v.map(x => x / R));
+  let dmin = Infinity;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) dmin = Math.min(dmin, dist(V[i], V[j]));
+  const E = [];
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (dist(V[i], V[j]) < dmin * 1.001) E.push([i, j]);
+  return { V, E, edge: dmin };
+}
+const dist = (a, b) => Math.hypot(...a.map((x, k) => x - b[k]));
+const SOLIDS = {};
+for (const k of Object.keys(POLYS)) SOLIDS[k] = build(POLYS[k].verts());
+SOLIDS.cube3 = build(cubeVerts(3));
+const solid = () => P.mode === 'cube' ? SOLIDS.cube3 : SOLIDS[P.poly];
+
+// ---------- rotation ----------
+function matrix() {
+  const M = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+  for (const [nm, a, b] of PLANES) {
+    if (P.mode === 'cube' && b === 3) continue;          // a cube lives in xyz: only xy, xz, yz apply
+    const t = P.ang[nm] * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+    for (let i = 0; i < 4; i++) { const p = M[i][a], q = M[i][b]; M[i][a] = p * c + q * s; M[i][b] = -p * s + q * c; }
+  }
+  return M;
+}
+function rotated() {
+  const M = matrix(), { V } = solid();
+  return V.map(v => M.map(row => row[0] * v[0] + row[1] * v[1] + row[2] * v[2] + row[3] * v[3]));
+}
+// 4D → 3D; perspective is normalised so that points at w = ½ keep their size
+const to3 = (v, persp) => { const f = persp ? (P.D - 0.5) / (P.D - v[3]) : 1; return [v[0] * f, v[1] * f, v[2] * f]; };
+
+// ---------- slicing ----------
+// points where edges cross the hyperplane (last coordinate = c); vertices exactly on it count as just above
+function crossings(R, axis, c) {
+  const { E } = solid(), pts = [];
+  const s = v => { const d = v[axis] - c; return Math.abs(d) < 1e-9 ? 1e-9 : d; };
+  for (const [i, j] of E) {
+    const a = s(R[i]), b = s(R[j]);
+    if (a * b >= 0) continue;
+    const t = a / (a - b), p = R[i].map((x, k) => x + t * (R[j][k] - x)).slice(0, axis);
+    if (!pts.some(q => dist(p, q) < 1e-6)) pts.push(p);
+  }
+  return pts;
+}
+// convex polygon in the plane: order by angle around the centroid
+function polygon(pts) {
+  const n = pts.length, cx = pts.reduce((s, p) => s + p[0], 0) / n, cy = pts.reduce((s, p) => s + p[1], 0) / n;
+  return pts.slice().sort((p, q) => Math.atan2(p[1] - cy, p[0] - cx) - Math.atan2(q[1] - cy, q[0] - cx));
+}
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+// convex hull in 3D by brute force: a triple spans a face when every other point is on one side of its plane
+function hull(P3) {
+  const n = P3.length, faces = [], seen = new Set();
+  if (n < 3 || n > HULL_MAX) return faces;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let k = j + 1; k < n; k++) {
+    let nv = cross(sub(P3[j], P3[i]), sub(P3[k], P3[i]));
+    const L = Math.hypot(...nv); if (L < 1e-9) continue;
+    nv = nv.map(x => x / L);
+    const d0 = dot(nv, P3[i]); let pos = 0, neg = 0; const on = [];
+    for (let m = 0; m < n; m++) { const e = dot(nv, P3[m]) - d0; if (e > 1e-6) pos++; else if (e < -1e-6) neg++; else on.push(m); }
+    if (pos && neg) continue;
+    const key = on.join(','); if (seen.has(key)) continue; seen.add(key);
+    if (pos) nv = nv.map(x => -x);                     // outward normal
+    const cen = [0, 1, 2].map(a => on.reduce((s, m) => s + P3[m][a], 0) / on.length);
+    const u0 = sub(P3[on[0]], cen), lu = Math.hypot(...u0), u = u0.map(x => x / lu), w = cross(nv, u);
+    const ang = m => { const r = sub(P3[m], cen); return Math.atan2(dot(w, r), dot(u, r)); };
+    faces.push({ idx: on.slice().sort((a, b) => ang(a) - ang(b)), normal: nv, flat: !pos && !neg });
+  }
+  return faces;
+}
+const POLY_NAMES = { 3: '三角形', 4: '四边形', 5: '五边形', 6: '六边形', 7: '七边形', 8: '八边形' };
+function sectionName(V, E, F, sig, reg) {
+  if (V === 0) return '空';
+  if (V === 1) return '一个点';
+  if (V === 2) return '线段';
+  if (F === 1 && V === 4 && sig === 'rect') return reg ? '正方形' : '长方形';
+  if (F === 1) return (reg ? '正' : '') + (POLY_NAMES[V] || `${V} 边形`);
+  const key = `${V},${E},${F}`;
+  if (key === '4,6,4') return reg ? '正四面体' : '四面体';
+  if (key === '6,12,8') return reg ? '正八面体' : '八面体';
+  if (key === '8,12,6') return reg ? '立方体' : (sig === '4^6' ? '长方体' : '六面体');
+  if (key === '6,9,5') return '三棱柱';
+  if (key === '5,8,5') return '四棱锥';
+  if (key === '12,18,8') return sig === '3^4 6^4' ? (reg ? '截角四面体（阿基米德）' : '截角四面体') : sig === '4^6 6^2' ? '六棱柱' : '八面体';
+  if (key === '12,24,14') return reg ? '立方八面体（阿基米德）' : '立方八面体';
+  if (key === '24,36,14' && sig === '4^6 6^8') return reg ? '截角八面体（阿基米德）' : '截角八面体';
+  if (key === '14,24,12' && sig === '4^12') return '菱形十二面体';
+  if (key === '32,48,18' && sig === '4^6 6^12') return '倒角立方体';
+  return `${F} 面体`;
+}
+// full section of the current state; dimension 3 (cube) gives a polygon, dimension 4 a polyhedron
+function section(R) {
+  const axis = P.mode === 'cube' ? 2 : 3, pts = crossings(R, axis, P.c), V = pts.length;
+  const out = { pts, faces: [], edges: [], V, E: 0, F: 0, name: '', sig: '', len: [0, 0] };
+  if (V >= 3 && axis === 2) {
+    const poly = polygon(pts);
+    out.pts = poly; out.faces = [{ idx: poly.map((_, i) => i), flat: true }];
+  } else if (V >= 3) out.faces = hull(pts);
+  if (V === 2) out.edges = [[0, 1]];
+  const ek = new Set();
+  for (const f of out.faces) {
+    const m = f.idx.length; if (axis === 3 && f.flat && out.faces.length === 1) out.flat = true;
+    for (let i = 0; i < m; i++) { const a = f.idx[i], b = f.idx[(i + 1) % m], k = a < b ? `${a},${b}` : `${b},${a}`;
+      if (!ek.has(k)) { ek.add(k); out.edges.push([a, b]); } }
+  }
+  out.E = out.edges.length; out.F = axis === 2 ? (V >= 3 ? 1 : 0) : out.faces.length;
+  const L = out.edges.map(([a, b]) => dist(out.pts[a], out.pts[b]));
+  out.len = L.length ? [Math.min(...L), Math.max(...L)] : [0, 0];
+  const cnt = {}; for (const f of out.faces) cnt[f.idx.length] = (cnt[f.idx.length] || 0) + 1;
+  out.sig = Object.keys(cnt).sort((a, b) => a - b).map(k => `${k}^${cnt[k]}`).join(' ');
+  const reg = L.length > 0 && out.len[1] / out.len[0] < 1.002;
+  if (axis === 2 && V === 4) {   // a quadrilateral with a right angle at every corner
+    const p = out.pts, d = i => [p[(i + 1) % 4][0] - p[i][0], p[(i + 1) % 4][1] - p[i][1]];
+    if ([0, 1, 2, 3].every(i => Math.abs(d(i)[0] * d((i + 1) % 4)[0] + d(i)[1] * d((i + 1) % 4)[1]) < 1e-6)) out.sig = 'rect';
+  }
+  out.name = sectionName(V, out.E, out.F, out.sig, reg);
+  return out;
+}
+
+// ---------- camera: 3D → screen (z up, yaw about z, pitch tilts) ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dpr = 1;
+function camera(cx, cy, size) {
+  const sc = 0.36 * size * view.zoom, ya = Math.cos(view.yaw), yb = Math.sin(view.yaw), pa = Math.cos(view.pitch), pb = Math.sin(view.pitch);
+  return p => {
+    const a = p[0] * ya - p[1] * yb, b = p[0] * yb + p[1] * ya;
+    const v = p[2] * pa - b * pb, d = p[2] * pb + b * pa;
+    const f = sc / (1 + Math.min(d, 4) / 6);
+    return [cx + a * f, cy - v * f, d, f / sc];
+  };
+}
+// w ∈ [−0.6, 0.6] → blue … green … orange (tesseract vertices sit at |w| ≤ ½ unless turned vertex-first)
+const wCol = (w, a = 1) => `hsla(${(215 - 185 * (clamp(w / 0.6, [-1, 1]) + 1) / 2).toFixed(0)},85%,62%,${a})`;
+const FACE_COL = { 3: '#ff9f6b', 4: '#7fb8ff', 5: '#c69cff', 6: '#7fe08a', 8: '#ffd38a' };
+
+function drawWire(R, P3, cam, { alpha = 1, hl = null, colourW = P.wc, width = 1.6 } = {}) {
+  const { E } = solid(), S = P3.map(cam);
+  if (noui()) width *= 1.8;   // the landing-page card is shown small
+  const order = E.map((e, i) => i).sort((i, j) => (S[E[j][0]][2] + S[E[j][1]][2]) - (S[E[i][0]][2] + S[E[i][1]][2]));
+  ctx.lineCap = 'round';
+  for (const i of order) {
+    const [a, b] = E[i], inHl = hl && hl[a] && hl[b];
+    ctx.strokeStyle = inHl ? `rgba(255,255,255,${alpha})` : colourW ? wCol((R[a][3] + R[b][3]) / 2, alpha * (hl ? 0.45 : 0.95)) : `rgba(200,195,230,${alpha * 0.85})`;
+    ctx.lineWidth = (inHl ? 3 : width) * dpr * Math.sqrt((S[a][3] + S[b][3]) / 2);
+    ctx.beginPath(); ctx.moveTo(S[a][0], S[a][1]); ctx.lineTo(S[b][0], S[b][1]); ctx.stroke();
+  }
+  if (P.vtx && alpha > 0.5) for (let i = 0; i < S.length; i++) {
+    ctx.fillStyle = hl && hl[i] ? '#fff' : colourW ? wCol(R[i][3]) : '#e6e2f6';
+    ctx.beginPath(); ctx.arc(S[i][0], S[i][1], 2.6 * dpr * Math.sqrt(S[i][3]), 0, 7); ctx.fill();
+  }
+  return S;
+}
+const noui = () => document.body.classList.contains('noui');
+function label(txt, x, y, col = '#cfc8e6', size = 13, align = 'left') {
+  if (noui()) return;
+  ctx.fillStyle = col; ctx.font = `${size * dpr}px -apple-system, "PingFang SC", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'top';
+  ctx.fillText(txt, x, y);
+}
+function drawGizmo(ox, oy) {
+  if (noui()) return;
+  const L = 22 * dpr, ya = Math.cos(view.yaw), yb = Math.sin(view.yaw), pa = Math.cos(view.pitch), pb = Math.sin(view.pitch);
+  ctx.lineWidth = 1.5 * dpr; ctx.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+  for (const [nm, x, y, z, c] of [['x', 1, 0, 0, '#ff8a7a'], ['y', 0, 1, 0, '#8ee08a'], ['z', 0, 0, 1, '#8ab4ff']]) {
+    const a = x * ya - y * yb, b = x * yb + y * ya, v = z * pa - b * pb;
+    ctx.strokeStyle = ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + a * L, oy - v * L); ctx.stroke();
+    ctx.fillText(nm, ox + a * L * 1.35, oy - v * L * 1.35);
+  }
+}
+
+// ---------- the four views ----------
+let last = {};
+function drawProj() {
+  const R = rotated(), both = P.pj === 'both';
+  const hl = P.poly === 't8' && Object.hasOwn(CELL_AXIS, P.cell) ? (() => { const [k, s] = CELL_AXIS[P.cell]; return SOLIDS.t8.V.map(v => Math.sign(v[k]) === s); })() : null;
+  const panes = both ? [[true, W * 0.25], [false, W * 0.75]] : [[P.pj === 'persp', W / 2]];
+  const size = both ? Math.min(W / 2 * 1.15, H) : Math.min(W, H);
+  const info = {};
+  for (const [persp, cx] of panes) {
+    const P3 = R.map(v => to3(v, persp)), cam = camera(cx, H / 2, size);
+    drawWire(R, P3, cam, { hl });
+    label(persp ? `透视投影（相机在 w = ${P.D.toFixed(2)}）` : '正交投影（丢掉 w）', cx, 14 * dpr, '#cfc8e6', 13, 'center');
+    if (hl) {   // size of the highlighted cell in 3D: mean length of its edges
+      const L = SOLIDS.t8.E.filter(([a, b]) => hl[a] && hl[b]).map(([a, b]) => dist(P3[a], P3[b]));
+      info[persp ? 'persp' : 'ortho'] = L.reduce((s, x) => s + x, 0) / L.length;
+    }
+  }
+  if (both) { ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = dpr; ctx.beginPath(); ctx.moveTo(W / 2, 40 * dpr); ctx.lineTo(W / 2, H - 40 * dpr); ctx.stroke(); }
+  drawGizmo(36 * dpr, H - 76 * dpr);
+  const s = SOLIDS[P.poly], f = POLYS[P.poly].f;
+  last = { V: s.V.length, E: s.E.length, f, cellEdge: info, wRange: [Math.min(...R.map(v => v[3])), Math.max(...R.map(v => v[3]))] };
+  return [POLYS[P.poly].name, `${s.V.length} 顶点 · ${s.E.length} 棱 · ${f[2]} 面 · ${f[3]} 胞`,
+    `V − E + F − C = ${s.V.length - s.E.length + f[2] - f[3]}`,
+    ...(hl ? [`高亮胞平均棱长 ${Object.entries(info).map(([k, x]) => `${k === 'persp' ? '透视' : '正交'} ${x.toFixed(3)}`).join(' / ')}`] : [])];
+}
+
+// the vertical bar on the right: every vertex's coordinate along the slicing axis, and the hyperplane
+function drawBar(R, axis) {
+  const x = W - 70 * dpr, top = 60 * dpr, bot = H - 60 * dpr, Y = v => bot - (v + 1.05) / 2.1 * (bot - top);
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bot); ctx.stroke();
+  const groups = new Map();
+  for (const v of R) { const k = Math.round(v[axis] * 1e4) / 1e4; groups.set(k, (groups.get(k) || 0) + 1); }
+  ctx.font = `${11 * dpr}px ui-monospace, Menlo, monospace`; ctx.textBaseline = 'middle';
+  for (const [w, n] of groups) {
+    ctx.fillStyle = axis === 3 && P.wc ? wCol(w) : '#e6e2f6'; ctx.beginPath(); ctx.arc(x, Y(w), 3.5 * dpr, 0, 7); ctx.fill();
+    if (n > 1 && groups.size <= 12) { ctx.textAlign = 'left'; ctx.fillText(`×${n}`, x + 8 * dpr, Y(w)); }
+  }
+  ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.moveTo(x - 18 * dpr, Y(P.c)); ctx.lineTo(x + 18 * dpr, Y(P.c)); ctx.stroke();
+  ctx.fillStyle = '#ff8f8f'; ctx.textAlign = 'right'; ctx.fillText(`${axis === 3 ? 'w' : 'z'} = ${P.c.toFixed(3)}`, x - 22 * dpr, Y(P.c));
+  label(axis === 3 ? '顶点的 w' : '顶点的 z', x, top - 30 * dpr, '#938ca8', 11, 'center');
+}
+
+function fillFaces(sec, pts3, cam, alpha) {
+  const S = pts3.map(cam);
+  const fs = sec.faces.map(f => ({ f, d: f.idx.reduce((s, i) => s + S[i][2], 0) / f.idx.length })).sort((a, b) => b.d - a.d);
+  for (const { f } of fs) {
+    ctx.fillStyle = FACE_COL[f.idx.length] || '#cccccc'; ctx.globalAlpha = alpha;
+    ctx.beginPath(); f.idx.forEach((i, k) => k ? ctx.lineTo(S[i][0], S[i][1]) : ctx.moveTo(S[i][0], S[i][1])); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round';
+  for (const [a, b] of sec.edges) { ctx.beginPath(); ctx.moveTo(S[a][0], S[a][1]); ctx.lineTo(S[b][0], S[b][1]); ctx.stroke(); }
+  ctx.fillStyle = '#ffffff';
+  for (const s of S) { ctx.beginPath(); ctx.arc(s[0], s[1], 3 * dpr, 0, 7); ctx.fill(); }
+}
+
+function sectionLines(sec, dimName) {
+  const lines = [`截面：${sec.name}`, `${sec.V} 顶点 · ${sec.E} 棱${dimName === 3 ? ` · ${sec.F} 面 · V − E + F = ${sec.V - sec.E + sec.F}` : ''}`];
+  if (sec.E) lines.push(`棱长 ${sec.len[0].toFixed(3)}${sec.len[1] - sec.len[0] > 1e-3 ? ` – ${sec.len[1].toFixed(3)}` : '（全部相等）'}`);
+  if (sec.sig && dimName === 3) lines.push('面：' + sec.sig.split(' ').map(t => { const [k, n] = t.split('^'); return `${n} 个${POLY_NAMES[k] || k + ' 边形'}`; }).join('，'));
+  return lines;
+}
+
+function drawSlice() {
+  const R = rotated(), sec = section(R), cam = camera(W * 0.46, H / 2, Math.min(W, H));
+  if (P.sh) drawWire(R, R.map(v => to3(v, false)), cam, { alpha: 0.22, width: 1.2 });
+  fillFaces(sec, sec.pts, cam, 0.42);
+  drawBar(R, 3); drawGizmo(36 * dpr, H - 76 * dpr);
+  label(`三维人看到的：超平面 w = ${P.c.toFixed(3)} 截出的多面体`, W * 0.46, 14 * dpr, '#cfc8e6', 13, 'center');
+  last = { section: { V: sec.V, E: sec.E, F: sec.F, name: sec.name, sig: sec.sig, len: sec.len, flat: !!sec.flat } };
+  $('secInfo').textContent = sectionLines(sec, 3).join('\n');
+  return [POLYS[P.poly].name, ...sectionLines(sec, 3).slice(0, 2)];
+}
+
+function drawCube() {
+  const R = rotated(), sec = section(R), cam = camera(W * 0.4, H / 2, Math.min(W, H));
+  const P3 = R.map(v => [v[0], v[1], v[2]]), S = drawWire(R, P3, cam, { colourW: false, alpha: 0.9 });
+  // the slicing plane z = c, a translucent square
+  const q = 1.15, corners = [[-q, -q], [q, -q], [q, q], [-q, q]].map(([x, y]) => cam([x, y, P.c]));
+  ctx.fillStyle = 'rgba(255,107,107,.10)'; ctx.strokeStyle = 'rgba(255,107,107,.5)'; ctx.lineWidth = dpr;
+  ctx.beginPath(); corners.forEach((p, k) => k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fill(); ctx.stroke();
+  fillFaces(sec, sec.pts.map(p => [p[0], p[1], P.c]), cam, 0.55);
+  drawBar(R, 2); drawGizmo(36 * dpr, H - 76 * dpr);
+  label(`立方体被平面 z = ${P.c.toFixed(3)} 切开`, W * 0.4, 14 * dpr, '#cfc8e6', 13, 'center');
+  // Flatland inset: what a 2D being living in the plane sees
+  const bw = 240 * dpr, bh = 200 * dpr, bx = W - bw - 110 * dpr, by = H - bh - 40 * dpr;
+  ctx.fillStyle = 'rgba(14,12,23,.88)'; ctx.strokeStyle = '#383152'; ctx.lineWidth = dpr;
+  ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh);
+  label('平面国居民看到的', bx + 8 * dpr, by + 6 * dpr, '#938ca8', 11);
+  const s = 0.36 * bh, cx = bx + bw / 2, cy = by + bh / 2 + 8 * dpr;
+  if (sec.V >= 2) {
+    ctx.fillStyle = FACE_COL[sec.V] || '#cccccc'; ctx.globalAlpha = 0.55; ctx.beginPath();
+    sec.pts.forEach((p, k) => k ? ctx.lineTo(cx + p[0] * s, cy - p[1] * s) : ctx.moveTo(cx + p[0] * s, cy - p[1] * s));
+    ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * dpr; ctx.stroke();
+  }
+  last = { section: { V: sec.V, E: sec.E, F: sec.F, name: sec.name, len: sec.len } };
+  $('secInfo').textContent = sectionLines(sec, 2).join('\n');
+  return ['立方体', ...sectionLines(sec, 2).slice(0, 2)];
+}
+
+// k-faces of the n-cube: C(n, k)·2^(n−k), the coefficients of (2 + x)^n
+const binom = (n, k) => { let r = 1; for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1); return Math.round(r); };
+const fk = (n, k) => k > n ? 0 : binom(n, k) * 2 ** (n - k);
+const SUP = ['', '', '²', '³', '⁴', '⁵', '⁶'];
+const poly2x = n => Array.from({ length: n + 1 }, (_, k) => k ? `${fk(n, k) > 1 ? fk(n, k) : ''}x${SUP[k]}` : `${fk(n, k)}`).join(' + ');
+const LADDER_AX = [[1, 0], [0, -1], [0.5, -0.36], [0.3, 0.42]];
+const LADDER_NM = ['点', '线段', '正方形', '立方体', '超立方体'];
+function drawLadder() {
+  const cols = 5, cw = W / cols, s = Math.min(cw * 0.55, H * 0.24), cy = H * 0.3;
+  ctx.lineCap = 'round';
+  for (let n = 0; n < cols; n++) {
+    const cx = cw * (n + 0.5), Vs = [];
+    for (let m = 0; m < 1 << n; m++) {
+      let x = 0, y = 0;
+      for (let k = 0; k < n; k++) if (m >> k & 1) { const t = k === n - 1 ? P.t : 1; x += LADDER_AX[k][0] * t; y += LADDER_AX[k][1] * t; }
+      Vs.push([x, y]);
+    }
+    // centre the figure
+    const mx = Vs.reduce((a, v) => a + v[0], 0) / Vs.length, my = Vs.reduce((a, v) => a + v[1], 0) / Vs.length;
+    const S = Vs.map(([x, y]) => [cx + (x - mx) * s, cy + (y - my) * s]);
+    for (let m = 0; m < 1 << n; m++) for (let k = 0; k < n; k++) if (!(m >> k & 1)) {
+      const j = m | 1 << k, newest = k === n - 1, copy = n > 0 && (m >> (n - 1) & 1);
+      ctx.strokeStyle = newest ? '#ff9f6b' : copy ? '#7fb8ff' : '#e6e2f6'; ctx.lineWidth = (newest ? 2.4 : 1.8) * dpr;
+      ctx.beginPath(); ctx.moveTo(S[m][0], S[m][1]); ctx.lineTo(S[j][0], S[j][1]); ctx.stroke();
+    }
+    for (const p of S) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p[0], p[1], 3 * dpr, 0, 7); ctx.fill(); }
+    label(`${n} 维 · ${LADDER_NM[n]}`, cx, cy + s * 1.25, '#e6e2f6', 14, 'center');
+    label(`${fk(n, 0)} 顶点` + (n ? ` · ${fk(n, 1)} 棱` : '') + (n > 1 ? ` · ${fk(n, 2)} 面` : '') + (n > 2 ? ` · ${fk(n, 3)} 胞` : ''), cx, cy + s * 1.25 + 22 * dpr, '#938ca8', 12, 'center');
+  }
+  // table of f-vectors
+  const heads = ['n', '顶点 f₀', '棱 f₁', '面 f₂', '胞 f₃', '4-面 f₄', '5-面 f₅', '(2 + x)ⁿ'];
+  const colX = [0.05, 0.12, 0.2, 0.28, 0.36, 0.44, 0.52, 0.6].map(f => f * W), y0 = H * 0.62, rh = 24 * dpr;
+  heads.forEach((h, i) => label(h, colX[i], y0, '#b7a9df', 13));
+  for (let n = 0; n <= 5; n++) {
+    const y = y0 + rh * (n + 1.2), col = n <= 4 ? '#e6e2f6' : '#938ca8';
+    label(String(n), colX[0], y, col, 13);
+    for (let k = 0; k <= 5; k++) if (k <= n) label(String(fk(n, k)), colX[k + 1], y, k === n ? '#938ca8' : col, 13);
+    label(poly2x(n), colX[7], y, n === 4 ? '#ffd38a' : col, 13);
+  }
+  label('橙色：新方向上的棱（每个旧顶点拉出一条）· 蓝色：推出去的那份拷贝 · 白色：原来那份', W / 2, H - 70 * dpr, '#938ca8', 12, 'center');
+  last = { ladder: Array.from({ length: 6 }, (_, n) => Array.from({ length: n + 1 }, (_, k) => fk(n, k))) };
+  return ['维度阶梯', `(2 + x)⁴ = ${poly2x(4)}`, `t = ${P.t.toFixed(2)}`];
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0e0c17'; ctx.fillRect(0, 0, W, H);
+  const parts = P.mode === 'proj' ? drawProj() : P.mode === 'slice' ? drawSlice() : P.mode === 'cube' ? drawCube() : drawLadder();
+  if (P.mode !== 'ladder') parts.push(PLANES.filter(([nm]) => P.ang[nm]).map(([nm]) => `${nm} ${P.ang[nm].toFixed(1)}°`).join(' ') || '未旋转');
+  if (!running) parts.push('已暂停');
+  $('stat').textContent = parts.join(' · ');
+  window.__tess = { mode: P.mode, poly: P.poly, pj: P.pj, D: P.D, c: P.c, t: P.t, ang: { ...P.ang }, view: { ...view }, ...last };
+}
+
+// ---------- animation ----------
+function advance(dt) {
+  if (!running) return;
+  if (P.mode !== 'ladder') for (const [nm] of PLANES) if (P.auto[nm] && !(P.mode === 'cube' && nm.includes('w'))) P.ang[nm] = wrapDeg(P.ang[nm] + P.sp * dt);
+  if (P.sweep && (P.mode === 'slice' || P.mode === 'cube')) {
+    P.c += sweepDir * P.ss * dt;
+    if (P.c > 1.02) { P.c = 1.02; sweepDir = -1; } else if (P.c < -1.02) { P.c = -1.02; sweepDir = 1; }
+  }
+  if (P.anim && P.mode === 'ladder') {
+    P.t += ladderDir * 0.4 * dt;
+    if (P.t > 1) { P.t = 1; ladderDir = -1; } else if (P.t < 0) { P.t = 0; ladderDir = 1; }
+  }
+}
+
+// ---------- UI ----------
+function makeButtons(host, table, key, onPick) {
+  for (const [k, v] of Object.entries(table)) {
+    const b = document.createElement('button');
+    b.textContent = Array.isArray(v) ? v[0] : typeof v === 'string' ? v : v.name; b.dataset[key] = k; b.onclick = () => onPick(k);
+    $(host).appendChild(b);
+  }
+}
+const custom = () => { P.preset = ''; };
+makeButtons('modes', MODES, 'm', k => { P.mode = k; custom(); syncUI(); });
+makeButtons('polys', POLYS, 'po', k => { P.poly = k; custom(); syncUI(); });
+makeButtons('pjs', PROJS, 'pj', k => { P.pj = k; custom(); syncUI(); });
+makeButtons('cells', CELLS, 'ce', k => { P.cell = k; custom(); syncUI(); });
+for (const [nm] of PLANES) {
+  const host = $('planes'), sp = document.createElement('span'), inp = document.createElement('input'), val = document.createElement('b'), lb = document.createElement('label'), cb = document.createElement('input');
+  sp.className = 'nm' + (nm.includes('w') ? ' w' : ''); sp.textContent = nm;
+  Object.assign(inp, { type: 'range', min: -180, max: 180, step: 0.1, id: 'a_' + nm });
+  inp.oninput = () => { P.ang[nm] = +inp.value; custom(); syncUI(); };
+  val.id = 'v_' + nm; cb.type = 'checkbox'; cb.id = 'au_' + nm;
+  cb.onchange = () => { P.auto[nm] = cb.checked; custom(); };
+  lb.append(cb, ' 自动');
+  const row = [sp, inp, val, lb]; row.forEach(e => { e.dataset.plane = nm; host.appendChild(e); });
+}
+function setAlign(key) {
+  const tab = P.mode === 'cube' ? ALIGN3 : ALIGN4;
+  if (!Object.hasOwn(tab, key)) return;
+  for (const [nm] of PLANES) { P.ang[nm] = tab[key][1][nm] || 0; P.auto[nm] = false; }
+}
+function syncAligns() {
+  const host = $('aligns'); host.textContent = '';
+  const tab = P.mode === 'cube' ? ALIGN3 : ALIGN4;
+  makeButtons('aligns', tab, 'al', k => { setAlign(k); custom(); syncUI(); });
+  $('alignNote').textContent = P.mode === 'cube'
+    ? '对齐：把一个面 / 一条棱 / 一个顶点的方向转到 z 轴上，再沿 z 切。'
+    : '对齐：把括号里的方向转到 w 轴上，再沿 w 切。名字按超立方体取：对 16-胞，(0,0,0,1) 指向顶点、(1,1,1,1) 指向胞心；对 24-胞，(0,0,1,1) 指向顶点，(0,0,0,1) 和 (1,1,1,1) 都指向胞心。';
+}
+let shownMode = '';
+function syncUI() {
+  const m = P.mode;
+  $('gPoly').hidden = !(m === 'proj' || m === 'slice'); $('gProj').hidden = m !== 'proj';
+  $('gSlice').hidden = !(m === 'slice' || m === 'cube'); $('gLadder').hidden = m !== 'ladder';
+  $('gRot').hidden = m === 'ladder';
+  if (shownMode !== m) { shownMode = m; syncAligns(); }
+  $('hSlice').textContent = m === 'cube' ? '截面（平面 z = c 切立方体）' : '截面（超平面 w = c 切四维体）';
+  $('lC').firstChild.textContent = m === 'cube' ? '截面位置 z = c ' : '截面位置 w = c ';
+  $('rCell').hidden = P.poly !== 't8';
+  $('D').value = P.D; $('vD').textContent = P.D.toFixed(2);
+  $('Sp').value = P.sp; $('vSp').textContent = `${P.sp} °/秒`;
+  $('C').value = P.c; $('vC').textContent = P.c.toFixed(3); $('sw').checked = P.sweep;
+  $('Ss').value = P.ss; $('vSs').textContent = P.ss.toFixed(2);
+  $('T').value = P.t; $('vT').textContent = P.t.toFixed(2); $('lAnim').checked = P.anim;
+  $('vtx').checked = P.vtx; $('wc').checked = P.wc; $('sh').checked = P.sh;
+  $('vCell').textContent = CELLS[P.cell];
+  for (const [nm] of PLANES) {
+    $('a_' + nm).value = P.ang[nm]; $('v_' + nm).textContent = P.ang[nm].toFixed(1); $('au_' + nm).checked = P.auto[nm];
+    const off = m === 'cube' && nm.includes('w');
+    document.querySelectorAll(`[data-plane="${nm}"]`).forEach(e => e.classList.toggle('off', off));
+    $('a_' + nm).disabled = $('au_' + nm).disabled = off;
+  }
+  $('planeNote').textContent = m === 'cube'
+    ? '立方体只活在 xyz 里，所以只有 xy、xz、yz 三个平面有意义。'
+    : '橙色的 xw、yw、zw 三个平面含 w，是三维里没有的旋转；xy、xz、yz 只是普通的三维转动。';
+  $('play').textContent = running ? '⏸ 暂停' : '▶ 继续';
+  const mark = (attr, v) => document.querySelectorAll(`[data-${attr}]`).forEach(b => b.classList.toggle('on', b.dataset[attr] === v));
+  mark('m', m); mark('po', P.poly); mark('pj', P.pj); mark('ce', P.cell); mark('p', P.preset);
+}
+
+function applyPreset(key) {
+  const s = PRESETS[key].s;
+  P.preset = key; P.mode = s.mode;
+  if (s.poly) P.poly = s.poly;
+  if (s.pj) P.pj = s.pj;
+  P.cell = s.cell || 'none';
+  if (s.ang) for (const [nm] of PLANES) P.ang[nm] = s.ang[nm] || 0;
+  if (s.auto) for (const [nm] of PLANES) P.auto[nm] = s.auto.includes(nm);
+  if (s.align) { shownMode = ''; P.mode = s.mode; setAlign(s.align); }
+  if (s.c !== undefined) P.c = s.c;
+  P.sweep = !!s.sweep; P.anim = !!s.anim;
+  if (s.t !== undefined) P.t = s.t;
+}
+makeButtons('pre', PRESETS, 'p', k => { applyPreset(k); running = true; syncUI(); });
+
+$('D').oninput = e => { P.D = +e.target.value; custom(); syncUI(); };
+$('Sp').oninput = e => { P.sp = +e.target.value; syncUI(); };
+$('C').oninput = e => { P.c = +e.target.value; P.sweep = false; custom(); syncUI(); };
+$('sw').onchange = e => { P.sweep = e.target.checked; custom(); };
+$('Ss').oninput = e => { P.ss = +e.target.value; syncUI(); };
+$('T').oninput = e => { P.t = +e.target.value; P.anim = false; custom(); syncUI(); };
+$('lAnim').onchange = e => { P.anim = e.target.checked; };
+$('vtx').onchange = e => { P.vtx = e.target.checked; };
+$('wc').onchange = e => { P.wc = e.target.checked; };
+$('sh').onchange = e => { P.sh = e.target.checked; };
+$('play').onclick = () => { running = !running; syncUI(); };
+$('zero').onclick = () => { for (const [nm] of PLANES) { P.ang[nm] = 0; P.auto[nm] = false; } custom(); syncUI(); };
+
+// drag rotates the 3D camera (not the 4D object)
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  view.yaw = Math.atan2(Math.sin(view.yaw + (e.clientX - drag[0]) * 0.008), Math.cos(view.yaw + (e.clientX - drag[0]) * 0.008));
+  view.pitch = clamp(view.pitch + (e.clientY - drag[1]) * 0.008, LIM.pitch);
+  drag = [e.clientX, e.clientY];
+});
+cv.addEventListener('pointerup', () => { drag = null; cv.style.cursor = ''; });
+cv.addEventListener('dblclick', () => Object.assign(view, HOME));
+cv.addEventListener('wheel', e => { e.preventDefault(); view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0015), LIM.zoom); }, { passive: false });
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=vslice&c=0  or  ?m=proj&poly=c24&pj=both&D=3&xw=30&yz=10&au=xw,yz&sp=40  or  ?m=cube&al=vert&c=0&run=0&ui=0
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const pickKey = (k, table, f) => { const v = q.get(k); if (v !== null && Object.hasOwn(table, v)) f(v); };
+pickKey('p', PRESETS, applyPreset);
+pickKey('m', MODES, v => { P.mode = v; custom(); });
+pickKey('poly', POLYS, v => { P.poly = v; custom(); });
+pickKey('pj', PROJS, v => { P.pj = v; custom(); });
+pickKey('cell', CELLS, v => { P.cell = v; custom(); });
+pickKey('al', P.mode === 'cube' ? ALIGN3 : ALIGN4, v => { setAlign(v); custom(); });
+if (q.has('au')) {
+  const want = q.get('au').split(',').slice(0, 6);
+  for (const [nm] of PLANES) P.auto[nm] = want.includes(nm);
+  custom();
+}
+for (const [nm] of PLANES) num(nm, x => { P.ang[nm] = Math.round(clamp(x, LIM.ang) * 10) / 10; custom(); });
+num('D', x => { P.D = clamp(x, LIM.D); custom(); });
+num('sp', x => P.sp = Math.round(clamp(x, LIM.sp)));
+num('c', x => { P.c = Math.round(clamp(x, LIM.c) * 1000) / 1000; custom(); });
+num('ss', x => P.ss = Math.round(clamp(x, LIM.ss) * 100) / 100);
+num('t', x => { P.t = Math.round(clamp(x, LIM.t) * 100) / 100; custom(); });
+num('yaw', x => view.yaw = clamp(x, LIM.yaw)); num('pitch', x => view.pitch = clamp(x, LIM.pitch)); num('z', x => view.zoom = clamp(x, LIM.zoom));
+if (q.has('sw')) P.sweep = q.get('sw') === '1';
+if (q.has('anim')) P.anim = q.get('anim') === '1';
+if (q.get('vtx') === '0') P.vtx = false;
+if (q.get('wc') === '0') P.wc = false;
+if (q.get('sh') === '0') P.sh = false;
+if (q.get('run') === '0') running = false;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI();
+let tPrev = null;
+(function loop(ts) {
+  if (ts !== undefined && tPrev !== null) advance(Math.min(0.1, (ts - tPrev) / 1000));
+  if (ts !== undefined) tPrev = ts;
+  draw(); syncLive();
+  window.__ready = true;
+  requestAnimationFrame(loop);
+})();
+// cheap per-frame refresh of the values that animate
+function syncLive() {
+  for (const [nm] of PLANES) if (P.auto[nm]) { $('a_' + nm).value = P.ang[nm]; $('v_' + nm).textContent = P.ang[nm].toFixed(1); }
+  if (P.sweep) { $('C').value = P.c; $('vC').textContent = P.c.toFixed(3); }
+  if (P.anim) { $('T').value = P.t; $('vT').textContent = P.t.toFixed(2); }
+}
+</script>
+</body>
+</html>
