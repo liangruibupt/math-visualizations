@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ulam 素数螺旋 · 二次多项式的对角线</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d14; color: #e4e6ee;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(22,26,38,.93); border: 1px solid #323a52; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #a8b6dc; border-top: 1px solid #323a52; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd27a; font-variant-numeric: tabular-nums; }
+  small { color: #8e95a8; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd27a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #262c3e; color: #e4e6ee; border: 1px solid #3a4360;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #313a52; }
+  button.on { background: #3f4f8a; border-color: #6375b8; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #b9bfd0; margin-top: 4px; white-space: pre-line; }
+  .ray { border-left: 3px solid; padding-left: 6px; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(11,13,20,.82); color: #cfd3e0; font-size: 12px; font-variant-numeric: tabular-nums; }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>Ulam 素数螺旋 · 二次多项式的对角线</h1>
+  <small>把 1, 2, 3, … 沿方形螺旋一圈圈排开，只点亮素数。素数会挤在一些斜线上：每条斜线的一半是一个二次多项式 <span class="mono">4k² + bk + c</span> 的取值（k 是第几圈）。单击一条斜线，看它的多项式和素数密度。</small>
+
+  <h2>布局</h2>
+  <div class="presets" id="lays"></div>
+  <h2>点亮哪些数</h2>
+  <div class="presets" id="sets"></div>
+  <small>随机对照：每个 n 以概率 1/ln n 点亮（素数定理给出的平均密度）。“随机奇数”只在奇数上抽，概率 2/ln n，保留了“素数都是奇数”这一条。</small>
+
+  <h2>大小</h2>
+  <div class="row">
+    <label>螺旋边长 S（共 S² 个数） <b id="vS"></b></label>
+    <input id="S" type="range" min="5" max="2001" step="2">
+  </div>
+  <div class="row">
+    <label>从哪个数开始 <b id="vS0"></b></label>
+    <input id="S0" type="range" min="1" max="1000" step="1">
+    <small>从 41 开始，主对角线就是 Euler 的 m² + m + 41</small>
+  </div>
+  <div class="row">
+    <label>亮度 <b id="vG"></b></label>
+    <input id="G" type="range" min="0.3" max="3" step="0.05">
+    <small>缩小到一个像素装好几个格子时，像素颜色是这几个格子的平均，素数挤在一起的斜线就显得更亮</small>
+  </div>
+  <div class="row">
+    <label>随机种子 <b id="vSeed"></b></label>
+    <input id="Seed" type="range" min="1" max="999" step="1">
+  </div>
+
+  <h2>选中的斜线</h2>
+  <div class="presets"><button id="flip">换方向 ↗ / ↘</button><button id="clear">清除</button></div>
+  <div class="info" id="selHead">单击 Ulam 螺旋上的一个格子：选中经过它、素数更密的那条斜线。</div>
+  <div class="info ray" id="rayA" style="border-color:#ff5c8a"></div>
+  <div class="info ray" id="rayB" style="border-color:#5cffb0"></div>
+  <small>HL 常数 C 来自 Hardy–Littlewood 猜想 F：f(k) 是素数的“概率”约为 C / ln f(k)。C 由 f 对每个素数 p 的根数决定，这里乘到 p ≤ 400 万。</small>
+
+  <h2>所有斜线：实测 vs 预测</h2>
+  <div class="checks"><label><input id="sc" type="checkbox"> 散点图（每条射线一个点）</label></div>
+  <div class="info" id="scInfo"></div>
+
+  <h2>素数定理</h2>
+  <div class="info" id="pnt"></div>
+
+  <h2>预设</h2>
+  <div class="presets" id="pre"></div>
+  <small style="margin-top:8px">拖动平移 · 滚轮缩放 · 双击复位 · 单击选斜线（Ulam 布局）</small>
+</div>
+
+<div id="view"><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+// ---------- configuration ----------
+const LIM = { S: [5, 2001], s0: [1, 1000], g: [0.3, 3], seed: [1, 999], z: [0.2, 400] };
+const MAXV = LIM.S[1] ** 2 + LIM.s0[1] - 1;    // largest value ever placed on the spiral: 4,005,000
+const SCAN_P = 2000;                           // the scatter plot truncates the HL product at p < SCAN_P
+const COL = { bg: [11, 13, 20], cell: [17, 20, 32], prime: [255, 210, 122], comp: [70, 78, 100],
+  A: '#ff5c8a', B: '#5cffb0' };
+const LAYS = { ulam: 'Ulam 方形螺旋', sacks: 'Sacks 螺旋' };
+const SETS = { prime: '素数', rand: '随机 1/ln n', odd: '随机奇数 2/ln n' };
+const PRESETS = {
+  classic: { name: '经典 201×201', lay: 'ulam', set: 'prime', S: 201, s0: 1 },
+  big: { name: '400 万个数', lay: 'ulam', set: 'prime', S: 2001, s0: 1 },
+  euler: { name: 'Euler m² + m + 41', lay: 'ulam', set: 'prime', S: 81, s0: 41, sel: [0, 0, 1] },
+  landau: { name: 'm² + 1 与平方数', lay: 'ulam', set: 'prime', S: 401, s0: 1, sel: [0, 0, -1] },
+  rich: { name: '最密的一条', lay: 'ulam', set: 'prime', S: 2001, s0: 1, sel: [-199, -199, -1] },
+  sacks: { name: 'Sacks 64 万个数', lay: 'sacks', set: 'prime', S: 801, s0: 1 },
+  sacksEuler: { name: 'Sacks · Euler 曲线', lay: 'sacks', set: 'prime', S: 401, s0: 41, sel: [0, 0, 1] },
+  rand: { name: '随机对照', lay: 'ulam', set: 'rand', S: 401, s0: 1 },
+  odd: { name: '随机奇数对照', lay: 'ulam', set: 'odd', S: 401, s0: 1 },
+  scatter: { name: '散点：实测 vs HL', lay: 'ulam', set: 'prime', S: 2001, s0: 1, sc: true },
+};
+
+const P = { preset: 'classic', lay: 'ulam', set: 'prime', S: 201, s0: 1, g: 1, seed: 1, sel: null, sc: false };
+const view = { cx: 0, cy: 0, zoom: 1 };
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const odd = x => 2 * Math.round((x - 1) / 2) + 1;
+const $ = id => document.getElementById(id);
+const fmt = x => Number.isFinite(x) ? Math.round(x).toLocaleString('en-US') : '—';
+
+function rng(seed) {   // mulberry32: same seed, same control set
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+}
+
+// ---------- the numbers ----------
+// sieve of Eratosthenes up to MAXV: isPrime[n] = 1 for primes
+const isPrime = new Uint8Array(MAXV + 1);
+isPrime.fill(1, 2);
+for (let i = 2; i * i <= MAXV; i++) if (isPrime[i]) for (let j = i * i; j <= MAXV; j += i) isPrime[j] = 0;
+const PRIMES = (() => { let c = 0; for (let n = 2; n <= MAXV; n++) c += isPrime[n];
+  const a = new Int32Array(c); for (let n = 2, k = 0; n <= MAXV; n++) if (isPrime[n]) a[k++] = n; return a; })();
+const PSMALL = PRIMES.subarray(0, PRIMES.findIndex(p => p >= SCAN_P));
+
+// random control: mark n with probability 1/ln n (rand) or, for odd n only, 2/ln n (odd)
+const randMark = new Uint8Array(MAXV + 1);
+let randKey = '';
+function markArray() {
+  if (P.set === 'prime') return isPrime;
+  const key = P.set + P.seed;
+  if (key !== randKey) {
+    randKey = key; randMark.fill(0); randMark[2] = 1;
+    const r = rng(P.seed), oddOnly = P.set === 'odd';
+    for (let n = 3; n <= MAXV; n++) {
+      if (oddOnly && !(n & 1)) continue;
+      if (r() < (oddOnly ? 2 : 1) / Math.log(n)) randMark[n] = 1;
+    }
+  }
+  return randMark;
+}
+let mark = isPrime;
+// the density each model expects at n; base() is the prime number theorem's 1/ln n
+const base = v => v < 2 ? 0 : Math.min(1, 1 / Math.log(v));
+const model = v => P.set === 'odd' ? (v === 2 ? 1 : v & 1 ? Math.min(1, 2 / Math.log(v)) : 0) : base(v);
+
+// ---------- spiral geometry ----------
+// standard spiral: 1 at the origin, 2 at (1, 0), turning counter-clockwise; ring k holds (2k−1)²+1 … (2k+1)²
+function side(x, y) {
+  const k = Math.max(Math.abs(x), Math.abs(y));
+  return y === -k ? 0 : x === -k ? 1 : y === k ? 2 : 3;   // bottom, left, top, right
+}
+function nAt(x, y) {
+  const k = Math.max(Math.abs(x), Math.abs(y)), m = (2 * k + 1) ** 2;
+  switch (side(x, y)) {
+    case 0: return m - (k - x);
+    case 1: return m - 2 * k - (k + y);
+    case 2: return m - 4 * k - (k + x);
+    default: return m - 6 * k - (k - y);
+  }
+}
+const valueAt = (x, y) => P.s0 - 1 + nAt(x, y);
+const half = () => (P.S - 1) / 2;
+
+// positions of the N = S² values s0 … s0+N−1 in the current layout
+const PX = new Float32Array(LIM.S[1] ** 2), PY = new Float32Array(LIM.S[1] ** 2);
+let N = 0;
+function layout() {
+  N = P.S * P.S;
+  if (P.lay === 'ulam') {   // walk the spiral: right 1, up 1, left 2, down 2, right 3, …
+    const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];
+    let x = 0, y = 0, i = 1, d = 0; PX[0] = PY[0] = 0;
+    for (let len = 1; i < N && len <= P.S; len++) for (let rep = 0; rep < 2 && i < N; rep++, d = (d + 1) % 4)
+      for (let s = 0; s < len && i < N; s++) { x += DX[d]; y += DY[d]; PX[i] = x; PY[i] = y; i++; }
+  } else for (let i = 0; i < N; i++) sacksXY(P.s0 + i, i);
+}
+// Sacks: n sits at radius √n and angle 2π√n, so the perfect squares line up on the positive x-axis
+function sacksXY(n, i) { const r = Math.sqrt(n), t = 2 * Math.PI * r; PX[i] = r * Math.cos(t); PY[i] = r * Math.sin(t); }
+const extent = () => P.lay === 'ulam' ? half() + 0.5 : Math.sqrt(P.s0 + N - 1) + 1;
+
+// ---------- diagonals and their polynomials ----------
+// The diagonal through (x0, y0) with slope dir splits into runs on one side of the rings. On a run the ring
+// index k moves by one per cell, and the value is exactly 4k² + bk + c.
+function lineRays(x0, y0, dir, lean) {
+  const h = half(), lo = Math.max(-h - x0, dir > 0 ? -h - y0 : y0 - h), hi = Math.min(h - x0, dir > 0 ? h - y0 : y0 + h);
+  const runs = []; let cur = null;
+  for (let j = lo; j <= hi; j++) {
+    const x = x0 + j, y = y0 + dir * j, s = side(x, y);
+    if (!cur || cur.side !== s) runs.push(cur = { side: s, cells: [] });
+    cur.cells.push([x, y, Math.max(Math.abs(x), Math.abs(y)), valueAt(x, y)]);
+  }
+  const rays = [];
+  for (const r of runs) {
+    if (r.cells.length < 3) continue;
+    const cs = r.cells[0][2] < r.cells[1][2] ? r.cells : r.cells.slice().reverse();   // order by k
+    const [k0, v0] = [cs[0][2], cs[0][3]], b = cs[1][3] - v0 - 4 * (2 * k0 + 1), c = v0 - 4 * k0 * k0 - b * k0;
+    rays.push(rayStats({ b, c, cells: cs }, lean));
+  }
+  return rays;
+}
+function rayStats(r, lean) {
+  let hits = 0, sb = 0, sm = 0;
+  for (const cl of r.cells) { const v = cl[3]; hits += mark[v]; sb += base(v); sm += model(v); }
+  const D = r.b * r.b - 16 * r.c, sq = D >= 0 && Number.isInteger(Math.sqrt(D));
+  const C = sq ? 0 : hlConst(r.b, r.c, lean ? PSMALL : PRIMES);
+  return Object.assign(r, { hits, sumBase: sb, sumModel: sm, D, square: sq, C, k0: r.cells[0][2], k1: r.cells[r.cells.length - 1][2] });
+}
+// Hardy–Littlewood / Bateman–Horn constant of f(k) = 4k² + bk + c:  C = Π_p (1 − ω(p)/p) / (1 − 1/p),
+// ω(p) = number of roots of f mod p. With b even, f ≡ c (mod 2); for odd p, ω(p) = 1 + (Δ/p), Δ = b² − 16c.
+function hlConst(b, c, plist) {
+  if (c % 2 === 0) return 0;
+  let C = 2;
+  for (let i = 1; i < plist.length; i++) {
+    const p = plist[i], a = ((b * b - 16 * c) % p + p) % p;
+    if (a === 0) continue;
+    C *= 1 - legendre(a, p) / (p - 1);
+  }
+  return C;
+}
+function legendre(a, p) {   // Euler's criterion a^((p−1)/2) mod p; all products stay below 2^53
+  let e = (p - 1) / 2, r = 1, x = a;
+  for (let i = 0; i < 32 && e > 0; i++) { if (e & 1) r = r * x % p; x = x * x % p; e = Math.floor(e / 2); }
+  return r === 1 ? 1 : -1;
+}
+// densest direction through a clicked cell: count marks within 40 cells either way
+function bestDir(x0, y0) {
+  const h = half(); let best = 1, bd = -1;
+  for (const dir of [1, -1]) {
+    let m = 0, n = 0;
+    for (let j = -40; j <= 40; j++) {
+      const x = x0 + j, y = y0 + dir * j;
+      if (Math.abs(x) <= h && Math.abs(y) <= h) { n++; m += mark[valueAt(x, y)]; }
+    }
+    if (n && m / n > bd + 1e-9) { bd = m / n; best = dir; }
+  }
+  return best;
+}
+// 4k² + bk + c = m² + εm + C₀ with m = 2k + u, ε ∈ {0, 1}  (b is always even on the spiral)
+function mForm(b, c) {
+  const e = ((b / 2) % 2 + 2) % 2, u = (b - 2 * e) / 4, C0 = c - u * u - e * u;
+  return `m²${e ? ' + m' : ''}${sgn(C0)}，m = 2k${sgn(u)}`;
+}
+const sgn = (v, t = '') => v === 0 ? '' : (v < 0 ? ' − ' : ' + ') + (Math.abs(v) === 1 && t ? '' : Math.abs(v)) + t;
+const poly = (b, c) => `4k²${sgn(b, 'k')}${sgn(c)}`;
+
+let rays = [], scan = null;
+function updateSelection() {
+  rays = P.sel ? lineRays(P.sel[0], P.sel[1], P.sel[2]) : [];
+  const ids = ['rayA', 'rayB'];
+  $('selHead').textContent = P.sel
+    ? `经过 (${P.sel[0]}, ${P.sel[1]}) 的 ${P.sel[2] > 0 ? '↗' : '↘'} 斜线，${rays.length} 条射线：`
+    : '单击 Ulam 螺旋上的一个格子：选中经过它、素数更密的那条斜线。';
+  const what = P.set === 'prime' ? '素数' : '被点亮的';
+  ids.forEach((id, i) => {
+    const r = rays[i], el = $(id); el.style.display = r ? '' : 'none';
+    if (!r) return;
+    const n = r.cells.length, lines = [
+      `射线 ${'AB'[i]}：f(k) = ${poly(r.b, r.c)}`, `      = ${mForm(r.b, r.c)}`,
+      `k = ${r.k0} … ${r.k1}，共 ${n} 个数，${what} ${r.hits} 个（${(100 * r.hits / n).toFixed(1)}%）`,
+    ];
+    if (r.square) lines.push(`Δ = b² − 16c = ${String(r.D).replace('-', '−')} 是完全平方：f 可以分解，不满足 Bunyakovsky 条件`);
+    else if (r.c % 2 === 0) lines.push('c 是偶数：f(k) 全是偶数，不满足 Bunyakovsky 条件');
+    else lines.push(`Δ = b² − 16c = ${String(r.D).replace('-', '−')}，HL 常数 C = ${r.C.toFixed(4)}`);
+    lines.push(`HL 预测 C·Σ1/ln f = ${(r.C * r.sumBase).toFixed(1)}，实测 / 预测 = ${r.C ? (r.hits / (r.C * r.sumBase)).toFixed(3) : '—'}`);
+    lines.push(`随机整数同样大小：Σ1/ln f = ${r.sumBase.toFixed(1)}` + (P.set === 'odd' ? `，随机奇数模型期望 ${r.sumModel.toFixed(1)}` : ''));
+    el.textContent = lines.join('\n');
+  });
+  dirtyOv = true;
+}
+
+// every ray of every diagonal with at least Lmin cells: measured density against the HL constant
+function scanAll() {
+  const h = half(), Lmin = Math.max(20, Math.floor(h / 4)), pts = [];
+  for (const dir of [1, -1]) for (let e = -2 * h; e <= 2 * h; e++) {
+    const x0 = dir > 0 ? Math.max(-h, -h - e) : Math.max(-h, e - h), y0 = dir > 0 ? x0 + e : e - x0;
+    if (Math.abs(y0) > h) continue;
+    for (const r of lineRays(x0, y0, dir, true)) if (r.cells.length >= Lmin && !r.square)
+      pts.push({ b: r.b, c: r.c, C: r.C, y: r.hits / r.sumBase, n: r.cells.length, hits: r.hits, x: r.cells[0][0], yy: r.cells[0][1], dir });
+  }
+  // statistics over the rays that can hold primes (C > 0): correlation and least-squares slope through the origin
+  const q = pts.filter(p => p.C > 0); let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+  for (const p of q) { sx += p.C; sy += p.y; sxx += p.C * p.C; syy += p.y * p.y; sxy += p.C * p.y; }
+  const m = q.length, cov = sxy / m - sx * sy / m / m, r = cov / Math.sqrt((sxx / m - (sx / m) ** 2) * (syy / m - (sy / m) ** 2));
+  const best = q.slice().sort((a, b) => b.hits / b.n - a.hits / a.n).slice(0, 5);
+  scan = { pts, Lmin, count: pts.length, odd: m, r, slope: sxy / sxx, meanY: sy / m, meanC: sx / m,
+    zeroC: pts.length - m, zeroHits: pts.filter(p => p.C === 0).reduce((s, p) => s + p.hits, 0), best };
+  $('scInfo').textContent = `射线长度 ≥ ${Lmin}：共 ${pts.length} 条（可约的不算）\n` +
+    `其中 c 为偶数（C = 0）的 ${scan.zeroC} 条，被点亮的数共 ${scan.zeroHits} 个\n` +
+    `C > 0 的 ${m} 条：相关系数 r = ${r.toFixed(3)}，过原点斜率 ${scan.slope.toFixed(3)}\n` +
+    `平均 C = ${scan.meanC.toFixed(3)}，平均 实测/Σ1/ln f = ${scan.meanY.toFixed(3)}`;
+  dirtyOv = true;
+}
+
+// prime number theorem read-out for x = the largest value on the spiral
+function li(x) {   // Ramanujan-free series li(x) = γ + ln ln x + Σ (ln x)^k / (k · k!)
+  const L = Math.log(x); let s = 0.5772156649015329 + Math.log(L), t = 1;
+  for (let k = 1; k < 200; k++) { t *= L / k; s += t / k; if (t / k < 1e-12 * s) break; }
+  return s;
+}
+function pntInfo() {
+  const x = P.s0 + N - 1; let cnt = 0, cm = 0, ex = 0;
+  for (let n = 2; n <= x; n++) { cnt += isPrime[n]; cm += mark[n]; ex += model(n); }
+  const xl = x / Math.log(x), L = li(x);
+  let t = `x = ${fmt(x)}\nπ(x) = ${fmt(cnt)}\nx / ln x = ${fmt(xl)}（π(x) 是它的 ${(cnt / xl).toFixed(4)} 倍）\nli(x) = ${fmt(L)}（π(x) / li(x) = ${(cnt / L).toFixed(5)}）`;
+  if (P.set !== 'prime') t += `\n随机对照点亮了 ${fmt(cm)} 个数，模型期望 ${fmt(ex)}`;
+  $('pnt').textContent = t;
+  return { x, pi: cnt, marked: cm, expected: ex, xlnx: xl, li: L };
+}
+
+// ---------- drawing ----------
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 1, H = 1, dpr = 1, img = null, cnt = null, prc = null;
+let dirtyBase = true, dirtyOv = true, pnt = null;
+// the Ulam square at one pixel per cell; zoomed out, the browser averages it down (smoothing 'high')
+const cellCv = document.createElement('canvas'), cellCtx = cellCv.getContext('2d');
+function buildCells() {
+  if (P.lay !== 'ulam') return;
+  const h = half(), im = cellCtx.createImageData(P.S, P.S), d = im.data;
+  cellCv.width = cellCv.height = P.S;
+  for (let i = 0; i < N; i++) put(d, 4 * ((h - PY[i]) * P.S + PX[i] + h), mark[P.s0 + i] ? COL.prime : COL.cell);
+  cellCtx.putImageData(im, 0, 0);
+}
+const zoomedOut = sc => P.lay === 'ulam' && sc < 1;
+function transform() {
+  const sc = Math.min(W, H) / (2 * extent()) * 0.97 * view.zoom;
+  return { sc, cx: view.cx, cy: view.cy, X: x => W / 2 + (x - view.cx) * sc, Y: y => H / 2 - (y - view.cy) * sc };
+}
+const put = (d, o, c) => { d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255; };
+
+function renderBase() {
+  const T = transform(), { sc, cx, cy } = T, d = img.data, n = W * H;
+  if (zoomedOut(sc)) return;
+  for (let o = 0; o < 4 * n; o += 4) put(d, o, COL.bg);
+  if (sc < 1) {   // Sacks, several numbers per pixel: mix towards the prime colour by the marked fraction
+    cnt.fill(0); prc.fill(0);
+    for (let i = 0; i < N; i++) {
+      const ix = Math.floor(W / 2 + (PX[i] - cx) * sc), iy = Math.floor(H / 2 - (PY[i] - cy) * sc);
+      if (ix < 0 || iy < 0 || ix >= W || iy >= H) continue;
+      const p = iy * W + ix; cnt[p]++; prc[p] += mark[P.s0 + i];
+    }
+    for (let p = 0, o = 0; p < n; p++, o += 4) {
+      if (!cnt[p]) continue;
+      const f = Math.min(1, P.g * 2 * prc[p] / cnt[p]);
+      for (let c = 0; c < 3; c++) d[o + c] = COL.cell[c] + (COL.prime[c] - COL.cell[c]) * f;
+      d[o + 3] = 255;
+    }
+  } else if (P.lay === 'ulam') {   // one cell covers ≥ 1 pixel: look the cell up for every pixel
+    const h = half(), gap = sc >= 5 ? 1 / sc : -1;
+    for (let sy = 0, o = 0; sy < H; sy++) {
+      const uy = cy + (H / 2 - sy - 0.5) / sc, Y = Math.round(uy), fy = uy - Y + 0.5;
+      for (let sx = 0; sx < W; sx++, o += 4) {
+        if (Math.abs(Y) > h) continue;
+        const ux = cx + (sx + 0.5 - W / 2) / sc, X = Math.round(ux), fx = ux - X + 0.5;
+        if (Math.abs(X) > h || fx < gap || fy < gap) continue;
+        put(d, o, mark[valueAt(X, Y)] ? COL.prime : COL.cell);
+      }
+    }
+  } else {   // Sacks, zoomed in: a disc per marked number, a faint dot for the others
+    const rp = Math.min(14, Math.max(0.7, 0.42 * sc)), rc = sc >= 3 ? Math.min(5, 0.16 * sc) : 0;
+    for (let i = 0; i < N; i++) {
+      const on = mark[P.s0 + i]; if (!on && !rc) continue;
+      const x = W / 2 + (PX[i] - cx) * sc, y = H / 2 - (PY[i] - cy) * sc, r = on ? rp : rc;
+      if (x < -r || y < -r || x > W + r || y > H + r) continue;
+      disc(d, x, y, r, on ? COL.prime : COL.comp);
+    }
+  }
+}
+function disc(d, x, y, r, c) {
+  const R = Math.ceil(r), r2 = Math.max(r * r, 0.5);
+  for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
+    const px = Math.floor(x) + i, py = Math.floor(y) + j;
+    if (px < 0 || py < 0 || px >= W || py >= H || (px + 0.5 - x) ** 2 + (py + 0.5 - y) ** 2 > r2) continue;
+    put(d, 4 * (py * W + px), c);
+  }
+}
+
+function drawOverlay() {
+  const T = transform(), { sc, X, Y } = T;
+  const labels = P.lay === 'ulam' && sc >= 14 * dpr;
+  rays.forEach((r, i) => {
+    const col = i ? COL.B : COL.A, pts = P.lay === 'ulam'
+      ? r.cells.map(c => [X(c[0]), Y(c[1]), c[3]])
+      : r.cells.map(c => { const s = Math.sqrt(c[3]), t = 2 * Math.PI * s; return [X(s * Math.cos(t)), Y(s * Math.sin(t)), c[3]]; });
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = Math.max(1.5 * dpr, Math.min(0.35 * sc, 6 * dpr));
+    ctx.beginPath(); pts.forEach(([x, y], j) => j ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.fillStyle = ctx.strokeStyle = col; ctx.lineWidth = 3 * dpr;
+    const s = labels ? sc * 0.9 : Math.max(2.5 * dpr, Math.min(sc * 0.6, 12 * dpr));   // outlines keep the numbers readable
+    for (const [x, y, v] of pts) if (mark[v] && x > -s && y > -s && x < W + s && y < H + s)
+      labels ? ctx.strokeRect(x - s / 2, y - s / 2, s, s) : ctx.fillRect(x - s / 2, y - s / 2, s, s);
+  });
+  if (labels) drawLabels(T);
+  if (P.sc && scan) drawScatter();
+}
+function drawLabels({ sc, X, Y, cx, cy }) {
+  const h = half(), fs = Math.min(15 * dpr, sc * 0.34);
+  const x0 = Math.max(-h, Math.floor(cx - W / 2 / sc)), x1 = Math.min(h, Math.ceil(cx + W / 2 / sc));
+  const y0 = Math.max(-h, Math.floor(cy - H / 2 / sc)), y1 = Math.min(h, Math.ceil(cy + H / 2 / sc));
+  ctx.font = `${fs}px ui-monospace, Menlo, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const v = valueAt(x, y), t = String(v);
+    if (t.length * fs * 0.62 > sc * 0.92) continue;
+    ctx.fillStyle = mark[v] ? '#1a1406' : '#6d7590'; ctx.fillText(t, X(x), Y(y));
+  }
+}
+function drawScatter() {
+  const w = 330 * dpr, h = 270 * dpr, x0 = W - w - 12 * dpr, y0 = 12 * dpr;
+  ctx.fillStyle = 'rgba(11,13,20,.9)'; ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = '#323a52'; ctx.lineWidth = 1 * dpr; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+  const ml = 34 * dpr, mr = 12 * dpr, mt = 28 * dpr, mb = 40 * dpr;
+  let M = 2; for (const p of scan.pts) M = Math.max(M, p.C, p.y);
+  M = Math.ceil(M);
+  const X = v => x0 + ml + v / M * (w - ml - mr), Y = v => y0 + h - mb - v / M * (h - mt - mb);
+  ctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; ctx.fillStyle = '#8e95a8'; ctx.strokeStyle = 'rgba(255,255,255,.08)';
+  for (let v = 0; v <= M; v++) {
+    ctx.beginPath(); ctx.moveTo(X(v), Y(0)); ctx.lineTo(X(v), Y(M)); ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(M), Y(v)); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(v, X(v), Y(0) + 3 * dpr);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(v, X(0) - 4 * dpr, Y(v));
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.setLineDash([5 * dpr, 4 * dpr]);
+  ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(M), Y(M)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(140,190,255,.55)';
+  for (const p of scan.pts) ctx.fillRect(X(p.C) - 1.5 * dpr, Y(p.y) - 1.5 * dpr, 3 * dpr, 3 * dpr);
+  rays.forEach((r, i) => {
+    if (r.cells.length < scan.Lmin || r.square) return;
+    ctx.strokeStyle = i ? COL.B : COL.A; ctx.lineWidth = 2 * dpr;
+    ctx.beginPath(); ctx.arc(X(r.C), Y(r.hits / r.sumBase), 5 * dpr, 0, 7); ctx.stroke();
+  });
+  ctx.font = `${11 * dpr}px -apple-system, "PingFang SC", sans-serif`; ctx.fillStyle = '#d6dae6';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`${scan.count} 条射线：实测密度 vs HL 预测（虚线 y = x）`, x0 + 8 * dpr, y0 + 7 * dpr);
+  ctx.fillStyle = '#8e95a8'; ctx.textAlign = 'center';
+  ctx.fillText(`横轴 HL 常数 C · 纵轴 ${P.set === 'prime' ? '素数' : '点亮'}个数 ÷ Σ 1/ln f · r = ${scan.r.toFixed(2)}`, x0 + w / 2, y0 + h - 18 * dpr);
+}
+
+function draw() {
+  if (dirtyBase) { renderBase(); dirtyBase = false; }
+  const T = transform();
+  if (zoomedOut(T.sc)) {
+    ctx.fillStyle = `rgb(${COL.bg})`; ctx.fillRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.filter = P.g !== 1 ? `brightness(${P.g})` : 'none';
+    ctx.drawImage(cellCv, T.X(-half() - 0.5), T.Y(half() + 0.5), P.S * T.sc, P.S * T.sc);
+    ctx.filter = 'none';
+  } else ctx.putImageData(img, 0, 0);
+  drawOverlay(); dirtyOv = false;
+}
+
+// ---------- state changes ----------
+let hover = null;
+function stat() {
+  const T = transform(), what = SETS[P.set];
+  let t = `${LAYS[P.lay]} · ${what} · ${fmt(N)} 个数（${fmt(P.s0)} … ${fmt(P.s0 + N - 1)}）· 每格 ${T.sc >= 1 ? (T.sc / dpr).toFixed(1) + ' 像素' : (1 / T.sc).toFixed(1) + ' 个数/像素'}`;
+  if (hover) t = `(${hover[0]}, ${hover[1]}) · n = ${fmt(hover[2])} · ${isPrime[hover[2]] ? '素数' : '合数'}${P.set !== 'prime' ? (mark[hover[2]] ? ' · 已点亮' : ' · 未点亮') : ''} · 第 ${Math.max(Math.abs(hover[0]), Math.abs(hover[1]))} 圈`;
+  $('stat').textContent = t;
+}
+function rebuild() {   // size, start, layout or number set changed
+  mark = markArray(); layout(); buildCells();
+  if (P.sel) { const h = half(); P.sel = [clamp(P.sel[0], [-h, h]), clamp(P.sel[1], [-h, h]), P.sel[2]]; }
+  updateSelection(); pnt = pntInfo();
+  if (P.sc) scanAll(); else { scan = null; $('scInfo').textContent = ''; }
+  dirtyBase = true;
+}
+function resetView() { Object.assign(view, { cx: 0, cy: 0, zoom: 1 }); dirtyBase = true; }
+
+function syncUI() {
+  $('S').value = P.S; $('S0').value = P.s0; $('G').value = P.g; $('Seed').value = P.seed; $('sc').checked = P.sc;
+  $('vS').textContent = `${P.S}（${fmt(P.S * P.S)}）`; $('vS0').textContent = P.s0; $('vG').textContent = P.g.toFixed(2); $('vSeed').textContent = P.seed;
+  document.querySelectorAll('[data-l]').forEach(b => b.classList.toggle('on', b.dataset.l === P.lay));
+  document.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === P.set));
+  document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === P.preset));
+}
+function applyPreset(key) {
+  const p = PRESETS[key];
+  Object.assign(P, { preset: key, lay: p.lay, set: p.set, S: p.S, s0: p.s0, sel: p.sel ? p.sel.slice() : null, sc: !!p.sc });
+}
+const button = (parent, text, attr, val, fn) => {
+  const b = document.createElement('button'); b.textContent = text; b.dataset[attr] = val; b.onclick = fn; $(parent).appendChild(b);
+};
+for (const [k, p] of Object.entries(PRESETS)) button('pre', p.name, 'p', k, () => { applyPreset(k); syncUI(); rebuild(); resetView(); });
+for (const [k, name] of Object.entries(LAYS)) button('lays', name, 'l', k, () => { P.lay = k; P.preset = ''; syncUI(); rebuild(); resetView(); });
+for (const [k, name] of Object.entries(SETS)) button('sets', name, 's', k, () => { P.set = k; P.preset = ''; syncUI(); rebuild(); });
+const changed = (rv) => { P.preset = ''; syncUI(); rebuild(); if (rv) resetView(); };
+$('S').oninput = e => { P.S = odd(+e.target.value); changed(true); };
+$('S0').oninput = e => { P.s0 = +e.target.value; changed(P.lay === 'sacks'); };
+$('Seed').oninput = e => { P.seed = +e.target.value; changed(false); };
+$('G').oninput = e => { P.g = +e.target.value; syncUI(); dirtyBase = true; };
+$('sc').onchange = e => { P.sc = e.target.checked; if (P.sc) scanAll(); else { scan = null; $('scInfo').textContent = ''; } dirtyOv = true; };
+$('flip').onclick = () => { if (P.sel) { P.sel[2] = -P.sel[2]; updateSelection(); } };
+$('clear').onclick = () => { P.sel = null; updateSelection(); };
+
+// pan / zoom / click
+let drag = null;
+const cellAt = e => {
+  const r = cv.getBoundingClientRect(), T = transform();
+  const ux = T.cx + ((e.clientX - r.left) * dpr - W / 2) / T.sc, uy = T.cy - ((e.clientY - r.top) * dpr - H / 2) / T.sc;
+  const x = Math.round(ux), y = Math.round(uy), h = half();
+  return P.lay === 'ulam' && Math.abs(x) <= h && Math.abs(y) <= h ? [x, y, valueAt(x, y)] : null;
+};
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: false }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) { hover = cellAt(e); return; }
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && dx * dx + dy * dy < 16) return;
+  const T = transform(), E = extent();
+  view.cx = clamp(view.cx - dx * dpr / T.sc, [-E, E]); view.cy = clamp(view.cy + dy * dpr / T.sc, [-E, E]);
+  drag = { x: e.clientX, y: e.clientY, moved: true }; dirtyBase = true;
+});
+cv.addEventListener('pointerup', e => {
+  if (drag && !drag.moved) { const c = cellAt(e); if (c) { P.sel = [c[0], c[1], bestDir(c[0], c[1])]; updateSelection(); } }
+  drag = null;
+});
+cv.addEventListener('pointerleave', () => { hover = null; });
+cv.addEventListener('dblclick', resetView);
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY * 0.0015), r = cv.getBoundingClientRect(), T = transform();
+  const mx = (e.clientX - r.left) * dpr - W / 2, my = (e.clientY - r.top) * dpr - H / 2;
+  const ax = T.cx + mx / T.sc, ay = T.cy - my / T.sc, z = clamp(view.zoom * f, LIM.z), sc2 = T.sc * z / view.zoom;
+  view.zoom = z; view.cx = ax - mx / sc2; view.cy = ay + my / sc2; dirtyBase = true;
+}, { passive: false });
+
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = devicePixelRatio || 1;
+  W = cv.width = Math.max(1, Math.round(r.width * dpr)); H = cv.height = Math.max(1, Math.round(r.height * dpr));
+  img = ctx.createImageData(W, H); cnt = new Uint32Array(W * H); prc = new Uint32Array(W * H);
+  dirtyBase = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?p=euler  or  ?S=2001&set=odd&seed=7&sc=1&ui=0  or  ?S=401&x=10&y=-3&dir=-1
+// Every numeric param must be finite and is clamped to its slider range; strings are matched against fixed lists.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { if (q.has(k)) { const x = Number(q.get(k)); if (Number.isFinite(x)) f(x); } };
+const pick = (k, dict, f) => { const v = q.get(k); if (v !== null && Object.hasOwn(dict, v)) f(v); };
+pick('p', PRESETS, applyPreset);
+pick('lay', LAYS, v => { P.lay = v; P.preset = ''; });
+pick('set', SETS, v => { P.set = v; P.preset = ''; });
+num('S', x => { P.S = odd(clamp(x, LIM.S)); P.preset = ''; });
+num('s0', x => { P.s0 = Math.round(clamp(x, LIM.s0)); P.preset = ''; });
+num('g', x => P.g = clamp(x, LIM.g));
+num('seed', x => P.seed = Math.round(clamp(x, LIM.seed)));
+if (q.has('x') && q.has('y')) {
+  const h = half(), s = [0, 0, 1];
+  num('x', x => s[0] = Math.round(clamp(x, [-h, h]))); num('y', y => s[1] = Math.round(clamp(y, [-h, h])));
+  P.sel = s; P.preset = '';
+}
+num('dir', x => { if (P.sel) P.sel[2] = x < 0 ? -1 : 1; });
+if (q.get('sc') === '1') P.sc = true;
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+resize(); syncUI(); rebuild();
+if (P.sel && !q.has('dir') && q.has('x')) { P.sel[2] = bestDir(P.sel[0], P.sel[1]); updateSelection(); }
+num('z', x => view.zoom = clamp(x, LIM.z));
+num('cx', x => view.cx = clamp(x, [-extent(), extent()]));
+num('cy', x => view.cy = clamp(x, [-extent(), extent()]));
+
+(function loop() {
+  if (dirtyBase || dirtyOv) { draw(); window.__ready = true; }
+  stat();
+  window.__ulam = { lay: P.lay, set: P.set, S: P.S, s0: P.s0, N, pnt, view: { ...view, sc: transform().sc },
+    rays: rays.map(r => ({ b: r.b, c: r.c, k0: r.k0, k1: r.k1, n: r.cells.length, hits: r.hits, C: r.C, sumBase: r.sumBase, sumModel: r.sumModel, D: r.D, square: r.square })),
+    scan: scan && { count: scan.count, odd: scan.odd, r: scan.r, slope: scan.slope, meanY: scan.meanY, meanC: scan.meanC, zeroC: scan.zeroC, zeroHits: scan.zeroHits, Lmin: scan.Lmin, best: scan.best } };
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

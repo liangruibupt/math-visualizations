@@ -2,7 +2,7 @@
 
 用可交互的图形直观展现数学的奥妙。每个样例是一个独立的网页，用浏览器直接打开即可，拖动滑块就能看到公式如何变成形状。
 
-从总目录页 [index.html](index.html) 进入，按“贝壳”“分形”“图案”“运动与波”“几何与拓扑”“概率”六类导航到各个样例；每个样例页面左上角有“← 全部样例”返回目录。
+从总目录页 [index.html](index.html) 进入，按“贝壳”“分形”“图案”“运动与波”“几何与拓扑”“数论”“概率”七类导航到各个样例；每个样例页面左上角有“← 全部样例”返回目录。
 
 ## 样例
 
@@ -20,6 +20,10 @@
 | [Logistic 映射 · 倍周期分岔](examples/logistic-map/README.md)（[打开页面](examples/logistic-map/index.html)） | 一维迭代 x → r·x(1 − x)、蛛网图与不动点稳定性、倍周期分岔与 Feigenbaum 常数 δ、Lyapunov 指数、周期 3 窗口与切分岔（Li–Yorke、Sharkovskii）、阵发混沌、与 Mandelbrot 集实轴的共轭 c = r/2 − r²/4；分岔图可单击设 r、拖框放大，数值求出 r₁…r₉ 和 δ | <img src="examples/logistic-map/images/logistic.png" width="240"> |
 | [Galton 板 · 中心极限定理](examples/galton-board/README.md)（[打开页面](examples/galton-board/index.html)） | 伯努利试验与杨辉三角、二项分布的均值 np 与方差 np(1−p)、de Moivre–Laplace 定理、中心极限定理及其条件、Berry–Esseen 与 Edgeworth 收敛速度、柯西分布的反例、大数定律；动画小球落板，叠加精确二项分布与正态曲线，另有均匀、指数、双峰、骰子、柯西五种分布的 n 项和，实时画出 KS 距离随 n 的下降 | <img src="examples/galton-board/images/galton.png" width="240"> |
 | [Penrose 镶嵌 · 永不重复的铺砖](examples/penrose-tiling/README.md)（[打开页面](examples/penrose-tiling/index.html)） | Robinson 三角形收缩替换、粗细菱形个数比沿 Fibonacci 数列收敛到 φ、膨胀与超级砖块、匹配弧线、P2 风筝与飞镖、de Bruijn 五重网格与相位子、晶体学限制（2cos 72° = 1/φ 不是整数）、准晶体与 Shechtman；可逐代收缩，并测量旋转 72°/36° 后的重合度 | <img src="examples/penrose-tiling/images/sun.png" width="240"> |
+| [圆上的乘法表 · 心形线](examples/times-table-circle/README.md)（[打开页面](examples/times-table-circle/index.html)） | 弦族的包络与外摆线（杠杆支点推导、滚圆切线）、模 N 的乘法阶与环结构（置换与尾巴、1/97 的 96 位循环节）、Mandelbrot 与 z^k + c 主分量的边界、圆内反射焦散；k 可连续变化并动画，按环着色，单击点看轨道，含心形线、肾形线、混叠图案、咖啡杯点光源/平行光预设 | <img src="examples/times-table-circle/images/cardioid.png" width="240"> |
+| [Collatz 3n+1 · 冰雹数与珊瑚树](examples/collatz-tree/README.md)（[打开页面](examples/collatz-tree/index.html)） | 冰雹轨迹与 BigInt 精确峰值、每个奇数步平均乘 3/4 的启发式、倒着画所有轨迹的珊瑚树、停止时间散点的条带与 σ(n) 只由 n mod 2ᵏ 决定、Terras 定理与 2-adic 视角；可调转角并切换共享路径只画一次，线性 / 对数纵轴，含 27、837799、2⁵³ − 1 等预设 | <img src="examples/collatz-tree/images/coral.png" width="240"> |
+| [Ulam 素数螺旋 · 二次多项式的对角线](examples/ulam-spiral/README.md)（[打开页面](examples/ulam-spiral/index.html)） | 埃拉托斯特尼筛法、素数定理 π(x) ~ li(x)、斜线即二次多项式 4k² + bk + c、Euler 的 m² + m + 41 与 Heegner 数 163、Hardy–Littlewood 猜想 F 与 Bateman–Horn 常数、Bunyakovsky 猜想与 Landau 的 m² + 1 问题、Cramér 随机模型；单击斜线给出多项式、实测与预测素数密度，所有射线的实测 vs 预测散点图，Sacks 螺旋上多项式变成曲线 | <img src="examples/ulam-spiral/images/ulam.png" width="240"> |
+| [Ford 圆与 Farey 数列](examples/ford-circles/README.md)（[打开页面](examples/ford-circles/index.html)） | Ford 圆从不交叠的证明 d² − (r₁+r₂)² = (Δ²−1)/(q²s²)、中位分数是空隙里最大的圆、Farey 数列相邻项相切与 \|F_n\| ≈ 3n²/π²、Stern–Brocot 树与连分数路径、Legendre 与 Vahlen 定理（竖线穿过的圆就是渐近分数）、Hurwitz 常数 √5 与 φ；可点选圆看邻居与中位数，树与圆共用横轴联动，φ、π、√2、e 逐个渐近分数放大 | <img src="examples/ford-circles/images/overview.png" width="240"> |
 
 ## 目录约定
 
