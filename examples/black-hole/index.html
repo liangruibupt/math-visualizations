@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>黑洞 · Schwarzschild 时空中的光线与轨道</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #040509; color: #e6e6e6;
+    font: 13px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #panel { position: absolute; top: 12px; left: 12px; width: 372px; padding: 10px 12px; box-sizing: border-box;
+    background: rgba(20,22,32,.93); border: 1px solid #343a50; border-radius: 8px;
+    max-height: calc(100% - 24px); overflow-y: auto; z-index: 2; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 2px; color: #e2bf8e; border-top: 1px solid #343a50; padding-top: 8px; }
+  .row { margin: 6px 0; }
+  .row label { display: flex; justify-content: space-between; }
+  .row label b { color: #ffd38a; font-variant-numeric: tabular-nums; }
+  small { color: #8f93a6; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; color: #ffd38a; }
+  input[type=range] { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  button { background: #2a2c40; color: #e6e6e6; border: 1px solid #44475f;
+    border-radius: 4px; padding: 3px 7px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #363954; }
+  button.on { background: #7a5a2e; border-color: #b8894a; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+  .info { font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #b3b7c8; margin-top: 6px; white-space: pre-wrap; }
+  #err { color: #ff8f8f; }
+  #view { position: absolute; left: 396px; right: 0; top: 0; bottom: 0; }
+  #view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #gl { cursor: grab; }
+  #ov { pointer-events: none; }
+  #stat:empty { display: none; }
+  #stat { position: absolute; left: 10px; bottom: 8px; padding: 4px 8px; border-radius: 4px; pointer-events: none;
+    background: rgba(4,5,9,.8); color: #cdd2e2; font-size: 12px; font-variant-numeric: tabular-nums; max-width: calc(100% - 40px); }
+  body.noui #panel, body.noui #stat { display: none; }
+  body.noui #view { left: 0; }
+  @media (max-width: 900px) { #panel { width: calc(100% - 24px); max-height: 45%; } #view { left: 0; top: 50%; } }
+  body.noui #view { left: 0; top: 0; }   /* after @media so ui=0 also wins on small screens */
+</style>
+</head>
+<body>
+<div id="panel">
+  <a href="../../index.html" style="display:inline-block;margin-bottom:6px;color:#9fb4d0;text-decoration:none;font-size:12px">← 全部样例</a>
+  <h1>黑洞 · Schwarzschild 时空中的光线与轨道</h1>
+  <small>不转动、不带电、质量为 M 的黑洞，取 G = c = M = 1（长度以 M 为单位）。视界在 r = 2M，光子球在 3M，最内稳定圆轨道（ISCO）在 6M。“光线追踪”逐像素从相机倒着积分光线 <span class="mono">d²u/dφ² = 3u² − u</span>（u = 1/r），看吸积盘和星空怎样被弯曲；“轨道与有效势”在赤道面上积分粒子和光子，旁边画有效势和两种时钟。</small>
+
+  <h2>视图</h2>
+  <div class="presets"><button id="vRay">光线追踪</button><button id="vOrb">轨道与有效势</button></div>
+
+  <div id="rayUI">
+    <h2>相机（静止观察者）</h2>
+    <div class="row"><label><span>距离 r<sub>obs</sub></span> <b id="vRr"></b></label><input id="Rr" type="range" min="0.60206" max="2.69897" step="0.001"></div>
+    <div class="row"><label>倾角 i（与盘法线的夹角） <b id="vRi"></b></label><input id="Ri" type="range" min="1" max="179" step="0.5"></div>
+    <div class="row"><label>方位角 <b id="vRaz"></b></label><input id="Raz" type="range" min="-180" max="180" step="1"></div>
+    <div class="row"><label>缩放 <b id="vRz"></b></label><input id="Rz" type="range" min="-2" max="3" step="0.01">
+      <small>画面短边的一半对应碰撞参数 14M / 缩放，所以不同距离下影子一样大</small></div>
+
+    <h2>吸积盘（薄盘，6M 到外半径）</h2>
+    <div class="checks">
+      <label><input id="disk" type="checkbox"> 吸积盘</label>
+      <label><input id="dop" type="checkbox"> 红移改变颜色（温度 × g）</label>
+      <label><input id="beam" type="checkbox"> 亮度 ∝ g⁴</label>
+      <label><input id="ord" type="checkbox"> 按像的阶数着色</label>
+      <label><input id="anim" type="checkbox"> 盘转动</label>
+    </div>
+    <div class="row"><label>外半径 <b id="vRo"></b></label><input id="Ro" type="range" min="7" max="40" step="0.5"></div>
+    <div class="row"><label>曝光 <b id="vEx"></b></label><input id="Ex" type="range" min="0.2" max="5" step="0.05"></div>
+
+    <h2>背景与标注</h2>
+    <div class="presets"><span style="align-self:center;color:#8f93a6">天空：</span><button id="bgS">星空</button><button id="bgG">经纬网格</button></div>
+    <div class="checks"><label><input id="ovl" type="checkbox"> 标出影子边缘 b = 3√3 M 与“不弯曲时”的视界大小</label></div>
+    <div class="row"><label>画质（每个 CSS 像素的采样） <b id="vQ"></b></label><input id="Q" type="range" min="0.25" max="2" step="0.25"></div>
+
+    <h2>预设</h2>
+    <div class="presets" id="rayPre"></div>
+    <div class="info" id="rayInfo"></div>
+    <small style="margin-top:6px">拖动画面转动相机 · 滚轮缩放 · 双击复位</small>
+  </div>
+
+  <div id="orbUI">
+    <h2>粒子</h2>
+    <div class="presets"><button id="tyM">有质量粒子</button><button id="tyP">光子</button></div>
+    <div id="mUI">
+      <div class="row"><label>角动量 L（每单位质量，M） <b id="vL"></b></label><input id="L" type="range" min="0" max="15" step="0.0001"></div>
+      <div class="row"><label>能量 E（每单位质量） <b id="vE"></b></label><input id="E" type="range" min="0.8" max="1.3" step="0.00001">
+        <small>E &lt; 1 从最外面的转折点出发；E ≥ 1 从 r = 50M 处飞来</small></div>
+    </div>
+    <div id="pUI">
+      <div class="row"><label>碰撞参数 b = L/E <b id="vB"></b></label><input id="B" type="range" min="0" max="20" step="0.001">
+        <small>从 r = 50M 处平行飞来</small></div>
+    </div>
+    <div class="row"><label>每帧积分步数 <b id="vSp"></b></label><input id="Sp" type="range" min="1" max="200" step="1"></div>
+    <div class="presets"><button id="play">⏸ 暂停</button><button id="restart">↺ 重新开始</button></div>
+    <h2>预设</h2>
+    <div class="presets" id="orbPre"></div>
+    <small>有效势图里两条淡线是 L = 2√3（ISCO，极大和极小合成拐点）和 L = 4（极大正好等于 1）。</small>
+    <div class="info" id="orbInfo"></div>
+    <h2>从有效势数值求出的特征半径</h2>
+    <div class="info" id="radii"></div>
+    <small style="margin-top:6px">滚轮缩放轨道图 · 双击复位</small>
+  </div>
+  <small id="err"></small>
+</div>
+
+<div id="view"><canvas id="gl"></canvas><canvas id="ov"></canvas><canvas id="c"></canvas><div id="stat"></div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const clamp = (x, [a, b]) => Math.max(a, Math.min(b, x));
+const DEG = Math.PI / 180;
+const BC = 3 * Math.sqrt(3);            // critical impact parameter b_c = 3√3 M
+const RIN = 6;                          // disk inner edge = ISCO
+const H_PHI = 0.02, NMAX = 900;         // ray step in φ and step cap; shared by the shader and the JS port
+const R_FAR = 50;                       // start radius of unbound orbits and photons
+const FMAX = 216 / 823543;              // max of (1 − √(6/r))/r³, reached at r = 49/6
+
+const LIM = { r: [4, 500], i: [1, 179], az: [-180, 180], z: [0.25, 8], ro: [7, 40], ex: [0.2, 5], q: [0.25, 2],
+  L: [0, 15], E: [0.8, 1.3], b: [0, 20], sp: [1, 200], oz: [0.25, 8], n: [0, 200000] };
+const RAY_DEF = { r: 30, i: 80, az: 0, z: 1, ro: 20, ex: 1.6, q: 1, disk: true, dop: true, beam: true, ord: false,
+  anim: false, bg: 'stars', ov: true };
+const RAY_PRESETS = {
+  luminet: { name: 'Luminet 视角 i = 80°' },
+  face: { name: '正面 i = 5°', i: 5 },
+  edge: { name: '侧面 i = 89°', i: 89 },
+  order: { name: '按像的阶数着色', ord: true },
+  lens: { name: '只看透镜（经纬网格）', disk: false, bg: 'grid' },
+  near: { name: '近处 r = 10M（广角）', r: 10, i: 75, ro: 9, z: 0.6 },
+  far: { name: '远处 r = 300M', r: 300 },
+  plain: { name: '不计红移和集束', dop: false, beam: false },
+};
+const BGS = { stars: 0, grid: 1 };
+const R = { ...RAY_DEF, preset: 'luminet' };
+
+// orbit presets: bound ones given by periapsis/apoapsis (E, L solved below), the rest by E, L or b
+const ORB_PRESETS = {
+  prec: { name: '进动椭圆 r_p = 10, r_a = 30', ty: 'm', rp: 10, ra: 30 },
+  weak: { name: '弱场 r_p = 50, r_a = 150', ty: 'm', rp: 50, ra: 150 },
+  whirl: { name: 'zoom-whirl r_p = 4.4, r_a = 30', ty: 'm', rp: 4.4, ra: 30 },
+  isco: { name: 'ISCO 圆轨道 6M', ty: 'm', L: 2 * Math.sqrt(3), E: Math.sqrt(8 / 9), r0: 6 },
+  mb: { name: '临界束缚 E = 1, L = 4（在 4M 上绕圈）', ty: 'm', L: 4, E: 1 },
+  plunge: { name: '越过势垒坠入 L = 3.6', ty: 'm', L: 3.6, E: 0.97 },
+  fall: { name: '从 10M 静止下落', ty: 'm', L: 0, E: Math.sqrt(0.8) },
+  phc: { name: '光子圆轨道 3M', ty: 'ph', b: BC, r0: 3 },
+  phw: { name: '光子绕一圈 b = 5.2', ty: 'ph', b: 5.2 },
+  phb: { name: '光子偏折 b = 8', ty: 'ph', b: 8 },
+  phx: { name: '光子被俘获 b = 5', ty: 'ph', b: 5 },
+};
+const TYPES = { m: 1, ph: 0 };
+const O = { preset: 'prec', ty: 'm', L: 0, E: 0, b: 8, r0: null, sp: 8, oz: 1, run: true };
+const VIEWS = { ray: 1, orbit: 1 };
+let view = 'ray';
+
+// E and L of the bound orbit with turning points rp < ra: roots of (du/dφ)² = 2u³ − u² + 2u/L² + (E² − 1)/L²
+function orbitFromTurns(rp, ra) {
+  const up = 1 / rp, ua = 1 / ra, u3 = 0.5 - ua - up;
+  const L2 = 1 / (ua * up + (ua + up) * u3);
+  return { L: Math.sqrt(L2), E: Math.sqrt(1 - 2 * ua * up * u3 * L2) };
+}
+function applyOrbPreset(key) {
+  const p = ORB_PRESETS[key];
+  O.preset = key; O.ty = p.ty; O.r0 = p.r0 ?? null;
+  if (p.ty === 'ph') O.b = p.b;
+  else Object.assign(O, p.rp ? orbitFromTurns(p.rp, p.ra) : { L: p.L, E: p.E });
+}
+applyOrbPreset('prec');
+
+// ---------- ray tracer (WebGL2) ----------
+const FRAG = `#version 300 es
+precision highp float;
+uniform vec2 uRes;
+uniform vec3 uE1, uUp, uRight;   // camera position unit vector (from the hole), screen up and right
+uniform float uR, uTan, uRout, uExp, uTime, uPix;
+uniform int uDisk, uDop, uBeam, uBg, uOrd;
+out vec4 outColor;
+const float H = ${H_PHI.toFixed(4)};
+const int NMAX = ${NMAX};
+const float RIN = ${RIN.toFixed(1)}, FMAX = ${FMAX.toExponential(8)}, PI = 3.14159265;
+
+float hash13(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+float vnoise(vec3 p) {
+  vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x), mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x), mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+// blackbody colour (chromaticity only, max channel 1), Tanner Helland's fit, 1000–40000 K
+vec3 bb(float T) {
+  float t = clamp(T, 1000.0, 40000.0) / 100.0;
+  float r = t <= 66.0 ? 1.0 : 1.29293618 * pow(t - 60.0, -0.1332047592);
+  float g = t <= 66.0 ? 0.39008158 * log(t) - 0.63184144 : 1.12989086 * pow(t - 60.0, -0.0755148492);
+  float b = t >= 66.0 ? 1.0 : (t <= 19.0 ? 0.0 : 0.54320679 * log(t - 10.0) - 1.19625409);
+  return clamp(vec3(r, g, b), 0.0, 1.0);
+}
+vec3 stars(vec3 d) {
+  vec3 c = vec3(0.0);
+  for (int l = 0; l < 2; l++) {
+    float sc = l == 0 ? 70.0 : 26.0, thr = l == 0 ? 0.9 : 0.965;
+    vec3 p = d * sc, cell = floor(p);
+    float h = hash13(cell);
+    if (h > thr) {
+      vec3 sp = cell + 0.3 + 0.4 * vec3(hash13(cell + 7.1), hash13(cell + 3.7), hash13(cell + 1.3));
+      float s = clamp(1.1 * uPix * sc, 0.05, 0.14), dd = length(p - sp);
+      c += bb(3000.0 + 9000.0 * hash13(cell + 5.5)) * ((h - thr) / (1.0 - thr)) * (l == 0 ? 1.0 : 2.2)
+           * exp(-dd * dd / (s * s));
+    }
+  }
+  vec3 gn = normalize(vec3(0.35, -0.55, 0.75));     // a faint "Milky Way" band, for orientation
+  float band = exp(-pow(dot(d, gn) / 0.2, 2.0));
+  c += vec3(0.26, 0.23, 0.32) * band * (0.25 + 0.75 * vnoise(d * 7.0)) * 0.4;
+  return c;
+}
+// celestial grid: 15° checkerboard, north warm / south cool, each 90° of longitude its own tint; never black
+vec3 grid(vec3 d) {
+  float th = acos(clamp(d.z, -1.0, 1.0)), ph = atan(d.y, d.x);
+  float chk = mod(floor(ph / (PI / 12.0)) + floor(th / (PI / 12.0)), 2.0);
+  float q = floor((ph + PI) / (PI / 2.0));
+  vec3 tint = q < 0.5 ? vec3(1.0, 0.9, 0.3) : q < 1.5 ? vec3(0.4, 1.0, 0.5) : q < 2.5 ? vec3(0.95, 0.4, 0.95) : vec3(0.4, 0.9, 1.0);
+  vec3 base = mix(d.z > 0.0 ? vec3(1.0, 0.55, 0.25) : vec3(0.3, 0.55, 1.0), tint, 0.4);
+  return base * (chk > 0.5 ? 0.9 : 0.4);
+}
+vec2 F(vec2 s) { return vec2(s.y, 3.0 * s.x * s.x - s.x); }
+float hermite(float u0, float w0, float u1, float w1, float f) {
+  float f2 = f * f, f3 = f2 * f;
+  return (2.0 * f3 - 3.0 * f2 + 1.0) * u0 + (f3 - 2.0 * f2 + f) * H * w0 + (-2.0 * f3 + 3.0 * f2) * u1 + (f3 - f2) * H * w1;
+}
+void main() {
+  vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / (0.5 * min(uRes.x, uRes.y)) * uTan;   // uTan spans half the shorter side
+  vec3 fwd = -uE1, d = normalize(fwd + p.x * uRight + p.y * uUp);
+  float ca = dot(d, fwd);
+  vec3 tv = d - ca * fwd;
+  float sa = length(tv);
+  if (sa < 1e-7) { outColor = vec4(0, 0, 0, 1); return; }
+  vec3 e2 = tv / sa;                                  // ray plane = span(e1, e2), φ measured from e1
+  float u = 1.0 / uR, w = u * sqrt(1.0 - 2.0 * u) * ca / sa;   // du/dφ = u √(1 − 2u) cot α for a static observer
+  float b = uR * sa / sqrt(1.0 - 2.0 / uR);           // impact parameter
+  float lam = -b * cross(uE1, e2).z;                  // L_z / E of the photon (it travels opposite to the traced ray)
+  float phi = 0.0, s0 = uE1.z;
+  int nCross = 0;
+  vec3 col = vec3(0.0);
+  for (int k = 0; k < NMAX; k++) {
+    vec2 st = vec2(u, w);
+    vec2 k1 = F(st), k2 = F(st + 0.5 * H * k1), k3 = F(st + 0.5 * H * k2), k4 = F(st + H * k3);
+    vec2 s1 = st + H / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+    float phi1 = phi + H, z1 = uE1.z * cos(phi1) + e2.z * sin(phi1);
+    if (uDisk == 1 && (s0 > 0.0) != (z1 > 0.0)) {     // crossed the equatorial plane
+      float f = s0 / (s0 - z1), uh = hermite(u, w, s1.x, s1.y, f);
+      if (uh > 0.0 && phi + f * H > 1e-4) {
+        nCross++;
+        float r = 1.0 / uh;
+        if (r >= RIN && r <= uRout) {
+          float ph = phi + f * H;
+          vec3 P = r * (cos(ph) * uE1 + sin(ph) * e2);
+          float Om = pow(r, -1.5);
+          float g = sqrt(1.0 - 3.0 / r) / (sqrt(1.0 - 2.0 / uR) * (1.0 - Om * lam));
+          float Fl = (1.0 - sqrt(6.0 / r)) / (r * r * r) / FMAX;
+          float ang = atan(P.y, P.x) - Om * uTime;
+          float tex = 0.45 + 0.55 * vnoise(vec3(3.0 * cos(ang), 3.0 * sin(ang), 2.2 * r)) * (0.6 + 0.4 * vnoise(vec3(9.0 * cos(ang), 9.0 * sin(ang), 5.0 * r)));
+          float T = 3600.0 * pow(Fl, 0.25) * (uDop == 1 ? g : 1.0);
+          float I = Fl * tex * (uBeam == 1 ? g * g * g * g : 1.0) * uExp;
+          if (uOrd == 1) {
+            vec3 tint = nCross == 1 ? vec3(1.0, 0.62, 0.2) : nCross == 2 ? vec3(0.25, 0.8, 1.0) : vec3(1.0, 0.3, 0.9);
+            col = tint * (0.3 + 0.7 * (1.0 - exp(-I)));
+          } else col = pow(1.0 - exp(-bb(T) * I), vec3(1.0 / 2.2));   // linear radiance → display gamma
+          break;
+        }
+      }
+    }
+    if (s1.x >= 0.5) break;                           // reached the horizon: black
+    if (s1.x <= 0.0) {                                // escaped to infinity in direction φ∞
+      float f = u / (u - s1.x), ph = phi + f * H;
+      vec3 D = cos(ph) * uE1 + sin(ph) * e2;
+      col = uBg == 1 ? grid(D) : stars(D);
+      break;
+    }
+    u = s1.x; w = s1.y; phi = phi1; s0 = z1;
+  }
+  outColor = vec4(col, 1.0);
+}`;
+const VERT = `#version 300 es
+in vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
+
+const glc = $('gl'), ovc = $('ov'), octx = ovc.getContext('2d');
+const gl = glc.getContext('webgl2', { antialias: false });
+let prog = null, U = {};
+function initGL() {
+  if (!gl) { $('err').textContent = '这个浏览器不支持 WebGL2，光线追踪视图不可用；“轨道与有效势”仍可使用。'; return; }
+  const sh = (type, src) => {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  };
+  try {
+    prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  } catch (e) { prog = null; $('err').textContent = '着色器编译失败：' + e.message; return; }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  for (const n of ['uRes', 'uE1', 'uUp', 'uRight', 'uR', 'uTan', 'uRout', 'uExp', 'uTime', 'uPix', 'uDisk', 'uDop', 'uBeam', 'uBg', 'uOrd'])
+    U[n] = gl.getUniformLocation(prog, n);
+}
+glc.addEventListener('webglcontextlost', e => { e.preventDefault(); prog = null; $('err').textContent = 'WebGL 上下文丢失，请刷新页面。'; });
+
+// camera frame: e1 = position direction, looking at the hole; screen up = projection of the disk normal +z
+function camera() {
+  const th = R.i * DEG, ph = R.az * DEG;
+  const e1 = [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
+  const f = e1.map(x => -x), zf = f[2];
+  let up = [-zf * f[0], -zf * f[1], 1 - zf * zf];
+  const n = Math.hypot(...up); up = up.map(x => x / n);
+  const right = [f[1] * up[2] - f[2] * up[1], f[2] * up[0] - f[0] * up[2], f[0] * up[1] - f[1] * up[0]];
+  // half of the screen height spans impact parameters ±14M/zoom: sin α = b √(1 − 2/r) / r
+  const half = Math.asin(Math.min(0.97, 14 / R.z * Math.sqrt(1 - 2 / R.r) / R.r));
+  return { e1, up, right, tanHalf: Math.tan(half) };
+}
+const alphaTheory = r => Math.asin(BC * Math.sqrt(1 - 2 / r) / r);   // shadow angular radius for a static observer
+
+// JS port of the shader's ray integrator (no disk): does the ray at angle α from the hole's direction fall in?
+function rayCaptured(alpha, r) {
+  let u = 1 / r, w = u * Math.sqrt(1 - 2 * u) / Math.tan(alpha);
+  const h = H_PHI, f = (u, w) => 3 * u * u - u;
+  for (let k = 0; k < NMAX; k++) {
+    const a1 = w, b1 = f(u), a2 = w + h / 2 * b1, b2 = f(u + h / 2 * a1), a3 = w + h / 2 * b2, b3 = f(u + h / 2 * a2);
+    const a4 = w + h * b3, b4 = f(u + h * a3);
+    u += h / 6 * (a1 + 2 * a2 + 2 * a3 + a4); w += h / 6 * (b1 + 2 * b2 + 2 * b3 + b4);
+    if (u >= 0.5) return true;
+    if (u <= 0) return false;
+  }
+  return true;
+}
+let shadow = { r: null };
+function measureShadow() {
+  if (shadow.r === R.r) return shadow;
+  let lo = 1e-6, hi = Math.PI - 1e-6;              // captured at lo, escapes at hi
+  for (let k = 0; k < 50; k++) { const m = (lo + hi) / 2; if (rayCaptured(m, R.r)) lo = m; else hi = m; }
+  const a = (lo + hi) / 2;
+  shadow = { r: R.r, alpha: a, b: R.r * Math.sin(a) / Math.sqrt(1 - 2 / R.r), alphaTh: alphaTheory(R.r) };
+  return shadow;
+}
+
+let rayDirty = true, rayTime = 0, dragging = false, rayFrames = 0, cam = camera();
+function renderRay() {
+  if (!prog) return;
+  const rc = glc.getBoundingClientRect(), dpr = devicePixelRatio;
+  let s = dpr * R.q * (dragging ? 0.5 : 1);
+  const px = rc.width * rc.height * s * s;
+  if (px > 8.3e6) s *= Math.sqrt(8.3e6 / px);
+  const W = Math.max(1, Math.round(rc.width * s)), H = Math.max(1, Math.round(rc.height * s));
+  if (glc.width !== W || glc.height !== H) { glc.width = W; glc.height = H; }
+  gl.viewport(0, 0, W, H);
+  cam = camera();
+  gl.uniform2f(U.uRes, W, H); gl.uniform3fv(U.uE1, cam.e1); gl.uniform3fv(U.uUp, cam.up); gl.uniform3fv(U.uRight, cam.right);
+  gl.uniform1f(U.uR, R.r); gl.uniform1f(U.uTan, cam.tanHalf); gl.uniform1f(U.uRout, R.ro); gl.uniform1f(U.uExp, R.ex);
+  gl.uniform1f(U.uTime, rayTime); gl.uniform1f(U.uPix, 2 * cam.tanHalf / Math.min(W, H));
+  gl.uniform1i(U.uDisk, +R.disk); gl.uniform1i(U.uDop, +R.dop); gl.uniform1i(U.uBeam, +R.beam); gl.uniform1i(U.uBg, BGS[R.bg]);
+  gl.uniform1i(U.uOrd, +R.ord);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (!dragging) rayFrames++;
+}
+function drawOverlay() {
+  const rc = ovc.getBoundingClientRect(), dpr = devicePixelRatio;
+  const W = ovc.width = Math.max(1, Math.round(rc.width * dpr)), H = ovc.height = Math.max(1, Math.round(rc.height * dpr));
+  octx.clearRect(0, 0, W, H);
+  if (!R.ov || !prog) return;
+  const pxR = a => Math.tan(a) / cam.tanHalf * Math.min(W, H) / 2, cx = W / 2, cy = H / 2;
+  octx.lineWidth = 1.4 * dpr;
+  octx.strokeStyle = 'rgba(120,220,255,.85)'; octx.setLineDash([6 * dpr, 5 * dpr]);
+  octx.beginPath(); octx.arc(cx, cy, pxR(alphaTheory(R.r)), 0, 2 * Math.PI); octx.stroke();
+  octx.strokeStyle = 'rgba(255,150,150,.8)'; octx.setLineDash([2 * dpr, 4 * dpr]);
+  octx.beginPath(); octx.arc(cx, cy, pxR(Math.asin(2 / R.r)), 0, 2 * Math.PI); octx.stroke();
+  octx.setLineDash([]);
+  octx.font = `${11 * dpr}px -apple-system, "PingFang SC", sans-serif`; octx.textBaseline = 'top';
+  octx.fillStyle = 'rgba(120,220,255,.95)'; octx.fillText('- - 影子边缘 b = 3√3 M（光子球 r = 3M 的像）', 10 * dpr, 10 * dpr);
+  octx.fillStyle = 'rgba(255,150,150,.95)'; octx.fillText('···· 光线不弯曲时 r = 2M 视界的视大小', 10 * dpr, 26 * dpr);
+}
+function rayInfo() {
+  const s = measureShadow(), lines = [
+    `影子角半径（追踪器二分）  ${(s.alpha / DEG).toFixed(4)}°`,
+    `理论 sin α = 3√3 M √(1 − 2M/r) / r  ${(s.alphaTh / DEG).toFixed(4)}°`,
+    `边缘的碰撞参数 b = ${s.b.toFixed(4)} M   3√3 M = ${BC.toFixed(4)} M`,
+    `没有引力弯曲时视界的视半径 ${(Math.asin(2 / R.r) / DEG).toFixed(3)}°`,
+    `相机处的蓝移 1/√(1 − 2M/r) = ${(1 / Math.sqrt(1 - 2 / R.r)).toFixed(4)}`];
+  $('rayInfo').textContent = lines.join('\n');
+  $('stat').textContent = `r_obs = ${R.r.toFixed(1)}M · i = ${R.i.toFixed(1)}° · 影子角半径 ${(s.alpha / DEG).toFixed(3)}°（理论 ${(s.alphaTh / DEG).toFixed(3)}°）`;
+}
+
+// ---------- orbits in the equatorial plane ----------
+// V(r) = (1 − 2/r)(κ + L²/r²): κ = 1 for a massive particle (τ = proper time), κ = 0 for light (affine parameter)
+// (dr/dτ)² + V = E²,  dφ/dτ = L/r²,  dt/dτ = E/(1 − 2/r)
+const Vf = (r, k, L) => (1 - 2 / r) * (k + L * L / (r * r));
+const acc = (r, k, L) => -k / (r * r) + L * L / r ** 3 - 3 * L * L / r ** 4;   // −½ dV/dr
+const TR = 40000, CK = 4000;
+let S = null;
+
+// outermost r with V(r) ≤ E²: walk inward on a log grid from rTop, then bisect
+function outerTurn(k, E, L, rTop) {
+  let hi = rTop, lo = rTop;
+  for (let j = 0; j < 4000 && lo > 2; j++) { lo = hi / 1.005; if (Vf(lo, k, L) <= E * E) break; hi = lo; }
+  for (let j = 0; j < 60; j++) { const m = (lo + hi) / 2; if (Vf(m, k, L) <= E * E) lo = m; else hi = m; }
+  return lo;
+}
+function orbitReset() {
+  const k = TYPES[O.ty], E = k ? O.E : 1, L = k ? O.L : O.b;
+  S = { k, E, L, r: 0, pr: 0, phi: 0, t: 0, tau: 0, crossed: false, tauH: null, tH: null, end: '', steps: 0,
+    peri: [], rp: [], ra: [], tauP: [], err: 0, tr: new Float32Array(2 * TR), nt: 0,
+    ck: new Float32Array(3 * CK), nck: 0, ckStride: 1 };
+  if (O.r0) S.r = O.r0;
+  else if (k && E < 1) S.r = outerTurn(k, E, L, 1e4);
+  else {
+    S.r = Vf(R_FAR, k, L) < E * E ? R_FAR : outerTurn(k, E, L, R_FAR);
+    S.pr = -Math.sqrt(Math.max(0, E * E - Vf(S.r, k, L)));
+    S.phi = Math.asin(Math.min(1, L / Math.sqrt(Math.max(E * E - k, 1e-12)) / S.r));
+  }
+  S.r0 = S.r;
+  if (S.pr === 0 && acc(S.r, k, L) < 0) S.ra.push(S.r);   // starting at apoapsis
+  S.rView = O.r0 ? Math.max(12, 2.2 * O.r0) : (k && E < 1 ? Math.max(12, 1.15 * S.r) : 25);
+  record();
+}
+function record() {
+  const j = (S.nt % TR) * 2; S.tr[j] = S.r * Math.cos(S.phi); S.tr[j + 1] = S.r * Math.sin(S.phi); S.nt++;
+  if (S.steps % S.ckStride) return;
+  if (S.nck >= CK) {                                  // full: keep every other sample, double the stride
+    for (let i = 0; i < CK / 2; i++) for (let c = 0; c < 3; c++) S.ck[3 * i + c] = S.ck[6 * i + c];
+    S.nck = CK / 2; S.ckStride *= 2;
+  }
+  const j3 = 3 * S.nck++; S.ck[j3] = S.tau; S.ck[j3 + 1] = S.crossed ? NaN : S.t; S.ck[j3 + 2] = S.r;
+}
+function stepOrbit() {
+  const { k, L, E } = S, r = S.r, pr = S.pr;
+  const h = 0.01 * Math.min(k ? r ** 1.5 : r, L > 1e-9 ? r * r / L : Infinity);
+  const f = (r, pr) => [pr, acc(r, k, L), L / (r * r)];
+  const d1 = f(r, pr), rb = r + h / 2 * d1[0], d2 = f(rb, pr + h / 2 * d1[1]);
+  const rc = r + h / 2 * d2[0], d3 = f(rc, pr + h / 2 * d2[1]), rd = r + h * d3[0], d4 = f(rd, pr + h * d3[1]);
+  const nr = r + h / 6 * (d1[0] + 2 * d2[0] + 2 * d3[0] + d4[0]);
+  const npr = pr + h / 6 * (d1[1] + 2 * d2[1] + 2 * d3[1] + d4[1]);
+  const nphi = S.phi + h / 6 * (d1[2] + 2 * d2[2] + 2 * d3[2] + d4[2]);
+  if (!S.crossed) {
+    if (Math.min(r, rb, rc, rd, nr) > 2) {
+      const g = x => E / (1 - 2 / x);
+      S.t += h / 6 * (g(r) + 2 * g(rb) + 2 * g(rc) + g(rd));
+    } else {                                          // crossing the horizon: t → ∞ for the outside observer
+      S.crossed = true; S.tauH = S.tau + h * (r - 2) / Math.max(r - nr, 1e-12); S.tH = S.t;
+    }
+  }
+  // turning points: dr/dτ changes sign; r at the extremum from a parabola through the current step
+  if ((pr < 0 && npr >= 0) || (pr > 0 && npr <= 0)) {
+    const a = acc(r, k, L), rx = r - pr * pr / (2 * a);
+    if (pr < 0) { S.peri.push(S.phi - pr / (npr - pr) * (nphi - S.phi)); S.rp.push(rx); S.tauP.push(S.tau); }
+    else S.ra.push(rx);
+  }
+  S.r = nr; S.pr = npr; S.phi = nphi; S.tau += h; S.steps++;
+  if (nr > 2) S.err = Math.max(S.err, Math.abs(npr * npr + Vf(nr, k, L) - E * E) / Math.max(E * E, 1e-9));
+  if (!(nr > 0.05) || !Number.isFinite(nr)) S.end = 'sing';
+  else if (nr > 1.3 * Math.max(R_FAR, S.r0) && npr > 0) S.end = 'esc';
+  record();
+}
+function advanceOrbit(n) { for (let j = 0; j < n && !S.end; j++) stepOrbit(); }
+
+// light deflection from infinity to infinity, same u(φ) equation, RK4 with dφ = 0.001; null if captured
+const deflCache = new Map();
+function deflection(b) {
+  if (!deflCache.has(b)) { if (deflCache.size > 64) deflCache.clear(); deflCache.set(b, deflect(b)); }
+  return deflCache.get(b);
+}
+function deflect(b) {
+  if (!(b > 0)) return null;
+  let u = 0, w = 1 / b, phi = 0; const h = 1e-3;
+  for (let k = 0; k < 200000; k++) {
+    const f = u => 3 * u * u - u;
+    const a1 = w, b1 = f(u), a2 = w + h / 2 * b1, b2 = f(u + h / 2 * a1), a3 = w + h / 2 * b2, b3 = f(u + h / 2 * a2);
+    const a4 = w + h * b3, b4 = f(u + h * a3);
+    const nu = u + h / 6 * (a1 + 2 * a2 + 2 * a3 + a4); w += h / 6 * (b1 + 2 * b2 + 2 * b3 + b4);
+    if (nu >= 0.5) return null;
+    if (nu <= 0 && k > 0) return phi + h * u / (u - nu) - Math.PI;
+    u = nu; phi += h;
+  }
+  return null;
+}
+
+// characteristic radii found from V alone (finite differences, no closed forms):
+// V'(r; L) = A(r) + L² B(r); circular orbits have L_c² = −A/B; ISCO = argmin L_c²; marginally bound: V(r; L_c) = 1;
+// photon sphere: B(r) = 0, the maximum of the photon potential (1 − 2/r)/r²
+function radiiFromPotential() {
+  const d = 1e-5, dV = (r, k, L) => (Vf(r + d, k, L) - Vf(r - d, k, L)) / (2 * d);
+  const A = r => dV(r, 1, 0), B = r => dV(r, 0, 1), Lc2 = r => -A(r) / B(r);
+  const bis = (f, lo, hi) => { for (let j = 0; j < 80; j++) { const m = (lo + hi) / 2; if ((f(m) > 0) === (f(lo) > 0)) lo = m; else hi = m; } return (lo + hi) / 2; };
+  const rph = bis(B, 2.5, 10);
+  let lo = 3.5, hi = 20;                              // golden-section minimum of L_c²(r)
+  const gr = (Math.sqrt(5) - 1) / 2;
+  for (let j = 0; j < 80; j++) { const a = hi - gr * (hi - lo), b = lo + gr * (hi - lo); if (Lc2(a) < Lc2(b)) hi = b; else lo = a; }
+  const risco = (lo + hi) / 2, Lisco = Math.sqrt(Lc2(risco)), Eisco = Math.sqrt(Vf(risco, 1, Lisco));
+  const rmb = bis(r => Vf(r, 1, Math.sqrt(Lc2(r))) - 1, rph + 0.01, risco);
+  return { rph, risco, Lisco, Eisco, rmb, Lmb: Math.sqrt(Lc2(rmb)) };
+}
+const RADII = radiiFromPotential();
+
+const cv = $('c'), ctx = cv.getContext('2d');
+let CW = 1, CH = 1;
+function orbLayout() {
+  if (CW >= CH * 1.25) { const s = Math.min(CH, CW * 0.56); return { orb: [0, 0, s, CH], pot: [s, 0, CW - s, CH * 0.58], clk: [s, CH * 0.58, CW - s, CH * 0.42] }; }
+  const s = Math.min(CW, CH * 0.58);
+  return { orb: [0, 0, CW, s], pot: [0, s, CW / 2, CH - s], clk: [CW / 2, s, CW / 2, CH - s] };
+}
+function drawOrbit() {
+  const dpr = devicePixelRatio, Lr = orbLayout();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#05060b'; ctx.fillRect(0, 0, CW, CH);
+  const [ox, oy, ow, oh] = Lr.orb, cx = ox + ow / 2, cy = oy + oh / 2;
+  const sc = Math.min(ow, oh) / 2 * 0.92 / (S.rView / O.oz);
+  const X = x => cx + x * sc, Y = y => cy - y * sc;
+  ctx.save(); ctx.beginPath(); ctx.rect(ox, oy, ow, oh); ctx.clip();
+  const ring = (r, col, dash, label, a = 0) => {
+    ctx.strokeStyle = col; ctx.lineWidth = 1.2 * dpr; ctx.setLineDash(dash.map(v => v * dpr));
+    ctx.beginPath(); ctx.arc(cx, cy, r * sc, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
+    if (r * sc > 30 * dpr) { ctx.fillStyle = col; ctx.textAlign = Math.cos(a) < 0 ? 'right' : 'left';
+      ctx.fillText(label, cx + (r * sc + 3 * dpr) * Math.cos(a), cy - (r * sc + 3 * dpr) * Math.sin(a)); ctx.textAlign = 'left'; }
+  };
+  ctx.font = `${10 * dpr}px -apple-system, "PingFang SC", sans-serif`; ctx.textBaseline = 'bottom';
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, 2 * sc, 0, 2 * Math.PI); ctx.fill();
+  ring(2, '#ff7b7b', [], '');
+  ring(3, '#7fd8ff', [5, 4], '3M', -0.6);
+  ring(4, '#b49bff', [2, 3], '4M', 0.9);
+  ring(6, '#ffcf70', [7, 4], 'ISCO 6M', 2.3);
+  // trail, older parts fainter
+  const m = Math.min(S.nt, TR), st = S.nt - m, CHN = 10;
+  ctx.lineWidth = 1.3 * dpr; ctx.strokeStyle = S.k ? '#ffe2a8' : '#9fe6ff';
+  for (let c = 0; c < CHN; c++) {
+    const a = st + Math.floor(m * c / CHN), b = st + Math.floor(m * (c + 1) / CHN);
+    if (b - a < 1) continue;
+    ctx.globalAlpha = 0.12 + 0.85 * (c + 1) / CHN; ctx.beginPath();
+    for (let j = Math.max(st, a - 1); j < b; j++) {
+      const o = (j % TR) * 2;
+      j === Math.max(st, a - 1) ? ctx.moveTo(X(S.tr[o]), Y(S.tr[o + 1])) : ctx.lineTo(X(S.tr[o]), Y(S.tr[o + 1]));
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  // periapsis directions
+  ctx.strokeStyle = 'rgba(255,140,90,.7)'; ctx.lineWidth = 1 * dpr;
+  for (let j = Math.max(0, S.peri.length - 40); j < S.peri.length; j++) {
+    const a = S.peri[j], r = S.rp[j];
+    ctx.beginPath(); ctx.moveTo(X(0.6 * r * Math.cos(a)), Y(0.6 * r * Math.sin(a))); ctx.lineTo(X(r * Math.cos(a)), Y(r * Math.sin(a))); ctx.stroke();
+  }
+  ctx.fillStyle = S.crossed ? '#ff7b7b' : '#fff';
+  ctx.beginPath(); ctx.arc(X(S.r * Math.cos(S.phi)), Y(S.r * Math.sin(S.phi)), 3.5 * dpr, 0, 2 * Math.PI); ctx.fill();
+  ctx.restore();
+  drawPotential(Lr.pot); drawClock(Lr.clk);
+}
+function frame(rect, title) {
+  const dpr = devicePixelRatio, [x, y, w, h] = rect;
+  ctx.fillStyle = '#0a0c14'; ctx.fillRect(x + 4 * dpr, y + 4 * dpr, w - 8 * dpr, h - 8 * dpr);
+  ctx.strokeStyle = '#2c3146'; ctx.lineWidth = 1; ctx.strokeRect(x + 4 * dpr, y + 4 * dpr, w - 8 * dpr, h - 8 * dpr);
+  ctx.fillStyle = '#cfd3e2'; ctx.font = `${11 * dpr}px -apple-system, "PingFang SC", sans-serif`; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+  ctx.fillText(title, x + 12 * dpr, y + 9 * dpr);
+  return { l: x + 46 * dpr, r: x + w - 14 * dpr, t: y + 30 * dpr, b: y + h - 26 * dpr };
+}
+function axes(B, xr, yr, xt, yt) {
+  const dpr = devicePixelRatio, X = v => B.l + (v - xr[0]) / (xr[1] - xr[0]) * (B.r - B.l), Y = v => B.b - (v - yr[0]) / (yr[1] - yr[0]) * (B.b - B.t);
+  ctx.font = `${10 * dpr}px ui-monospace, Menlo, monospace`; ctx.fillStyle = '#8f93a6'; ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const v of xt) { ctx.beginPath(); ctx.moveTo(X(v), B.t); ctx.lineTo(X(v), B.b); ctx.stroke(); ctx.fillText(+v.toFixed(3), X(v), B.b + 4 * dpr); }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const v of yt) { ctx.beginPath(); ctx.moveTo(B.l, Y(v)); ctx.lineTo(B.r, Y(v)); ctx.stroke(); ctx.fillText(+v.toFixed(3), B.l - 4 * dpr, Y(v)); }
+  return [X, Y];
+}
+const ticks = (a, b, n = 5) => {
+  const raw = (b - a) / n, p = 10 ** Math.floor(Math.log10(raw)), s = [1, 2, 5, 10].map(m => m * p).find(m => m >= raw) || raw;
+  const out = []; for (let v = Math.ceil(a / s) * s; v <= b + 1e-9 && out.length < 50; v += s) out.push(v); return out;
+};
+function drawPotential(rect) {
+  const dpr = devicePixelRatio, { k, E, L } = S;
+  const B = frame(rect, k ? '有效势 V(r) = (1 − 2M/r)(1 + L²/r²)，黄线 E²' : '光子的势 (1 − 2M/r)/r²，黄线 1/b²');
+  const rMax = k ? Math.max(20, Math.min(400, 1.3 * Math.max(S.r0, ...S.ra.slice(-1)))) : 30;
+  const level = k ? E * E : (L > 0 ? 1 / (L * L) : Infinity);
+  const N = 400, rs = [], vs = [];
+  for (let j = 0; j <= N; j++) { const r = 2 + (rMax - 2) * j / N; rs.push(r); vs.push(k ? Vf(r, 1, L) : Vf(r, 0, 1)); }
+  let yr;
+  if (k) { const vmax = Math.max(...vs.slice(N / 50)); yr = [Math.max(0, Math.min(E * E, ...vs.slice(N / 20)) - 0.06), Math.max(1.02, Math.min(1.5, Math.max(vmax, E * E) + 0.04))]; }
+  else yr = [0, Math.max(1 / 27, Number.isFinite(level) ? level : 0) * 1.3];
+  const [X, Y] = axes(B, [2, rMax], yr, ticks(2, rMax), ticks(yr[0], yr[1], 4));
+  ctx.save(); ctx.beginPath(); ctx.rect(B.l, B.t, B.r - B.l, B.b - B.t); ctx.clip();
+  if (k) for (const [Lg, col] of [[2 * Math.sqrt(3), 'rgba(255,207,112,.35)'], [4, 'rgba(180,155,255,.35)']]) {
+    ctx.strokeStyle = col; ctx.lineWidth = 1 * dpr; ctx.beginPath();
+    rs.forEach((r, j) => j ? ctx.lineTo(X(r), Y(Vf(r, 1, Lg))) : ctx.moveTo(X(r), Y(Vf(r, 1, Lg)))); ctx.stroke();
+  }
+  for (const [r, col] of [[3, '#7fd8ff'], [4, '#b49bff'], [6, '#ffcf70']]) {
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.setLineDash([3 * dpr, 3 * dpr]);
+    ctx.beginPath(); ctx.moveTo(X(r), B.t); ctx.lineTo(X(r), B.b); ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.setLineDash([]);
+  ctx.strokeStyle = '#e6e9f5'; ctx.lineWidth = 1.6 * dpr; ctx.beginPath();
+  rs.forEach((r, j) => j ? ctx.lineTo(X(r), Y(vs[j])) : ctx.moveTo(X(r), Y(vs[j]))); ctx.stroke();
+  if (Number.isFinite(level)) {
+    ctx.strokeStyle = '#ffd38a'; ctx.lineWidth = 1.4 * dpr; ctx.beginPath(); ctx.moveTo(B.l, Y(level)); ctx.lineTo(B.r, Y(level)); ctx.stroke();
+    if (S.r >= 2 && S.r <= rMax) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(X(S.r), Y(level), 3.5 * dpr, 0, 2 * Math.PI); ctx.fill(); }
+  }
+  ctx.restore();
+  ctx.font = `${10 * dpr}px -apple-system, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.textAlign = 'left';
+  for (const [r, col, t, dy] of [[3, '#7fd8ff', '3M', 0], [4, '#b49bff', '4M', 11], [6, '#ffcf70', '6M', 0]])
+    if (r < rMax) { ctx.fillStyle = col; ctx.fillText(t, X(r) + 2 * dpr, B.t + (11 + dy) * dpr); }
+}
+function drawClock(rect) {
+  const dpr = devicePixelRatio;
+  const B = frame(rect, `r 对 ${S.k ? '固有时 τ' : '仿射参数 λ'}（黄）和坐标时 t（青）`);
+  const n = S.nck, ck = S.ck;
+  if (n < 2) return;
+  const tauMax = ck[3 * (n - 1)];
+  let tMax = 0, rM = 2.5;
+  for (let j = 0; j < n; j++) { if (Number.isFinite(ck[3 * j + 1])) tMax = Math.max(tMax, ck[3 * j + 1]); rM = Math.max(rM, ck[3 * j + 2]); }
+  let xMax = Math.max(1e-6, tauMax, Math.min(tMax, 3 * tauMax)) * 1.05;
+  if (S.tauP.length >= 2) xMax = Math.min(xMax, 4 * (S.tauP[1] - S.tauP[0]));   // bound orbit: first four radial periods
+  const [X, Y] = axes(B, [0, xMax], [0, rM * 1.08], ticks(0, xMax), ticks(0, rM * 1.08, 4));
+  ctx.save(); ctx.beginPath(); ctx.rect(B.l, B.t, B.r - B.l, B.b - B.t); ctx.clip();
+  ctx.strokeStyle = '#ff7b7b'; ctx.setLineDash([4 * dpr, 3 * dpr]); ctx.beginPath(); ctx.moveTo(B.l, Y(2)); ctx.lineTo(B.r, Y(2)); ctx.stroke(); ctx.setLineDash([]);
+  for (const [c, col] of [[0, '#ffd38a'], [1, '#7fe3ff']]) {
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); let on = false;
+    for (let j = 0; j < n; j++) {
+      const x = ck[3 * j + c]; if (!Number.isFinite(x)) break;
+      on ? ctx.lineTo(X(x), Y(ck[3 * j + 2])) : ctx.moveTo(X(x), Y(ck[3 * j + 2])); on = true;
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = '#ff9b9b'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.font = `${10 * dpr}px -apple-system, sans-serif`;
+  ctx.fillText('r = 2M', B.l + 4 * dpr, Y(2) - 2 * dpr);
+}
+function orbInfo() {
+  const { k, E, L } = S, lines = [];
+  const kind = S.end === 'sing' ? '到达 r → 0 奇点' : S.end === 'esc' ? '逃逸' : S.crossed ? '已穿过视界' : '运动中';
+  lines.push(`状态：${kind} · 步数 ${S.steps}`);
+  lines.push(k ? `E = ${E.toFixed(6)}, L = ${L.toFixed(5)} M` : `光子 b = L/E = ${L.toFixed(4)} M（b_c = 3√3 M = ${BC.toFixed(4)}）`);
+  lines.push(`${k ? 'τ' : 'λ'} = ${S.tau.toFixed(2)} M,  t = ${S.crossed ? `∞（穿过视界时 ${k ? 'τ' : 'λ'} = ${S.tauH.toFixed(3)} M）` : S.t.toFixed(2) + ' M'}`);
+  lines.push(`约束 |ṙ² + V − E²|/E² 最大 ${S.err.toExponential(1)}`);
+  if (k && S.peri.length >= 2) {
+    const n = S.peri.length, dphi = [];
+    for (let j = 1; j < n; j++) dphi.push(S.peri[j] - S.peri[j - 1] - 2 * Math.PI);
+    const rp = S.rp[n - 1], ra = S.ra.length ? S.ra[S.ra.length - 1] : NaN;
+    const mean = dphi.reduce((a, b) => a + b, 0) / dphi.length, p = 2 * rp * ra / (rp + ra);
+    lines.push(`r_p = ${rp.toFixed(4)} M, r_a = ${ra.toFixed(4)} M`);
+    lines.push(`近点进动（实测，${dphi.length} 圈平均）${mean.toFixed(5)} rad/圈`);
+    lines.push(`弱场公式 6πM/(a(1 − e²)) = ${(6 * Math.PI / p).toFixed(5)} rad/圈`);
+  }
+  if (!k) {
+    const d = Math.abs(L - BC) < 1e-6 ? NaN : deflection(L);
+    lines.push(d === null ? '从无穷远来的这条光线会落进黑洞' : Number.isNaN(d) ? 'b = b_c：从无穷远来的光线无限地逼近 3M 圆轨道，偏折角发散'
+      : `偏折角（u(φ) 从无穷远积分）${d.toFixed(5)} rad`);
+    if (L > 0) lines.push(`弱场 4M/b = ${(4 / L).toFixed(5)} rad`);
+    if (Number.isFinite(d) && L < 8) lines.push(`强场近似 −ln(b/b_c − 1) − 0.4002 = ${(-Math.log(L / BC - 1) - 0.40023).toFixed(4)} rad`);
+  }
+  $('orbInfo').textContent = lines.join('\n');
+  $('stat').textContent = `${k ? 'τ' : 'λ'} = ${S.tau.toFixed(1)} M · t = ${S.crossed ? '∞' : S.t.toFixed(1) + ' M'} · r = ${S.r.toFixed(3)} M · ${kind}`;
+}
+function radiiInfo() {
+  const d = RADII;
+  $('radii').textContent = [
+    `光子球    r = ${d.rph.toFixed(5)} M   （(1 − 2/r)/r² 的极大，理论 3M）`,
+    `临界束缚  r = ${d.rmb.toFixed(5)} M   L = ${d.Lmb.toFixed(4)}（E_c = 1，理论 4M、L = 4）`,
+    `ISCO      r = ${d.risco.toFixed(4)} M    L = ${d.Lisco.toFixed(5)}, E = ${d.Eisco.toFixed(5)}`,
+    `          （理论 6M、L = 2√3 = 3.46410、E = √(8/9) = 0.94281）`].join('\n');
+}
+
+// ---------- UI ----------
+function syncUI() {
+  document.querySelectorAll('[data-rp]').forEach(b => b.classList.toggle('on', b.dataset.rp === R.preset));
+  document.querySelectorAll('[data-op]').forEach(b => b.classList.toggle('on', b.dataset.op === O.preset));
+  $('vRay').classList.toggle('on', view === 'ray'); $('vOrb').classList.toggle('on', view === 'orbit');
+  $('rayUI').style.display = view === 'ray' ? '' : 'none'; $('orbUI').style.display = view === 'orbit' ? '' : 'none';
+  glc.style.display = ovc.style.display = view === 'ray' ? '' : 'none'; cv.style.display = view === 'orbit' ? '' : 'none';
+  $('Rr').value = Math.log10(R.r); $('vRr').textContent = R.r.toFixed(R.r < 10 ? 2 : 1) + ' M';
+  $('Ri').value = R.i; $('vRi').textContent = R.i.toFixed(1) + '°';
+  $('Raz').value = R.az; $('vRaz').textContent = R.az.toFixed(0) + '°';
+  $('Rz').value = Math.log2(R.z); $('vRz').textContent = R.z.toFixed(2) + '×';
+  $('Ro').value = R.ro; $('vRo').textContent = R.ro.toFixed(1) + ' M';
+  $('Ex').value = R.ex; $('vEx').textContent = R.ex.toFixed(2);
+  $('Q').value = R.q; $('vQ').textContent = R.q.toFixed(2);
+  for (const k of ['disk', 'dop', 'beam', 'ord', 'anim']) $(k).checked = R[k];
+  $('ovl').checked = R.ov;
+  $('bgS').classList.toggle('on', R.bg === 'stars'); $('bgG').classList.toggle('on', R.bg === 'grid');
+  $('tyM').classList.toggle('on', O.ty === 'm'); $('tyP').classList.toggle('on', O.ty === 'ph');
+  $('mUI').style.display = O.ty === 'm' ? '' : 'none'; $('pUI').style.display = O.ty === 'ph' ? '' : 'none';
+  $('L').value = O.L; $('vL').textContent = O.L.toFixed(4);
+  $('E').value = O.E; $('vE').textContent = O.E.toFixed(5);
+  $('B').value = O.b; $('vB').textContent = O.b.toFixed(3) + ' M';
+  $('Sp').value = O.sp; $('vSp').textContent = O.sp;
+  $('play').textContent = O.run ? '⏸ 暂停' : '▶ 继续';
+}
+const rayChanged = () => { R.preset = ''; rayDirty = true; syncUI(); };
+const rayIn = (id, f) => { $(id).oninput = e => { f(+e.target.value); rayChanged(); }; };
+rayIn('Rr', v => R.r = clamp(10 ** v, LIM.r)); rayIn('Ri', v => R.i = v); rayIn('Raz', v => R.az = v);
+rayIn('Rz', v => R.z = 2 ** v); rayIn('Ro', v => R.ro = v); rayIn('Ex', v => R.ex = v); rayIn('Q', v => R.q = v);
+for (const k of ['disk', 'dop', 'beam', 'ord', 'anim']) $(k).onchange = e => { R[k] = e.target.checked; rayChanged(); };
+$('ovl').onchange = e => { R.ov = e.target.checked; rayChanged(); };
+$('bgS').onclick = () => { R.bg = 'stars'; rayChanged(); };
+$('bgG').onclick = () => { R.bg = 'grid'; rayChanged(); };
+for (const [key, p] of Object.entries(RAY_PRESETS)) {
+  const b = document.createElement('button'); b.textContent = p.name; b.dataset.rp = key;
+  b.onclick = () => { const { name, ...v } = p; Object.assign(R, RAY_DEF, v, { preset: key }); rayDirty = true; syncUI(); };
+  $('rayPre').appendChild(b);
+}
+const orbChanged = () => { O.preset = ''; O.r0 = null; orbitReset(); syncUI(); };
+const orbIn = (id, f) => { $(id).oninput = e => { f(+e.target.value); orbChanged(); }; };
+orbIn('L', v => O.L = v); orbIn('E', v => O.E = v); orbIn('B', v => O.b = v);
+$('Sp').oninput = e => { O.sp = +e.target.value; syncUI(); };
+$('tyM').onclick = () => { O.ty = 'm'; orbChanged(); };
+$('tyP').onclick = () => { O.ty = 'ph'; orbChanged(); };
+$('play').onclick = () => { O.run = !O.run; syncUI(); };
+$('restart').onclick = () => { O.run = true; orbitReset(); syncUI(); };
+for (const [key, p] of Object.entries(ORB_PRESETS)) {
+  const b = document.createElement('button'); b.textContent = p.name; b.dataset.op = key;
+  b.onclick = () => { applyOrbPreset(key); O.run = true; orbitReset(); syncUI(); };
+  $('orbPre').appendChild(b);
+}
+$('vRay').onclick = () => { view = 'ray'; rayDirty = true; syncUI(); resize(); };
+$('vOrb').onclick = () => { view = 'orbit'; syncUI(); resize(); };
+
+// drag to orbit the camera, wheel to zoom
+let drag = null;
+glc.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; glc.setPointerCapture(e.pointerId); glc.style.cursor = 'grabbing'; });
+glc.addEventListener('pointermove', e => {
+  if (!drag) return;
+  R.az = ((R.az - (e.clientX - drag[0]) * 0.3 + 540) % 360) - 180;
+  R.i = clamp(R.i + (e.clientY - drag[1]) * 0.3, LIM.i);
+  drag = [e.clientX, e.clientY]; dragging = true; rayChanged();
+});
+const endDrag = () => { drag = null; glc.style.cursor = ''; if (dragging) { dragging = false; rayDirty = true; } };
+glc.addEventListener('pointerup', endDrag); glc.addEventListener('pointercancel', endDrag);
+glc.addEventListener('dblclick', () => { Object.assign(R, { i: RAY_DEF.i, az: RAY_DEF.az, z: RAY_DEF.z }); rayChanged(); });
+glc.addEventListener('wheel', e => { e.preventDefault(); R.z = clamp(R.z * Math.exp(-e.deltaY * 0.0015), LIM.z); rayChanged(); }, { passive: false });
+cv.addEventListener('wheel', e => { e.preventDefault(); O.oz = clamp(O.oz * Math.exp(-e.deltaY * 0.0015), LIM.oz); }, { passive: false });
+cv.addEventListener('dblclick', () => { O.oz = 1; });
+addEventListener('keydown', e => { if (e.key === 'h' && e.target === document.body) { document.body.classList.toggle('noui'); resize(); } });
+
+function resize() {
+  const r = cv.getBoundingClientRect(), dpr = devicePixelRatio;
+  CW = cv.width = Math.max(1, Math.round(r.width * dpr)); CH = cv.height = Math.max(1, Math.round(r.height * dpr));
+  rayDirty = true;
+}
+addEventListener('resize', resize);
+
+// URL params, e.g. ?v=ray&r=30&i=80&bg=grid&disk=0  or  ?v=orbit&p=whirl&n=20000  or  ?v=orbit&ty=ph&b=5.3
+// Every number must be finite and is clamped to its slider range; names are matched with Object.hasOwn against fixed tables.
+const q = new URLSearchParams(location.search);
+const num = (k, f) => { const s = q.get(k); if (s !== null && s.trim() !== '') { const x = Number(s); if (Number.isFinite(x)) f(clamp(x, LIM[k])); } };
+const flag = (k, f) => { const s = q.get(k); if (s === '0' || s === '1') f(s === '1'); };
+const pick = (k, table, f) => { const s = q.get(k); if (s !== null && Object.hasOwn(table, s)) f(s); };
+pick('v', VIEWS, s => view = s);
+pick('rp', RAY_PRESETS, s => { const { name, ...v } = RAY_PRESETS[s]; Object.assign(R, RAY_DEF, v, { preset: s }); });
+pick('p', ORB_PRESETS, applyOrbPreset);
+const rayKeys = ['r', 'i', 'az', 'z', 'ro', 'ex', 'q'];
+for (const k of rayKeys) num(k, x => { R[k] = x; R.preset = ''; });
+for (const k of ['disk', 'dop', 'beam', 'ord', 'anim', 'ov']) flag(k, v => { R[k] = v; R.preset = ''; });
+pick('bg', BGS, s => { R.bg = s; R.preset = ''; });
+pick('ty', TYPES, s => { O.ty = s; O.preset = ''; O.r0 = null; });
+for (const k of ['L', 'E', 'b']) num(k, x => { O[k] = x; O.preset = ''; O.r0 = null; });
+num('sp', x => O.sp = Math.round(x)); num('oz', x => O.oz = x);
+flag('run', v => O.run = v);
+let ffSteps = 0; num('n', x => ffSteps = Math.round(x));
+if (q.get('ui') === '0') document.body.classList.add('noui');
+
+initGL(); resize(); orbitReset(); advanceOrbit(ffSteps); syncUI(); radiiInfo();
+
+window.__bh = { R, O, S: () => S, cam: () => cam, shadow: () => measureShadow(), radii: RADII, deflection, rayCaptured,
+  glOK: () => !!prog, rayFrames: () => rayFrames };
+
+(function loop() {
+  if (view === 'ray') {
+    if (R.anim) { rayTime += 1.5; rayDirty = true; }
+    if (rayDirty) { rayDirty = false; renderRay(); drawOverlay(); rayInfo(); }
+    if (rayFrames > 0 || !prog) window.__ready = true;
+  } else {
+    if (O.run) advanceOrbit(O.sp);
+    drawOrbit(); orbInfo(); $('stat').textContent = '';
+    window.__ready = true;
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
